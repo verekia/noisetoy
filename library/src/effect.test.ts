@@ -107,19 +107,27 @@ test('drift translates the field over time, in the heading direction', () => {
   expect(still.sample(u, v, 0)).toBe(still.sample(u, v, 3))
   expect(drifting.sample(u, v, 0)).not.toBe(drifting.sample(u, v, 3))
 
-  // Heading 0 moves the pattern right: what is at x now was at x - speed*t/scale.
-  const scale = drifting.layers[0]?.scale ?? 1
+  // Speed is screen-relative: heading 0 at speed 1 moves the pattern right by
+  // a full canvas per second, regardless of the layer scale.
   const t = 0.5
-  expect(drifting.sample(u, v, t)).toBeCloseTo(still.sample(u - t / scale, v, 0), 10)
+  expect(drifting.sample(u, v, t)).toBeCloseTo(still.sample(u - t, v, 0), 10)
+})
+
+test('the visible drift speed is the same at any scale', () => {
+  const t = 0.5
+  for (const scale of [0.5, 4]) {
+    const still = createEffect({ layers: [{ noise: 'perlin', dim: 2, scale }] })
+    const drifting = createEffect({ layers: [{ noise: 'perlin', dim: 2, scale, speed: 1, angle: 0 }] })
+    expect(drifting.sample(0.31, 0.62, t)).toBeCloseTo(still.sample(0.31 - t, 0.62, 0), 10)
+  }
 })
 
 test('angle 90 moves the pattern up the screen', () => {
   const still = createEffect({ layers: [{ noise: 'perlin', dim: 2 }] })
   const up = createEffect({ layers: [{ noise: 'perlin', dim: 2, speed: 1, angle: 90 }] })
-  const scale = up.layers[0]?.scale ?? 1
   const t = 0.5
   // v points down, so moving up means sampling further down the field.
-  expect(up.sample(0.31, 0.62, t)).toBeCloseTo(still.sample(0.31, 0.62 + t / scale, 0), 10)
+  expect(up.sample(0.31, 0.62, t)).toBeCloseTo(still.sample(0.31, 0.62 + t, 0), 10)
 })
 
 // Octaves at exactly doubled frequency share lattice points, and gradient

@@ -46,7 +46,11 @@ export type LayerSpec = {
   blend?: BlendMode
   /** 0-1. Default 1. */
   opacity?: number
-  /** Translation speed in lattice cells per second. Default 0 (no translation). */
+  /**
+   * Translation speed in canvas units per second — a speed of 1 crosses the
+   * whole canvas in one second. Screen-relative, so the visible drift speed
+   * is the same at any `scale`. Default 0 (no translation).
+   */
   speed?: number
   /** Translation heading in degrees: 0 is right, 90 is up. Default 0. */
   angle?: number

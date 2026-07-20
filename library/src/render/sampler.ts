@@ -130,7 +130,7 @@ const layerValue = (
  */
 export const createSolidSampler = (cfg: RenderConfig): ((x: number, y: number, z: number, time?: number) => number) => {
   const { layers } = cfg
-  const velocities = layers.map(l => translationVelocity(l.speed, l.angle))
+  const velocities = layers.map(l => translationVelocity(l.speed, l.angle, l.scale))
   return (x, y, z, time = 0) => {
     let acc = 0
     for (let i = 0; i < layers.length; i++) {
@@ -183,7 +183,7 @@ export const createSolidSampler = (cfg: RenderConfig): ((x: number, y: number, z
 export const createSampler = (cfg: RenderConfig): ((u: number, v: number, time?: number) => number) => {
   const { layers, tiled } = cfg
   const tiledFlags = layers.map(l => tiled && l.variant.sampleTileable !== null)
-  const velocities = layers.map(l => translationVelocity(l.speed, l.angle))
+  const velocities = layers.map(l => translationVelocity(l.speed, l.angle, l.scale))
   return (u, v, time = 0) => {
     let su = u
     let sv = v

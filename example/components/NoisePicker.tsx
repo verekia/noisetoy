@@ -34,12 +34,27 @@ export type PickerDraft = {
 
 const SCALES = [0.25, 0.5, 1, 2, 4]
 
-const SPEEDS = [0, 0.25, 0.5, 1, 2, 4]
+/** Screen-relative drift presets, in canvas units per second. */
+const DRIFTS = [
+  { value: 0, label: 'None' },
+  { value: 0.03125, label: 'Slow' },
+  { value: 0.125, label: 'Fast' },
+]
+
+/** Eight compass headings; 0 is right, 90 is up (counter-clockwise). */
+const ANGLES = [
+  { value: 90, label: '\u2191' },
+  { value: 45, label: '\u2197' },
+  { value: 0, label: '\u2192' },
+  { value: 315, label: '\u2198' },
+  { value: 270, label: '\u2193' },
+  { value: 225, label: '\u2199' },
+  { value: 180, label: '\u2190' },
+  { value: 135, label: '\u2196' },
+]
 
 /** Implementations of published algorithms first, this repo's originals after. */
 const SORTED_NOISES = NOISES.toSorted((a, b) => Number(Boolean(a.original)) - Number(Boolean(b.original)))
-
-const selectClass = 'rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 text-xs text-zinc-300'
 
 /**
  * Canonical reads as "trust this matches the paper", alternative as "we went
@@ -263,99 +278,81 @@ const NoisePicker = ({
               </div>
             </div>
             <div className="space-y-2">
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="max-w-80 space-y-2">
                 {noise.variants.length > 1 && (
+                  <div className="flex items-center justify-between gap-2 text-xs text-zinc-500">
+                    Type
+                    <Segmented
+                      value={variant.id}
+                      onChange={id => setDraft(d => ({ ...d, variantId: id }))}
+                      options={noise.variants.map(v => ({
+                        value: v.id,
+                        label: v.dim === 3 ? '3D (animated)' : '2D (static)',
+                      }))}
+                    />
+                  </div>
+                )}
+                <div className="flex items-center justify-between gap-2 text-xs text-zinc-500">
+                  Style
                   <Segmented
-                    value={variant.id}
-                    onChange={id => setDraft(d => ({ ...d, variantId: id }))}
-                    options={noise.variants.map(v => ({
-                      value: v.id,
-                      label: v.dim === 3 ? '3D (animated)' : '2D (static)',
-                    }))}
+                    value={draft.style}
+                    onChange={style => setDraft(d => ({ ...d, style }))}
+                    options={[
+                      { value: 'basic', label: 'Basic' },
+                      { value: 'billow', label: 'Billow' },
+                      { value: 'ridged', label: 'Ridged' },
+                    ]}
                   />
-                )}
-                <Segmented
-                  value={draft.style}
-                  onChange={style => setDraft(d => ({ ...d, style }))}
-                  options={[
-                    { value: 'basic', label: 'Basic' },
-                    { value: 'billow', label: 'Billow' },
-                    { value: 'ridged', label: 'Ridged' },
-                  ]}
-                />
-              </div>
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                <label className="flex items-center gap-1.5 text-xs text-zinc-500">
+                </div>
+                <div className="flex items-center justify-between gap-2 text-xs text-zinc-500">
                   Octaves
-                  <select
-                    value={draft.octaves}
-                    onChange={e => setDraft(d => ({ ...d, octaves: Number(e.target.value) }))}
-                    className={selectClass}
-                  >
-                    {[1, 2, 3, 4, 5, 6].map(o => (
-                      <option key={o} value={o}>
-                        {o}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {draft.octaves > 1 && (
-                  <label
-                    className="flex items-center gap-1.5 text-xs text-zinc-500"
-                    title="Classic fBm construction: rotated octaves, stronger decorrelation. Breaks tiling."
-                  >
-                    fBm
-                    <input
-                      type="checkbox"
-                      checked={draft.rotate}
-                      onChange={e => setDraft(d => ({ ...d, rotate: e.target.checked }))}
+                  <div className="flex items-center gap-3">
+                    {draft.octaves > 1 && (
+                      <label
+                        className="flex items-center gap-1.5"
+                        title="Classic fBm construction: rotated octaves, stronger decorrelation. Breaks tiling."
+                      >
+                        fBm
+                        <input
+                          type="checkbox"
+                          checked={draft.rotate}
+                          onChange={e => setDraft(d => ({ ...d, rotate: e.target.checked }))}
+                        />
+                      </label>
+                    )}
+                    <Segmented
+                      value={draft.octaves}
+                      onChange={octaves => setDraft(d => ({ ...d, octaves }))}
+                      options={[1, 2, 3, 4, 5].map(o => ({ value: o, label: String(o) }))}
                     />
-                  </label>
-                )}
-                <label className="flex items-center gap-1.5 text-xs text-zinc-500">
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-2 text-xs text-zinc-500">
                   Scale
-                  <select
+                  <Segmented
                     value={draft.scaleMul}
-                    onChange={e => setDraft(d => ({ ...d, scaleMul: Number(e.target.value) }))}
-                    className={selectClass}
-                  >
-                    {SCALES.map(s => (
-                      <option key={s} value={s}>
-                        {s}×
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                <label className="flex items-center gap-1.5 text-xs text-zinc-500">
+                    onChange={scaleMul => setDraft(d => ({ ...d, scaleMul }))}
+                    options={SCALES.map(o => ({ value: o, label: String(o) }))}
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-2 text-xs text-zinc-500">
                   Drift
-                  <select
+                  <Segmented
                     value={draft.speed}
-                    onChange={e => setDraft(d => ({ ...d, speed: Number(e.target.value) }))}
-                    className={selectClass}
-                  >
-                    {SPEEDS.map(sp => (
-                      <option key={sp} value={sp}>
-                        {sp === 0 ? 'off' : `${sp}/s`}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                    onChange={speed => setDraft(d => ({ ...d, speed }))}
+                    options={DRIFTS}
+                  />
+                </div>
                 {draft.speed > 0 && (
-                  <label className="flex items-center gap-1.5 text-xs text-zinc-500">
+                  <div className="flex items-center justify-between gap-2 text-xs text-zinc-500">
                     Angle
-                    <input
-                      type="number"
-                      min={0}
-                      max={359}
-                      step={15}
+                    <Segmented
+                      compact
                       value={draft.angle}
-                      onChange={e => setDraft(d => ({ ...d, angle: ((Number(e.target.value) % 360) + 360) % 360 }))}
-                      className={`w-16 ${selectClass}`}
+                      onChange={angle => setDraft(d => ({ ...d, angle }))}
+                      options={ANGLES}
                     />
-                    °
-                  </label>
+                  </div>
                 )}
               </div>
             </div>

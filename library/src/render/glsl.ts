@@ -60,7 +60,7 @@ const layerFunctions = (L: LayerConfig, i: number, tiled: boolean): string => {
     ? `float lv${i}(${vec} p, vec2 per) { return ${shaderSpec.expr}; }`
     : `float lv${i}(${vec} p) { return ${shaderSpec.expr}; }`
   const s = f(L.scale)
-  const [vx, vy] = translationVelocity(L.speed, L.angle)
+  const [vx, vy] = translationVelocity(L.speed, L.angle, L.scale)
   const drift = vx || vy ? ` + vec2(${f(vx)}, ${f(vy)}) * t` : ''
   const bp =
     shaderSpec.dim === 3 ? `vec3 bp = vec3(uv * ${s}${drift}, t * ${f(Z_SPEED)});` : `vec2 bp = uv * ${s}${drift};`

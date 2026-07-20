@@ -171,21 +171,28 @@ export type LayerConfig = {
   blend: BlendMode
   /** 0..1, mixes the blended result with the accumulator below. */
   opacity: number
-  /** Translation speed in lattice cells per second. 0 disables translation. */
+  /**
+   * Translation speed in canvas units per second (a speed of 1 crosses the
+   * whole canvas in one second). Screen-relative on purpose: the visible
+   * drift speed is the same at any layer scale and for any noise's lattice
+   * density. 0 disables translation.
+   */
   speed: number
   /** Translation heading in degrees: 0 is right, 90 is up (counter-clockwise). */
   angle: number
 }
 
 /**
- * Sampling offset per second for a translating layer, in lattice cells. The
- * pattern appears to move along `angle`, so the sampling point moves the other
- * way; v points down, which flips the y component back.
+ * Sampling offset per second for a translating layer, in lattice cells.
+ * `speed` is screen-relative (canvas units per second), so the lattice
+ * velocity is speed x the layer's lattice scale. The pattern appears to move
+ * along `angle`, so the sampling point moves the other way; v points down,
+ * which flips the y component back.
  */
-export const translationVelocity = (speed: number, angle: number): [number, number] => {
+export const translationVelocity = (speed: number, angle: number, scale: number): [number, number] => {
   if (!speed) return [0, 0]
   const rad = (angle * Math.PI) / 180
-  return [-Math.cos(rad) * speed, Math.sin(rad) * speed]
+  return [-Math.cos(rad) * speed * scale, Math.sin(rad) * speed * scale]
 }
 
 /**

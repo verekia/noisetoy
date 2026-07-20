@@ -109,7 +109,7 @@ const layerFunctions = (L: LayerConfig, i: number, tiled: boolean, solid: boolea
     ? `const lv${i} = Fn(([p, per]) => ${shaderSpec.expr})`
     : `const lv${i} = Fn(([p]) => ${shaderSpec.expr})`
   const s = L.scale
-  const [vx, vy] = translationVelocity(L.speed, L.angle)
+  const [vx, vy] = translationVelocity(L.speed, L.angle, L.scale)
   const drift = vx || vy ? `.add(vec2(${vx}, ${vy}).mul(t))` : ''
   // In the solid domain the whole 3D point is the sample position, so the z
   // slice becomes a drift through the volume instead of a plane offset.

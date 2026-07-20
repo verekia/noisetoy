@@ -31,7 +31,27 @@ type UILayer = PickerDraft & {
   hidden?: boolean
 }
 
-const SPEEDS = [0, 0.25, 0.5, 1, 2, 4]
+/** Screen-relative drift presets, in canvas units per second. */
+const DRIFTS = [
+  { value: 0, label: 'None' },
+  { value: 0.03125, label: 'Slow' },
+  { value: 0.125, label: 'Fast' },
+]
+
+/** Eight compass headings; 0 is right, 90 is up (counter-clockwise). */
+const ANGLES = [
+  { value: 90, label: '\u2191' },
+  { value: 45, label: '\u2197' },
+  { value: 0, label: '\u2192' },
+  { value: 315, label: '\u2198' },
+  { value: 270, label: '\u2193' },
+  { value: 225, label: '\u2199' },
+  { value: 180, label: '\u2190' },
+  { value: 135, label: '\u2196' },
+]
+
+const nearest = (values: number[], v: number): number =>
+  values.reduce((best, x) => (Math.abs(x - v) < Math.abs(best - v) ? x : best))
 
 let nextLayerId = 2
 
@@ -134,7 +154,7 @@ export default function Home() {
   const confirmPicker = (draft: PickerDraft) => {
     if (picking === 'add') {
       const id = nextLayerId++
-      setLayers(prev => [...prev, { ...draft, id, blend: 'multiply', opacity: 1 }])
+      setLayers(prev => [...prev, { ...draft, id, blend: 'overlay', opacity: 1 }])
       setSelectedId(id)
     } else if (typeof picking === 'number') {
       updateLayer(picking, draft)
@@ -218,9 +238,12 @@ export default function Home() {
         const rawOpacity = Number(o.opacity)
         const opacity = Number.isFinite(rawOpacity) ? Math.min(1, Math.max(0, rawOpacity)) : 1
         const scaleMul = SCALES.includes(Number(o.scale)) ? Number(o.scale) : 1
-        const speed = SPEEDS.includes(Number(o.speed)) ? Number(o.speed) : 0
+        const speed = nearest(
+          DRIFTS.map(d => d.value),
+          Number(o.speed) || 0,
+        )
         const rawAngle = Number(o.angle)
-        const angle = Number.isFinite(rawAngle) ? ((rawAngle % 360) + 360) % 360 : 0
+        const angle = Number.isFinite(rawAngle) ? (Math.round((((rawAngle % 360) + 360) % 360) / 45) * 45) % 360 : 0
         return {
           id: nextLayerId++,
           noiseId: n.id,
@@ -316,7 +339,7 @@ export default function Home() {
     const visible = layers.filter(l => !l.hidden)
     if (picking === 'add') {
       // A new layer lands on top of everything, with the blend confirmPicker gives it.
-      return visible.length > 0 ? { below: visible.map(toSpec), above: [], blend: 'multiply', opacity: 1 } : null
+      return visible.length > 0 ? { below: visible.map(toSpec), above: [], blend: 'overlay', opacity: 1 } : null
     }
     if (typeof picking !== 'number') return null
     const i = visible.findIndex(l => l.id === picking)
@@ -332,8 +355,16 @@ export default function Home() {
     }
   }, [layers, picking])
 
+  // Adding over a drifting base starts the new layer counter-drifting: same
+  // speed, opposite heading. Two fields sliding against each other read as
+  // churn, where two sliding together read as one rigid sheet.
+  const baseLayer = layers[0] as UILayer
   const pickerInitial: PickerDraft =
-    typeof picking === 'number' ? (layers.find(l => l.id === picking) ?? selected) : selected
+    typeof picking === 'number'
+      ? (layers.find(l => l.id === picking) ?? selected)
+      : baseLayer.speed > 0
+        ? { ...selected, speed: baseLayer.speed, angle: (baseLayer.angle + 180) % 360 }
+        : selected
 
   return (
     <>
@@ -361,7 +392,7 @@ export default function Home() {
             </button>
           </div>
         )}
-        <aside className="flex w-80 shrink-0 flex-col overflow-y-auto border-r border-zinc-800 p-4">
+        <aside className="flex w-84 shrink-0 flex-col overflow-y-auto border-r border-zinc-800 p-4">
           <div className="mb-5 flex items-center justify-between">
             <h1 className="text-lg font-semibold">noisetoy</h1>
             <a
@@ -464,8 +495,9 @@ export default function Home() {
                       </span>
                     </div>
                     <div className="mt-2 space-y-2" onClick={e => e.stopPropagation()}>
-                      <div className="flex flex-wrap items-center gap-2">
-                        {n.variants.length > 1 && (
+                      {n.variants.length > 1 && (
+                        <div className="flex items-center justify-between gap-2 text-xs text-zinc-500">
+                          Type
                           <Segmented
                             value={v.id}
                             onChange={id => updateLayer(l.id, { variantId: id })}
@@ -474,7 +506,10 @@ export default function Home() {
                               label: x.dim === 3 ? '3D (animated)' : '2D (static)',
                             }))}
                           />
-                        )}
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between gap-2 text-xs text-zinc-500">
+                        Style
                         <Segmented
                           value={l.style}
                           onChange={style => updateLayer(l.id, { style })}
@@ -485,80 +520,52 @@ export default function Home() {
                           ]}
                         />
                       </div>
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                        <label className="flex items-center gap-1.5 text-xs text-zinc-500">
-                          Octaves
-                          <select
+                      <div className="flex items-center justify-between gap-2 text-xs text-zinc-500">
+                        Octaves
+                        <div className="flex items-center gap-3">
+                          {l.octaves > 1 && (
+                            <label
+                              className="flex items-center gap-1.5"
+                              title="Classic fBm construction: rotated octaves, stronger decorrelation. Breaks tiling."
+                            >
+                              fBm
+                              <input
+                                type="checkbox"
+                                checked={l.rotate}
+                                onChange={e => updateLayer(l.id, { rotate: e.target.checked })}
+                              />
+                            </label>
+                          )}
+                          <Segmented
                             value={l.octaves}
-                            onChange={e => updateLayer(l.id, { octaves: Number(e.target.value) })}
-                            className={selectClass}
-                          >
-                            {[1, 2, 3, 4, 5, 6].map(o => (
-                              <option key={o} value={o}>
-                                {o}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        {l.octaves > 1 && (
-                          <label
-                            className="flex items-center gap-1.5 text-xs text-zinc-500"
-                            title="Classic fBm construction: rotated octaves, stronger decorrelation. Breaks tiling."
-                          >
-                            fBm
-                            <input
-                              type="checkbox"
-                              checked={l.rotate}
-                              onChange={e => updateLayer(l.id, { rotate: e.target.checked })}
-                            />
-                          </label>
-                        )}
-                        <label className="flex items-center gap-1.5 text-xs text-zinc-500">
-                          Scale
-                          <select
-                            value={l.scaleMul}
-                            onChange={e => updateLayer(l.id, { scaleMul: Number(e.target.value) })}
-                            className={selectClass}
-                          >
-                            {SCALES.map(s => (
-                              <option key={s} value={s}>
-                                {s}×
-                              </option>
-                            ))}
-                          </select>
-                        </label>
+                            onChange={octaves => updateLayer(l.id, { octaves })}
+                            options={[1, 2, 3, 4, 5].map(o => ({ value: o, label: String(o) }))}
+                          />
+                        </div>
                       </div>
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                        <label className="flex items-center gap-1.5 text-xs text-zinc-500">
-                          Drift
-                          <select
-                            value={l.speed}
-                            onChange={e => updateLayer(l.id, { speed: Number(e.target.value) })}
-                            className={selectClass}
-                          >
-                            {SPEEDS.map(sp => (
-                              <option key={sp} value={sp}>
-                                {sp === 0 ? 'off' : `${sp}/s`}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        {l.speed > 0 && (
-                          <label className="flex items-center gap-1.5 text-xs text-zinc-500">
-                            Angle
-                            <input
-                              type="number"
-                              min={0}
-                              max={359}
-                              step={15}
-                              value={l.angle}
-                              onChange={e => updateLayer(l.id, { angle: ((Number(e.target.value) % 360) + 360) % 360 })}
-                              className={`w-16 ${selectClass}`}
-                            />
-                            °
-                          </label>
-                        )}
+                      <div className="flex items-center justify-between gap-2 text-xs text-zinc-500">
+                        Scale
+                        <Segmented
+                          value={l.scaleMul}
+                          onChange={scaleMul => updateLayer(l.id, { scaleMul })}
+                          options={SCALES.map(o => ({ value: o, label: String(o) }))}
+                        />
                       </div>
+                      <div className="flex items-center justify-between gap-2 text-xs text-zinc-500">
+                        Drift
+                        <Segmented value={l.speed} onChange={speed => updateLayer(l.id, { speed })} options={DRIFTS} />
+                      </div>
+                      {l.speed > 0 && (
+                        <div className="flex items-center justify-between gap-2 text-xs text-zinc-500">
+                          Angle
+                          <Segmented
+                            compact
+                            value={l.angle}
+                            onChange={angle => updateLayer(l.id, { angle })}
+                            options={ANGLES}
+                          />
+                        </div>
+                      )}
                     </div>
                     {!isBottom && (
                       <div className="mt-2 flex items-center gap-2">

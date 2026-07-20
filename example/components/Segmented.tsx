@@ -1,11 +1,14 @@
-const Segmented = <T extends string | boolean>({
+const Segmented = <T extends string | number | boolean>({
   options,
   value,
   onChange,
+  compact,
 }: {
   options: { value: T; label: string; disabled?: boolean; title?: string }[]
   value: T
   onChange: (value: T) => void
+  /** Tighter horizontal padding, for many narrow segments (e.g. arrows). */
+  compact?: boolean
 }) => (
   <div className="flex overflow-hidden rounded-md border border-zinc-700 bg-zinc-950 text-xs">
     {options.map(opt => (
@@ -14,7 +17,7 @@ const Segmented = <T extends string | boolean>({
         disabled={opt.disabled}
         title={opt.title}
         onClick={() => onChange(opt.value)}
-        className={`px-3 py-1.5 font-medium transition-colors ${
+        className={`${compact ? 'px-2' : 'px-3'} py-1.5 font-medium transition-colors ${
           value === opt.value
             ? 'bg-zinc-100 text-zinc-900'
             : opt.disabled
