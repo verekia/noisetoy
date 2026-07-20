@@ -1,6 +1,6 @@
 {
   "name": "noisetoy",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Noise functions with TypeScript, GLSL, WGSL and Three.js TSL parity, plus a layer compositor that emits any of them",
   "keywords": [
     "glsl",
