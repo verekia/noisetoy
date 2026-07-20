@@ -40,7 +40,10 @@
 // faster one is found it is promoted into src/noises/**, the previous champion
 // moves to src/alt/**, and both stay listed here with the loser marked
 // `superseded`. The inventory is therefore the history of the search; the
-// default entry is only ever its current winner.
+// default entry is only ever its current winner. A challenger that measures
+// faster on the CPU but cannot yet ship — registry variants need all four
+// language backends, and a CPU win does not settle the GPU — waits in
+// src/alt/** marked `candidate` until it either completes or loses.
 //
 // THE SHARED-PRIMITIVE CAVEAT. The largest single implementation decision in
 // this repo was `gradDot2` / `gradDot3` in noises/common.ts, which turns a hash
@@ -133,10 +136,13 @@ export type NoiseImplementation = {
    * Absent when this is the implementation that ships. Otherwise why it does
    * not: 'superseded' means it was the default and lost a measurement;
    * 'baseline' means it was never a candidate to ship and exists only to be
-   * measured against. Either way it provides no registry variants, so
-   * `variantIds` is empty.
+   * measured against; 'candidate' means it currently BEATS the shipping
+   * implementation on the CPU but has not been promoted, because promotion
+   * needs the GLSL/WGSL/TSL backends and a GPU measurement it does not yet
+   * have. Either way it provides no registry variants, so `variantIds` is
+   * empty.
    */
-  status?: 'superseded' | 'baseline'
+  status?: 'superseded' | 'baseline' | 'candidate'
   /** Where the source of a non-shipping implementation lives. */
   archivedAt?: string
   /** Variant ids this implementation provides. Empty unless it ships. */
@@ -252,6 +258,32 @@ export const IMPLEMENTATIONS: Record<string, NoiseImplementation[]> = {
       rationale:
         "The gradient SET is the reference one — Perlin's 12 cube-edge midpoint vectors — but the mapping of hash slot to vector is not his, and neither is the hash. Measured against Perlin's OWN reference implementation it is a dead heat, 1.007x on the CPU: this is not faster than Perlin and must not be described as such. What it has over the reference is the absence of a 256-cell period and the ability to run in a shader. GPU unmeasured.",
       variantIds: ['perlin-2d', 'perlin-3d'],
+    },
+    {
+      id: 'fib-hash',
+      name: 'Top-bit gradients, Fibonacci hash',
+      kind: 'alternative',
+      evidence: 'reference-exists-uncompared',
+      status: 'candidate',
+      archivedAt: 'src/alt/perlin-fast.ts',
+      reference: {
+        paper: "Ken Perlin, 'Improved Noise' (SIGGRAPH 2002)",
+        implementation:
+          'ImprovedNoise.java, by Perlin. Cited as the specification and deliberately not copied; the measured comparison is against the SHIPPING implementation above, not the reference.',
+        licence: 'NOT freely licensed: the file states "COPYRIGHT 2002 KEN PERLIN" and grants nothing.',
+        url: 'https://cs.nyu.edu/~perlin/noise/',
+      },
+      follows: "Ken Perlin, 'Improved Noise' (2002)",
+      deviations: [
+        HASH_NOT_PERMUTATION,
+        "A corner hash is one xor-shift and one multiply by 2^32/phi (Knuth multiplicative hashing) with every selection bit read from the TOP of the product, against the shipping implementation's full lowbias32 avalanche per corner. The pre-multiply xor-shift is load-bearing: without it the corner mix is affine in the lattice coordinates and neighbouring gradients correlate in a fixed pattern.",
+        'In 2D the xor-shift is hoisted out of the corners (applied to the two x lattice products, corners then combine by xor); the same hoist in 3D failed adjacent-corner chi-square (216 against a 143-df critical of 172), so 3D keeps the per-corner mix of the folded sum, which passes.',
+        'The 2D corner dots are factored: with the four diagonal gradients every dot is +-(fx + fy) or +-(fx - fy) up to a per-corner integer shift, so both bases are computed once per sample and a corner is a select, an add and a sign flip. The gradient set matches the shipping gradTable2, which draws the same four diagonals (its slots 4-7 repeat slots 0-3 with the operands swapped).',
+        "3D keeps the reference's 12 cube-edge gradient set, chosen by the same integer range split as the shipping gradTable3, reading the low 30 bits so the axis choice stays disjoint from the sign bits at 30/31.",
+      ],
+      rationale:
+        "The current challenger. Measured with `bun run bench:impl`: ~1.3x the shipping perlin3 (stable across runs) and ~1.1x perlin2 (noisy, 1.08-1.27x run to run) on the CPU. Gradient marginals, adjacent-corner joints along each axis and a checkerboard split all sit inside the 95% chi-square criticals, and the assembled field's mean, RMS, extrema and lattice-lag autocorrelation match the shipping perlin to three decimals — but the field is a DIFFERENT DRAW, so promotion would change the pattern every consumer sees. Not promoted because it has no GLSL/WGSL/TSL backends yet and the GPU is unmeasured, and a narrower avalanche is precisely the kind of trade a GPU prices differently.",
+      variantIds: [],
     },
   ],
   flow: [

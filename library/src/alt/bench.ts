@@ -1,25 +1,30 @@
-// Head-to-head benchmark of a shipping implementation against the one it
-// replaced.
+// Head-to-head benchmark of each shipping implementation against the
+// non-shipping one kept in src/alt: the trig-gradient Simplex it replaced, and
+// the fast-hash Perlin candidate that challenges it.
 //
-// Only Simplex has a predecessor left to measure against. The reference
-// implementations of Perlin and Simplex were removed from the repo: both were
-// built on Perlin's 256-entry permutation table, and while it reached here
-// through Gustavson's public-domain file, he could only dedicate what he owned
-// and he took the table from Perlin. The parity results they produced —
-// Perlin 1.007x, Simplex 0.99x against their references — are recorded in
-// implementations.ts rather than re-runnable. Run with `bun run bench:impl` from the library, or
+// The reference implementations of Perlin and Simplex were removed from the
+// repo: both were built on Perlin's 256-entry permutation table, and while it
+// reached here through Gustavson's public-domain file, he could only dedicate
+// what he owned and he took the table from Perlin. The parity results they
+// produced — Perlin 1.007x, Simplex 0.99x against their references — are
+// recorded in implementations.ts rather than re-runnable. Run with
+// `bun run bench:impl` from the library, or
 // `bun run --filter noisetoy bench:impl` from the root.
 //
 // This exists so a claimed speedup can be re-checked rather than believed. It
-// imports the archived implementation directly from src/alt, which is why that
-// source is kept after being superseded — see implementations.ts.
+// imports the non-shipping implementations directly from src/alt, which is why
+// that source is kept — see implementations.ts.
 //
 // CPU only. The GPU comparison needs the /bench page in the explorer, and the
 // two do not always agree: transcendentals are far cheaper relative to integer
-// work on a GPU than they are in JS, which is precisely the axis these two
-// Perlins differ on. Treat this as a strong hint, not a settled answer.
+// work on a GPU than they are in JS, which is precisely the axis the two
+// Simplexes differ on — and the Perlin pair differ on integer avalanche
+// width, which a GPU also prices differently. Treat this as a strong hint,
+// not a settled answer.
 
+import { perlin2, perlin3 } from '../noises/perlin'
 import { simplex2 as simplexTable2, simplex3 as simplexTable3 } from '../noises/simplex'
+import { perlinFast2, perlinFast3 } from './perlin-fast'
 import { simplex2 as simplexTrig2, simplex3 as simplexTrig3 } from './simplex-trig'
 
 type Fn3 = (x: number, y: number, z: number) => number
@@ -46,32 +51,36 @@ const time = (fn: Fn3): number => {
   return (Bun.nanoseconds() - t0) / 1e6
 }
 
-const compare = (label: string, before: Fn3, after: Fn3) => {
+const compare = (label: string, before: [string, Fn3], after: [string, Fn3]) => {
   // Interleaved repeats: a single ordering lets JIT warmth or thermal drift
   // land entirely on one contestant.
   const beforeMs: number[] = []
   const afterMs: number[] = []
   for (let rep = 0; rep < 3; rep++) {
-    beforeMs.push(time(before))
-    afterMs.push(time(after))
+    beforeMs.push(time(before[1]))
+    afterMs.push(time(after[1]))
   }
   const b = Math.min(...beforeMs)
   const a = Math.min(...afterMs)
   const rate = (ms: number) => (SAMPLES / ms) * 1e-3
+  const row = (name: string, ms: number) =>
+    console.log(`  ${name.padEnd(29)} ${ms.toFixed(1).padStart(8)} ms   ${rate(ms).toFixed(1).padStart(6)} Msamples/s`)
   console.log(`\n${label}`)
-  console.log(
-    `  superseded (trig gradients)  ${b.toFixed(1).padStart(8)} ms   ${rate(b).toFixed(1).padStart(6)} Msamples/s`,
-  )
-  console.log(
-    `  shipping   (table gradients) ${a.toFixed(1).padStart(8)} ms   ${rate(a).toFixed(1).padStart(6)} Msamples/s`,
-  )
+  row(before[0], b)
+  row(after[0], a)
   console.log(`  speedup ${(b / a).toFixed(2)}x   (best of 3, interleaved)`)
 }
 
 console.log(`Implementation comparison — ${SAMPLES.toLocaleString()} samples per run, bun ${Bun.version}`)
 compare(
   'Simplex 2D',
-  (x, y) => simplexTrig2(x, y),
-  (x, y) => simplexTable2(x, y),
+  ['superseded (trig gradients)', (x, y) => simplexTrig2(x, y)],
+  ['shipping   (table gradients)', (x, y) => simplexTable2(x, y)],
 )
-compare('Simplex 3D', simplexTrig3, simplexTable3)
+compare('Simplex 3D', ['superseded (trig gradients)', simplexTrig3], ['shipping   (table gradients)', simplexTable3])
+compare(
+  'Perlin 2D',
+  ['shipping  (folded lowbias32)', (x, y) => perlin2(x, y)],
+  ['candidate (Fibonacci hash)', (x, y) => perlinFast2(x, y)],
+)
+compare('Perlin 3D', ['shipping  (folded lowbias32)', perlin3], ['candidate (Fibonacci hash)', perlinFast3])
