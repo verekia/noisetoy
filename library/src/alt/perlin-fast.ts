@@ -58,6 +58,33 @@
 //
 // Raw amplitude matches noises/perlin.ts: gradients of length sqrt(2) in both
 // dimensions, so the same display norms would apply.
+//
+// SECOND PASS, so nobody re-treads it: this is the measured floor of the
+// scalar form on the CPU. Decomposing the cost showed the floors + fades +
+// lerp tree alone run ~156 ms in the 8M-sample harness against ~190 ms (2D) /
+// ~222 ms (3D) for the full function — the integer hashing this file already
+// shrank is now a minority of the runtime and sits latency-hidden behind the
+// FP dependency chain. Five further variants all measured flat or worse over
+// 8-12 interleaved repeats:
+//
+//   - Hoisting the xy pre-mix in 3D (corner = imul(rxy ^ z, K), two ops per
+//     corner instead of five): flat, and it carries the per-slab correlation
+//     risk along z that sank the hoisted form in the header.
+//   - Weighted-sum (barycentric) interpolation replacing the lerp tree, which
+//     shortens the FP critical path on paper: flat in 3D, slightly worse in
+//     2D — the out-of-order core already overlaps the tree with gradient work.
+//   - Estrin-reassociated fade (10t^3 + t^4(6t - 15), two levels shorter):
+//     +4.5% on one run, exactly 1.00x on a dedicated 12-repeat interleaved
+//     rerun. A lesson in noisy-box benchmarking, hence the median in bench.ts.
+//   - Branchless sign selection in 2D (multiply by 1 - ((h >>> 30) & 2)): flat.
+//   - Bias-trick floor (((x + 2^20) | 0) - 2^20): slightly faster in 2D, much
+//     slower in 3D, and it silently narrows the domain to |x| < 2^20. Rejected.
+//
+// What is NOT at its floor is call granularity: sampling a plane re-derives
+// every per-row and per-cell quantity per sample, and a row-walking evaluator
+// could skip all hashing inside a cell. That is an API change (the registry
+// contract is a pure scalar function), not an implementation of this noise,
+// so it does not belong in this file.
 
 import { fade, LATTICE_HX, LATTICE_HY, LATTICE_HZ, lerp } from '../noises/common'
 

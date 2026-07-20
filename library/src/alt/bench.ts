@@ -53,22 +53,34 @@ const time = (fn: Fn3): number => {
 
 const compare = (label: string, before: [string, Fn3], after: [string, Fn3]) => {
   // Interleaved repeats: a single ordering lets JIT warmth or thermal drift
-  // land entirely on one contestant.
+  // land entirely on one contestant. The median is reported next to the best
+  // because a single lucky run once manufactured a 4.5% "win" that a
+  // dedicated 12-repeat rerun measured at exactly 1.00x — trust a speedup
+  // only when both statistics agree.
+  const REPS = 5
   const beforeMs: number[] = []
   const afterMs: number[] = []
-  for (let rep = 0; rep < 3; rep++) {
+  for (let rep = 0; rep < REPS; rep++) {
     beforeMs.push(time(before[1]))
     afterMs.push(time(after[1]))
   }
-  const b = Math.min(...beforeMs)
-  const a = Math.min(...afterMs)
+  beforeMs.sort((p, q) => p - q)
+  afterMs.sort((p, q) => p - q)
+  const b = beforeMs[0] as number
+  const a = afterMs[0] as number
+  const bMed = beforeMs[REPS >> 1] as number
+  const aMed = afterMs[REPS >> 1] as number
   const rate = (ms: number) => (SAMPLES / ms) * 1e-3
-  const row = (name: string, ms: number) =>
-    console.log(`  ${name.padEnd(29)} ${ms.toFixed(1).padStart(8)} ms   ${rate(ms).toFixed(1).padStart(6)} Msamples/s`)
+  const row = (name: string, best: number, median: number) =>
+    console.log(
+      `  ${name.padEnd(29)} ${best.toFixed(1).padStart(8)} ms   ${rate(best).toFixed(1).padStart(6)} Msamples/s   (median ${median.toFixed(1)} ms)`,
+    )
   console.log(`\n${label}`)
-  row(before[0], b)
-  row(after[0], a)
-  console.log(`  speedup ${(b / a).toFixed(2)}x   (best of 3, interleaved)`)
+  row(before[0], b, bMed)
+  row(after[0], a, aMed)
+  console.log(
+    `  speedup ${(b / a).toFixed(2)}x best, ${(bMed / aMed).toFixed(2)}x median   (best of ${REPS}, interleaved)`,
+  )
 }
 
 console.log(`Implementation comparison — ${SAMPLES.toLocaleString()} samples per run, bun ${Bun.version}`)
