@@ -1,0 +1,16 @@
+@import 'tailwindcss';
+
+html {
+  height: 100dvh;
+  /* The app is dark-only: this gives us dark scrollbars and native controls. */
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  height: 100%;
+}
+
+#__next {
+  height: 100%;
+}

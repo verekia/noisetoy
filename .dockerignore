@@ -1,0 +1,9 @@
+# Everything below is either reinstalled or regenerated inside the image, so
+# keeping it out of the build context avoids shadowing the container's own
+# `bun i` / `bun run build` output with host artifacts.
+node_modules
+**/node_modules
+library/dist
+example/.next
+example/out
+.git

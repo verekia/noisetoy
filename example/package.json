@@ -1,0 +1,39 @@
+{
+  "name": "example",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "imports": {
+    "#/*": "./*"
+  },
+  "scripts": {
+    "dev": "portless noisetoy next dev",
+    "build": "next build",
+    "start": "serve out",
+    "bench": "bun run scripts/bench.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "noisetoy": "workspace:*",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "three": "0.183.2"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.1.18",
+    "@types/bun": "1.3.9",
+    "@types/node": "25.7.0",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@types/three": "0.183.1",
+    "@webgpu/types": "0.1.69",
+    "babel-plugin-react-compiler": "1.0.0",
+    "next": "16.2.6",
+    "portless": "0.13.0",
+    "postcss": "8.5.14",
+    "serve": "14.2.5",
+    "tailwindcss": "4.3.0",
+    "typescript": "6.0.3"
+  }
+}

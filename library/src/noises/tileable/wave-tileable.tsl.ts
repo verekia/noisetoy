@@ -1,0 +1,48 @@
+// TSL counterpart of wave-tileable.ts. Requires COMMON_TSL and WAVE_TSL
+// (reuses waveCorner2/waveCorner3).
+
+export const WAVE_TILEABLE_TSL = /* js */ `
+const wave2T = Fn(([p, per]) => {
+  const i = floor(p)
+  const f = p.sub(i).toVar()
+  const ux = fade(f.x)
+  const uy = fade(f.y)
+  const px = int(per.x).toVar()
+  const py = int(per.y).toVar()
+  const x0 = imod(int(i.x), px).toVar()
+  const x1 = imod(int(i.x).add(1), px).toVar()
+  const y0 = imod(int(i.y), py).toVar()
+  const y1 = imod(int(i.y).add(1), py).toVar()
+  const s00 = waveCorner2(hash2u(x0, y0), f)
+  const s10 = waveCorner2(hash2u(x1, y0), f.sub(vec2(1, 0)))
+  const s01 = waveCorner2(hash2u(x0, y1), f.sub(vec2(0, 1)))
+  const s11 = waveCorner2(hash2u(x1, y1), f.sub(vec2(1, 1)))
+  return mix(mix(s00, s10, ux), mix(s01, s11, ux), uy)
+})
+
+const wave3T = Fn(([p, per]) => {
+  const i = floor(p)
+  const f = p.sub(i).toVar()
+  const ux = fade(f.x)
+  const uy = fade(f.y)
+  const uz = fade(f.z)
+  const px = int(per.x).toVar()
+  const py = int(per.y).toVar()
+  const x0 = imod(int(i.x), px).toVar()
+  const x1 = imod(int(i.x).add(1), px).toVar()
+  const y0 = imod(int(i.y), py).toVar()
+  const y1 = imod(int(i.y).add(1), py).toVar()
+  const iz = int(i.z).toVar()
+  const s000 = waveCorner3(hash3u(x0, y0, iz), f)
+  const s100 = waveCorner3(hash3u(x1, y0, iz), f.sub(vec3(1, 0, 0)))
+  const s010 = waveCorner3(hash3u(x0, y1, iz), f.sub(vec3(0, 1, 0)))
+  const s110 = waveCorner3(hash3u(x1, y1, iz), f.sub(vec3(1, 1, 0)))
+  const s001 = waveCorner3(hash3u(x0, y0, iz.add(1)), f.sub(vec3(0, 0, 1)))
+  const s101 = waveCorner3(hash3u(x1, y0, iz.add(1)), f.sub(vec3(1, 0, 1)))
+  const s011 = waveCorner3(hash3u(x0, y1, iz.add(1)), f.sub(vec3(0, 1, 1)))
+  const s111 = waveCorner3(hash3u(x1, y1, iz.add(1)), f.sub(vec3(1, 1, 1)))
+  const nz0 = mix(mix(s000, s100, ux), mix(s010, s110, ux), uy)
+  const nz1 = mix(mix(s001, s101, ux), mix(s011, s111, ux), uy)
+  return mix(nz0, nz1, uz)
+})
+`
