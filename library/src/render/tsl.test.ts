@@ -8,7 +8,7 @@ import type { LayerConfig } from './types'
 
 const layer = (over: Partial<LayerConfig> & Pick<LayerConfig, 'variant' | 'scale'>): LayerConfig => ({
   octaves: 1,
-  gain: 0.5,
+  rotate: false,
   style: 'basic',
   blend: 'normal',
   opacity: 1,

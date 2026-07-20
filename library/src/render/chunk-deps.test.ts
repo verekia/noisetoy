@@ -25,7 +25,7 @@ const layer = (variant: NoiseVariant, scale: number): LayerConfig => ({
   variant,
   scale,
   octaves: 2,
-  gain: 0.5,
+  rotate: false,
   style: 'basic',
   blend: 'normal',
   opacity: 1,

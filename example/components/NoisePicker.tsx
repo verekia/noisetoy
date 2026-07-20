@@ -22,8 +22,8 @@ export type PickerDraft = {
   noiseId: string
   variantId: string
   octaves: number
-  /** Per-octave amplitude falloff; 0.5 is classic fBm. */
-  gain: number
+  /** Rotate octaves (classic fBm construction) instead of offsetting them; breaks tiling. */
+  rotate: boolean
   style: FractalStyle
   scaleMul: number
   /** Translation speed in lattice cells per second (0 = off). */
@@ -35,8 +35,6 @@ export type PickerDraft = {
 const SCALES = [0.25, 0.5, 1, 2, 4]
 
 const SPEEDS = [0, 0.25, 0.5, 1, 2, 4]
-
-const GAINS = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
 
 /** Implementations of published algorithms first, this repo's originals after. */
 const SORTED_NOISES = NOISES.toSorted((a, b) => Number(Boolean(a.original)) - Number(Boolean(b.original)))
@@ -104,7 +102,7 @@ const NoisePicker = ({
     noise: draft.noiseId,
     variant: draft.variantId,
     octaves: draft.octaves,
-    gain: draft.gain,
+    rotate: draft.rotate,
     style: draft.style,
     scale: draft.scaleMul,
     speed: draft.speed,
@@ -129,7 +127,7 @@ const NoisePicker = ({
       draft.noiseId,
       draft.variantId,
       draft.octaves,
-      draft.gain,
+      draft.rotate,
       draft.style,
       draft.scaleMul,
       draft.speed,
@@ -294,7 +292,7 @@ const NoisePicker = ({
                     onChange={e => setDraft(d => ({ ...d, octaves: Number(e.target.value) }))}
                     className={selectClass}
                   >
-                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(o => (
+                    {[1, 2, 3, 4, 5, 6].map(o => (
                       <option key={o} value={o}>
                         {o}
                       </option>
@@ -302,19 +300,16 @@ const NoisePicker = ({
                   </select>
                 </label>
                 {draft.octaves > 1 && (
-                  <label className="flex items-center gap-1.5 text-xs text-zinc-500">
-                    Gain
-                    <select
-                      value={draft.gain}
-                      onChange={e => setDraft(d => ({ ...d, gain: Number(e.target.value) }))}
-                      className={selectClass}
-                    >
-                      {GAINS.map(g => (
-                        <option key={g} value={g}>
-                          {g}
-                        </option>
-                      ))}
-                    </select>
+                  <label
+                    className="flex items-center gap-1.5 text-xs text-zinc-500"
+                    title="Classic fBm construction: rotated octaves, stronger decorrelation. Breaks tiling."
+                  >
+                    fBm
+                    <input
+                      type="checkbox"
+                      checked={draft.rotate}
+                      onChange={e => setDraft(d => ({ ...d, rotate: e.target.checked }))}
+                    />
                   </label>
                 )}
                 <label className="flex items-center gap-1.5 text-xs text-zinc-500">

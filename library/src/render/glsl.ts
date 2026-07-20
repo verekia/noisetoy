@@ -5,11 +5,30 @@
 // layer's uv by the accumulated value beneath it.
 
 import { COMMON_GLSL } from '../noises/common.glsl'
-import { TILE_REPEAT, translationVelocity, WARP_BLEND_STRENGTH, Z_SPEED } from './types'
+import {
+  FRACTAL_GAIN,
+  fractalAmpSum,
+  fractalRms,
+  OCTAVE_OFFSET,
+  OCTAVE_ROT2,
+  OCTAVE_ROT3,
+  RIDGE_FEEDBACK,
+  TILE_REPEAT,
+  translationVelocity,
+  WARP_BLEND_STRENGTH,
+  Z_SPEED,
+} from './types'
 
 import type { BlendMode, LayerConfig, RenderConfig } from './types'
 
 const f = (n: number): string => (Number.isInteger(n) ? `${n}.0` : `${n}`)
+
+/** GLSL matrix constructors are column-major; the shared matrices are row-major. */
+const rotMat = (dim: 2 | 3): string => {
+  const m = dim === 3 ? OCTAVE_ROT3 : OCTAVE_ROT2
+  const cols = dim === 3 ? [m[0], m[3], m[6], m[1], m[4], m[7], m[2], m[5], m[8]] : [m[0], m[2], m[1], m[3]]
+  return `mat${dim}(${cols.map(c => f(c as number)).join(', ')})`
+}
 
 const blendExpr = (mode: BlendMode, a: string, v: string): string => {
   switch (mode) {
@@ -33,7 +52,8 @@ const blendExpr = (mode: BlendMode, a: string, v: string): string => {
 }
 
 const layerFunctions = (L: LayerConfig, i: number, tiled: boolean): string => {
-  const lTiled = tiled && L.variant.glslTileable !== null
+  const rotated = L.rotate && L.octaves > 1
+  const lTiled = tiled && L.variant.glslTileable !== null && !rotated
   const shaderSpec = lTiled && L.variant.glslTileable ? L.variant.glslTileable : L.variant.glsl
   const vec = `vec${shaderSpec.dim}`
   const value = lTiled
@@ -44,29 +64,45 @@ const layerFunctions = (L: LayerConfig, i: number, tiled: boolean): string => {
   const drift = vx || vy ? ` + vec2(${f(vx)}, ${f(vy)}) * t` : ''
   const bp =
     shaderSpec.dim === 3 ? `vec3 bp = vec3(uv * ${s}${drift}, t * ${f(Z_SPEED)});` : `vec2 bp = uv * ${s}${drift};`
-  const call = (freq: string) => (lTiled ? `lv${i}(bp * ${freq}, vec2(${s}, ${s}) * ${freq})` : `lv${i}(bp * ${freq})`)
+  const call = (p: string) => (lTiled ? `lv${i}(${p}, vec2(${s}, ${s}) * freq)` : `lv${i}(${p})`)
+  const one = (p: string) => (lTiled ? `lv${i}(${p}, vec2(${s}, ${s}))` : `lv${i}(${p})`)
+  const [offX, offY, offZ] = OCTAVE_OFFSET
+  const offStep = shaderSpec.dim === 3 ? `vec3(${f(offX)}, ${f(offY)}, ${f(offZ)})` : `vec2(${f(offX)}, ${f(offY)})`
+  const offZero = shaderSpec.dim === 3 ? 'vec3(0.0)' : 'vec2(0.0)'
   const accLine =
     L.style === 'billow'
       ? 'accum += amp * abs(2.0 * nv - 1.0);'
       : L.style === 'ridged'
-        ? 'float r = 1.0 - abs(2.0 * nv - 1.0); accum += amp * r * r;'
+        ? `float r = max(1.0 - abs(2.0 * nv - 1.0), 0.0); float sig = r * r * weight; accum += amp * sig; weight = clamp(sig * ${f(RIDGE_FEEDBACK)}, 0.0, 1.0);`
         : 'accum += amp * (nv - 0.5);'
-  const finalExpr = L.style === 'basic' ? '0.5 + accum / sqrt(sumSq)' : 'accum / sumAmp'
+  // The falloff is fixed, so the normalizer is a codegen-time constant.
+  const finalExpr =
+    L.style === 'basic' ? `0.5 + accum * ${f(1 / fractalRms(L.octaves))}` : `accum * ${f(1 / fractalAmpSum(L.octaves))}`
   const body =
     L.octaves === 1 && L.style === 'basic'
-      ? `return ${call('1.0')};`
-      : `float accum = 0.0;
-  float amp = 1.0;
-  float freq = 1.0;
-  float sumAmp = 0.0;
-  float sumSq = 0.0;
+      ? `return clamp(${one('bp')}, 0.0, 1.0);`
+      : rotated
+        ? `float accum = 0.0;
+  float amp = 1.0;${L.style === 'ridged' ? '\n  float weight = 1.0;' : ''}
+  const mat${shaderSpec.dim} m = ${rotMat(shaderSpec.dim)};
+  ${shaderSpec.dim === 3 ? 'vec3' : 'vec2'} q = bp;
   for (int o = 0; o < ${L.octaves}; o++) {
-    float nv = ${call('freq')};
+    float nv = ${call('q')};
     ${accLine}
-    sumAmp += amp;
-    sumSq += amp * amp;
-    amp *= ${f(L.gain)};
+    amp *= ${f(FRACTAL_GAIN)};
+    q = m * q;
+  }
+  return clamp(${finalExpr}, 0.0, 1.0);`
+        : `float accum = 0.0;
+  float amp = 1.0;
+  float freq = 1.0;${L.style === 'ridged' ? '\n  float weight = 1.0;' : ''}
+  ${shaderSpec.dim === 3 ? 'vec3' : 'vec2'} off = ${offZero};
+  for (int o = 0; o < ${L.octaves}; o++) {
+    float nv = ${call('bp * freq + off')};
+    ${accLine}
+    amp *= ${f(FRACTAL_GAIN)};
     freq *= 2.0;
+    off += ${offStep};
   }
   return clamp(${finalExpr}, 0.0, 1.0);`
   return `${value}

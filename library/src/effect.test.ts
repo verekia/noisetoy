@@ -122,43 +122,94 @@ test('angle 90 moves the pattern up the screen', () => {
   expect(up.sample(0.31, 0.62, t)).toBeCloseTo(still.sample(0.31, 0.62 + t / scale, 0), 10)
 })
 
-const meanDelta = (a: Effect, b: Effect) => {
-  const N = 64
-  let sum = 0
-  for (let y = 0; y < N; y++) {
-    for (let x = 0; x < N; x++)
-      sum += Math.abs(a.sample((x + 0.5) / N, (y + 0.5) / N) - b.sample((x + 0.5) / N, (y + 0.5) / N))
+// Octaves at exactly doubled frequency share lattice points, and gradient
+// noise is zero at every one of them — without per-octave decorrelation
+// offsets, fBm is pinned to exact mid-grey on a visible grid. Perlin's scale
+// is 8, so lattice corners sit at u,v = k/8.
+test('octaves are decorrelated: fBm is not pinned to 0.5 at lattice corners', () => {
+  const single = createEffect({ layers: [{ noise: 'perlin', dim: 2 }] })
+  const fbm = createEffect({ layers: [{ noise: 'perlin', dim: 2, octaves: 6 }] })
+  for (let i = 1; i < 8; i++) {
+    for (let j = 1; j < 8; j++) {
+      expect(single.sample(i / 8, j / 8)).toBe(0.5) // the basis really is zero there
+      expect(fbm.sample(i / 8, j / 8)).not.toBe(0.5) // the fractal must not be
+    }
   }
-  return sum / (N * N)
+})
+
+// Rotated octaves are the classic fBm construction (iq's matrices, lacunarity
+// 2.02): stronger decorrelation than the offsets — every lattice alignment is
+// broken, not just the zero-pinning — at the price of tiling.
+describe('rotate', () => {
+  test('defaults off, is inert at one octave, and kills tiling past it', () => {
+    expect(createEffect({ layers: [{ noise: 'perlin' }] }).spec.layers[0]?.rotate).toBe(false)
+    const inert = createEffect({ layers: [{ noise: 'perlin', rotate: true }], tiled: true })
+    expect(inert.tileable).toBe(true)
+    const rotated = createEffect({ layers: [{ noise: 'perlin', octaves: 5, rotate: true }], tiled: true })
+    expect(rotated.tileable).toBe(false)
+    expect(rotated.tiled).toBe(false)
+  })
+
+  test('changes the field relative to the offset construction', () => {
+    const offset = createEffect({ layers: [{ noise: 'perlin', dim: 2, octaves: 5 }] })
+    const rotated = createEffect({ layers: [{ noise: 'perlin', dim: 2, octaves: 5, rotate: true }] })
+    expect(rotated.sample(0.31, 0.62)).not.toBe(offset.sample(0.31, 0.62))
+  })
+
+  // Same guarantee the offsets give, achieved the stronger way. The origin
+  // (uv 0,0) is excluded: it is a fixed point of any linear octave map.
+  test('rotated fBm is not pinned to 0.5 at lattice corners', () => {
+    const rotated = createEffect({ layers: [{ noise: 'perlin', dim: 2, octaves: 6, rotate: true }] })
+    for (let i = 1; i < 8; i++) {
+      for (let j = 1; j < 8; j++) {
+        expect(rotated.sample(i / 8, j / 8)).not.toBe(0.5)
+      }
+    }
+  })
+})
+
+const displaySd = (e: Effect) => {
+  const N = 128
+  let sum = 0
+  let sumSq = 0
+  for (let y = 0; y < N; y++) {
+    for (let x = 0; x < N; x++) {
+      const v = e.sample((x + 0.5) / N, (y + 0.5) / N)
+      sum += v
+      sumSq += v * v
+    }
+  }
+  const mean = sum / (N * N)
+  return Math.sqrt(sumSq / (N * N) - mean * mean)
 }
 
-describe('gain', () => {
-  const perlin = (octaves: number, gain?: number) =>
-    createEffect({ layers: [{ noise: 'perlin', dim: 3, octaves, ...(gain === undefined ? {} : { gain }) }] })
-
-  test('defaults to 0.5 and is clamped to 0.1-0.9', () => {
-    expect(createEffect({ layers: [{ noise: 'perlin' }] }).spec.layers[0]?.gain).toBe(0.5)
-    expect(createEffect({ layers: [{ noise: 'perlin', gain: 5 }] }).spec.layers[0]?.gain).toBe(0.9)
-    expect(createEffect({ layers: [{ noise: 'perlin', gain: 0 }] }).spec.layers[0]?.gain).toBe(0.1)
+// The point of the variance-preserving normalization: raising the octave
+// count adds detail without washing the layer toward mid-grey, so a 6-octave
+// stack has the same display contrast as its single-octave basis. (The
+// amplitude-sum alternative can never clip, but drops a 6-octave Perlin to
+// ~60% of the basis contrast and turns the octave knob into a contrast knob.)
+describe('octave normalization preserves contrast', () => {
+  test.each([
+    ['basic', 'perlin'],
+    ['basic', 'simplex'],
+  ] as const)('%s %s: 6 octaves keep the single-octave sd', (style, noise) => {
+    const one = createEffect({ layers: [{ noise, dim: 2, style }] })
+    const six = createEffect({ layers: [{ noise, dim: 2, style, octaves: 6 }] })
+    const ratio = displaySd(six) / displaySd(one)
+    expect(ratio).toBeGreaterThan(0.85)
+    expect(ratio).toBeLessThan(1.15)
   })
 
-  test('is irrelevant at one octave', () => {
-    expect(meanDelta(perlin(1, 0.3), perlin(1, 0.8))).toBe(0)
-  })
-
-  // The reason gain exists: at 0.5 the octaves past ~5 fall below one 8-bit
-  // level, so raising the octave count stops changing anything visible.
-  test('rescues the octaves that vanish at 0.5', () => {
-    const faint = meanDelta(perlin(5, 0.5), perlin(10, 0.5))
-    const strong = meanDelta(perlin(5, 0.8), perlin(10, 0.8))
-    expect(faint * 255).toBeLessThan(1)
-    expect(strong).toBeGreaterThan(faint * 8)
-  })
-
-  test('reaches every backend', () => {
-    for (const src of [perlin(4, 0.8).glsl(), perlin(4, 0.8).wgsl(), perlin(4, 0.8).tsl()]) {
-      expect(src).toContain('0.8')
-      expect(src).not.toContain('amp *= 0.5')
+  // The trade for that contrast: the rarest extremes may clamp, but only as
+  // rarely as the calibrated display norms themselves allow (top ~0.1%).
+  test('clipping stays rare', () => {
+    const six = createEffect({ layers: [{ noise: 'perlin', dim: 2, octaves: 6 }] })
+    let clipped = 0
+    const N = 20000
+    for (let i = 0; i < N; i++) {
+      const v = six.sample((i * 0.7131) % 1, (i * 0.148137) % 1)
+      if (v === 0 || v === 1) clipped++
     }
+    expect(clipped / N).toBeLessThan(0.002)
   })
 })

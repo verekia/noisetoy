@@ -1,7 +1,8 @@
 // TSL shader specs for every registry variant, keyed by variant id. Kept in a
 // separate module (merged into the registry at load time) so the main registry
 // entries stay language-agnostic. Display expressions mirror the GLSL/WGSL
-// ones: value * (0.5 * norm) + 0.5 clamped for signed noises.
+// ones: value * (0.5 * norm) + 0.5 for signed noises, unclamped — the
+// composers clamp at display, so the fractal operator can fold raw octaves.
 
 import { CELLULAR_TSL } from './cellular.tsl'
 import { COMMON_TSL } from './common.tsl'
@@ -61,11 +62,10 @@ export type TslSpecPair = { tsl: ShaderSpec; tslTileable: ShaderSpec | null }
 
 const spec = (dim: 2 | 3, deps: string[], expr: string): ShaderSpec => ({ dim, deps, expr })
 
-/** value * (0.5 * norm) + 0.5, clamped — matches signedExpr in the registry. */
-const signed = (norm: number, call: string): string => `${call}.mul(${0.5 * norm}).add(0.5).clamp(0.0, 1.0)`
+/** value * (0.5 * norm) + 0.5, unclamped — matches signedExpr in the registry. */
+const signed = (norm: number, call: string): string => `${call}.mul(${0.5 * norm}).add(0.5)`
 
-const unsigned = (norm: number, call: string): string =>
-  norm === 1 ? `${call}.clamp(0.0, 1.0)` : `${call}.mul(${norm}).clamp(0.0, 1.0)`
+const unsigned = (norm: number, call: string): string => (norm === 1 ? call : `${call}.mul(${norm})`)
 
 const TSL_SPECS: Record<string, TslSpecPair> = {
   'value-2d': {

@@ -5,7 +5,19 @@
 // exported verbatim by Copy TSL.
 
 import { COMMON_TSL } from '../noises/common.tsl'
-import { TILE_REPEAT, translationVelocity, WARP_BLEND_STRENGTH, Z_SPEED } from './types'
+import {
+  FRACTAL_GAIN,
+  fractalAmpSum,
+  fractalRms,
+  OCTAVE_OFFSET,
+  OCTAVE_ROT2,
+  OCTAVE_ROT3,
+  RIDGE_FEEDBACK,
+  TILE_REPEAT,
+  translationVelocity,
+  WARP_BLEND_STRENGTH,
+  Z_SPEED,
+} from './types'
 
 import type { BlendMode, LayerConfig, RenderConfig } from './types'
 
@@ -39,6 +51,35 @@ export const TSL_IMPORTS = [
   'mod',
 ] as const
 
+/**
+ * One row of the rotated-octave step as TSL method chains, skipping zero
+ * coefficients. The shared matrices are row-major, so rows apply directly.
+ */
+const rotRow = (coeffs: [string, number][]): string => {
+  const terms = coeffs.filter(([, c]) => c !== 0).map(([axis, c]) => `q.${axis}.mul(${c})`)
+  return terms.reduce((acc, t) => (acc ? `${acc}.add(${t})` : t))
+}
+
+const rotFn = (name: string, dim: 2 | 3): string => {
+  if (dim === 3) {
+    const m = OCTAVE_ROT3 as number[]
+    const row = (o: number) =>
+      rotRow([
+        ['x', m[o] as number],
+        ['y', m[o + 1] as number],
+        ['z', m[o + 2] as number],
+      ])
+    return `const ${name} = Fn(([q]) => vec3(${row(0)}, ${row(3)}, ${row(6)}))`
+  }
+  const m = OCTAVE_ROT2 as number[]
+  const row = (o: number) =>
+    rotRow([
+      ['x', m[o] as number],
+      ['y', m[o + 1] as number],
+    ])
+  return `const ${name} = Fn(([q]) => vec2(${row(0)}, ${row(2)}))`
+}
+
 const blendExpr = (mode: BlendMode, a: string, v: string): string => {
   switch (mode) {
     case 'add':
@@ -61,7 +102,8 @@ const blendExpr = (mode: BlendMode, a: string, v: string): string => {
 }
 
 const layerFunctions = (L: LayerConfig, i: number, tiled: boolean, solid: boolean): string => {
-  const lTiled = !solid && tiled && L.variant.tslTileable !== null
+  const rotated = L.rotate && L.octaves > 1
+  const lTiled = !solid && tiled && L.variant.tslTileable !== null && !rotated
   const shaderSpec = lTiled && L.variant.tslTileable ? L.variant.tslTileable : L.variant.tsl
   const value = lTiled
     ? `const lv${i} = Fn(([p, per]) => ${shaderSpec.expr})`
@@ -79,34 +121,52 @@ const layerFunctions = (L: LayerConfig, i: number, tiled: boolean, solid: boolea
     : shaderSpec.dim === 3
       ? `const bp = vec3(uv.mul(${s})${drift}, t.mul(${Z_SPEED}))`
       : `const bp = uv.mul(${s})${drift}`
-  const call = (freq: string) =>
-    lTiled ? `lv${i}(bp.mul(${freq}), vec2(${s}, ${s}).mul(${freq}))` : `lv${i}(bp.mul(${freq}))`
+  const call = (p: string) => (lTiled ? `lv${i}(${p}, vec2(${s}, ${s}).mul(freq))` : `lv${i}(${p})`)
+  const one = (p: string) => (lTiled ? `lv${i}(${p}, vec2(${s}, ${s}))` : `lv${i}(${p})`)
+  const [offX, offY, offZ] = OCTAVE_OFFSET
+  const offStep = shaderSpec.dim === 3 ? `vec3(${offX}, ${offY}, ${offZ})` : `vec2(${offX}, ${offY})`
+  const offZero = shaderSpec.dim === 3 ? 'vec3(0.0)' : 'vec2(0.0)'
   const accLine =
     L.style === 'billow'
       ? 'accum.addAssign(amp.mul(nv.mul(2).sub(1).abs()))'
       : L.style === 'ridged'
-        ? 'const r = nv.mul(2).sub(1).abs().oneMinus()\n    accum.addAssign(amp.mul(r).mul(r))'
+        ? `const r = nv.mul(2).sub(1).abs().oneMinus().max(0.0)
+    const sig = r.mul(r).mul(weight)
+    accum.addAssign(amp.mul(sig))
+    weight.assign(sig.mul(${RIDGE_FEEDBACK}).clamp(0.0, 1.0))`
         : 'accum.addAssign(amp.mul(nv.sub(0.5)))'
+  // The falloff is fixed, so the normalizer is a codegen-time constant.
   const finalExpr =
-    L.style === 'basic' ? 'accum.div(sumSq.sqrt()).add(0.5).clamp(0.0, 1.0)' : 'accum.div(sumAmp).clamp(0.0, 1.0)'
+    L.style === 'basic'
+      ? `accum.mul(${1 / fractalRms(L.octaves)}).add(0.5).clamp(0.0, 1.0)`
+      : `accum.mul(${1 / fractalAmpSum(L.octaves)}).clamp(0.0, 1.0)`
   const body =
     L.octaves === 1 && L.style === 'basic'
-      ? `  return ${call('1.0')}`
-      : `  const accum = float(0).toVar()
-  const amp = float(1).toVar()
-  const freq = float(1).toVar()
-  const sumAmp = float(0).toVar()
-  const sumSq = float(0).toVar()
+      ? `  return ${one('bp')}.clamp(0.0, 1.0)`
+      : rotated
+        ? `  const accum = float(0).toVar()
+  const amp = float(1).toVar()${L.style === 'ridged' ? '\n  const weight = float(1).toVar()' : ''}
+  const q = ${shaderSpec.dim === 3 ? 'vec3' : 'vec2'}(bp).toVar()
   Loop(${L.octaves}, () => {
-    const nv = ${call('freq')}
+    const nv = ${call('q')}
     ${accLine}
-    sumAmp.addAssign(amp)
-    sumSq.addAssign(amp.mul(amp))
-    amp.mulAssign(${L.gain})
-    freq.mulAssign(2)
+    amp.mulAssign(${FRACTAL_GAIN})
+    q.assign(rot${i}(q))
   })
   return ${finalExpr}`
-  return `${value}
+        : `  const accum = float(0).toVar()
+  const amp = float(1).toVar()
+  const freq = float(1).toVar()${L.style === 'ridged' ? '\n  const weight = float(1).toVar()' : ''}
+  const off = ${offZero}.toVar()
+  Loop(${L.octaves}, () => {
+    const nv = ${call('bp.mul(freq).add(off)')}
+    ${accLine}
+    amp.mulAssign(${FRACTAL_GAIN})
+    freq.mulAssign(2)
+    off.addAssign(${offStep})
+  })
+  return ${finalExpr}`
+  return `${value}${rotated ? `\n${rotFn(`rot${i}`, shaderSpec.dim)}` : ''}
 const layerVal${i} = Fn(([${solid ? 'p' : 'uv'}, t]) => {
   ${bp}
 ${body}

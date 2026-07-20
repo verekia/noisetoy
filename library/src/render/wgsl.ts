@@ -3,11 +3,30 @@
 // chunks, bottom-to-top blend fold, 'warp' uv displacement).
 
 import { COMMON_WGSL } from '../noises/common.wgsl'
-import { TILE_REPEAT, translationVelocity, WARP_BLEND_STRENGTH, Z_SPEED } from './types'
+import {
+  FRACTAL_GAIN,
+  fractalAmpSum,
+  fractalRms,
+  OCTAVE_OFFSET,
+  OCTAVE_ROT2,
+  OCTAVE_ROT3,
+  RIDGE_FEEDBACK,
+  TILE_REPEAT,
+  translationVelocity,
+  WARP_BLEND_STRENGTH,
+  Z_SPEED,
+} from './types'
 
 import type { BlendMode, LayerConfig, RenderConfig } from './types'
 
 const f = (n: number): string => (Number.isInteger(n) ? `${n}.0` : `${n}`)
+
+/** WGSL matrix constructors are column-major; the shared matrices are row-major. */
+const rotMat = (dim: 2 | 3): string => {
+  const m = dim === 3 ? OCTAVE_ROT3 : OCTAVE_ROT2
+  const cols = dim === 3 ? [m[0], m[3], m[6], m[1], m[4], m[7], m[2], m[5], m[8]] : [m[0], m[2], m[1], m[3]]
+  return `mat${dim}x${dim}f(${cols.map(c => f(c as number)).join(', ')})`
+}
 
 const blendExpr = (mode: BlendMode, a: string, v: string): string => {
   switch (mode) {
@@ -31,7 +50,8 @@ const blendExpr = (mode: BlendMode, a: string, v: string): string => {
 }
 
 const layerFunctions = (L: LayerConfig, i: number, tiled: boolean): string => {
-  const lTiled = tiled && L.variant.wgslTileable !== null
+  const rotated = L.rotate && L.octaves > 1
+  const lTiled = tiled && L.variant.wgslTileable !== null && !rotated
   const shaderSpec = lTiled && L.variant.wgslTileable ? L.variant.wgslTileable : L.variant.wgsl
   const vec = `vec${shaderSpec.dim}f`
   const value = lTiled
@@ -42,29 +62,45 @@ const layerFunctions = (L: LayerConfig, i: number, tiled: boolean): string => {
   const drift = vx || vy ? ` + vec2f(${f(vx)}, ${f(vy)}) * t` : ''
   const bp =
     shaderSpec.dim === 3 ? `let bp = vec3f(uv * ${s}${drift}, t * ${f(Z_SPEED)});` : `let bp = uv * ${s}${drift};`
-  const call = (freq: string) => (lTiled ? `lv${i}(bp * ${freq}, vec2f(${s}, ${s}) * ${freq})` : `lv${i}(bp * ${freq})`)
+  const call = (p: string) => (lTiled ? `lv${i}(${p}, vec2f(${s}, ${s}) * freq)` : `lv${i}(${p})`)
+  const one = (p: string) => (lTiled ? `lv${i}(${p}, vec2f(${s}, ${s}))` : `lv${i}(${p})`)
+  const [offX, offY, offZ] = OCTAVE_OFFSET
+  const offStep = shaderSpec.dim === 3 ? `vec3f(${f(offX)}, ${f(offY)}, ${f(offZ)})` : `vec2f(${f(offX)}, ${f(offY)})`
+  const offZero = shaderSpec.dim === 3 ? 'vec3f(0.0)' : 'vec2f(0.0)'
   const accLine =
     L.style === 'billow'
       ? 'accum += amp * abs(2.0 * nv - 1.0);'
       : L.style === 'ridged'
-        ? 'let r = 1.0 - abs(2.0 * nv - 1.0); accum += amp * r * r;'
+        ? `let r = max(1.0 - abs(2.0 * nv - 1.0), 0.0); let sig = r * r * weight; accum += amp * sig; weight = clamp(sig * ${f(RIDGE_FEEDBACK)}, 0.0, 1.0);`
         : 'accum += amp * (nv - 0.5);'
-  const finalExpr = L.style === 'basic' ? '0.5 + accum / sqrt(sumSq)' : 'accum / sumAmp'
+  // The falloff is fixed, so the normalizer is a codegen-time constant.
+  const finalExpr =
+    L.style === 'basic' ? `0.5 + accum * ${f(1 / fractalRms(L.octaves))}` : `accum * ${f(1 / fractalAmpSum(L.octaves))}`
   const body =
     L.octaves === 1 && L.style === 'basic'
-      ? `return ${call('1.0')};`
-      : `var accum = 0.0;
-  var amp = 1.0;
-  var freq = 1.0;
-  var sumAmp = 0.0;
-  var sumSq = 0.0;
+      ? `return clamp(${one('bp')}, 0.0, 1.0);`
+      : rotated
+        ? `var accum = 0.0;
+  var amp = 1.0;${L.style === 'ridged' ? '\n  var weight = 1.0;' : ''}
+  let m = ${rotMat(shaderSpec.dim)};
+  var q = bp;
   for (var o = 0; o < ${L.octaves}; o++) {
-    let nv = ${call('freq')};
+    let nv = ${call('q')};
     ${accLine}
-    sumAmp += amp;
-    sumSq += amp * amp;
-    amp *= ${f(L.gain)};
+    amp *= ${f(FRACTAL_GAIN)};
+    q = m * q;
+  }
+  return clamp(${finalExpr}, 0.0, 1.0);`
+        : `var accum = 0.0;
+  var amp = 1.0;
+  var freq = 1.0;${L.style === 'ridged' ? '\n  var weight = 1.0;' : ''}
+  var off = ${offZero};
+  for (var o = 0; o < ${L.octaves}; o++) {
+    let nv = ${call('bp * freq + off')};
+    ${accLine}
+    amp *= ${f(FRACTAL_GAIN)};
     freq *= 2.0;
+    off += ${offStep};
   }
   return clamp(${finalExpr}, 0.0, 1.0);`
   return `${value}

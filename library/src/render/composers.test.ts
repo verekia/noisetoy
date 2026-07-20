@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test'
 
 import { getNoise, NOISES } from '../registry'
 import { buildGlslFragment } from './glsl'
+import { fractalRms } from './types'
 import { buildWgslShader } from './wgsl'
 
 import type { NoiseDef } from '../registry'
@@ -17,7 +18,7 @@ const layer = (over?: Partial<LayerConfig>): LayerConfig => ({
   variant: perlin3d,
   scale: perlin.scale,
   octaves: 1,
-  gain: 0.5,
+  rotate: false,
   style: 'basic',
   blend: 'normal',
   opacity: 1,
@@ -26,39 +27,63 @@ const layer = (over?: Partial<LayerConfig>): LayerConfig => ({
   ...over,
 })
 
-test('single plain layer calls its value function once', () => {
+test('single plain layer calls its value function once, clamped at display', () => {
   const cfg = { layers: [layer()], tiled: false, size: 512 }
   const glsl = buildGlslFragment(cfg)
   const wgsl = buildWgslShader(cfg)
-  expect(glsl).toContain('lv0(bp * 1.0)')
-  expect(wgsl).toContain('lv0(bp * 1.0)')
+  expect(glsl).toContain('return clamp(lv0(bp), 0.0, 1.0);')
+  expect(wgsl).toContain('return clamp(lv0(bp), 0.0, 1.0);')
   expect(glsl).not.toContain('for (int o = 0;')
   expect(wgsl).not.toContain('for (var o = 0;')
 })
 
-test('octaves build loops with frequency scaling', () => {
+test('octaves build loops with frequency scaling and decorrelation offsets', () => {
   const cfg = { layers: [layer({ octaves: 4 })], tiled: false, size: 512 }
   const glsl = buildGlslFragment(cfg)
   const wgsl = buildWgslShader(cfg)
   expect(glsl).toContain('for (int o = 0; o < 4; o++)')
   expect(wgsl).toContain('for (var o = 0; o < 4; o++)')
-  expect(glsl).toContain('lv0(bp * freq)')
-  expect(wgsl).toContain('lv0(bp * freq)')
+  expect(glsl).toContain('lv0(bp * freq + off)')
+  expect(wgsl).toContain('lv0(bp * freq + off)')
+  expect(glsl).toContain('off += vec3(19.618, 27.236, 41.854);')
+  expect(wgsl).toContain('off += vec3f(19.618, 27.236, 41.854);')
 })
 
-test('billow and ridged fold each octave', () => {
+test('octaves normalize variance-preserving, via a codegen-time constant', () => {
+  const glsl = buildGlslFragment({ layers: [layer({ octaves: 4 })], tiled: false, size: 512 })
+  expect(glsl).toContain(`return clamp(0.5 + accum * ${1 / fractalRms(4)}, 0.0, 1.0);`)
+  // No per-octave clamp: the layer value function returns the raw expression.
+  expect(glsl).toContain('float lv0(vec3 p) { return 0.5 + 0.5 *')
+})
+
+test('rotate swaps the offset step for the iq rotation matrix', () => {
+  const cfg = { layers: [layer({ octaves: 4, rotate: true })], tiled: false, size: 512 }
+  const glsl = buildGlslFragment(cfg)
+  const wgsl = buildWgslShader(cfg)
+  expect(glsl).toContain('const mat3 m = mat3(0.0, 1.616, 1.212, -1.616, 0.7272, -0.9696, -1.212, -0.9696, 1.2928);')
+  expect(wgsl).toContain('let m = mat3x3f(0.0, 1.616, 1.212, -1.616, 0.7272, -0.9696, -1.212, -0.9696, 1.2928);')
+  expect(glsl).toContain('q = m * q;')
+  expect(glsl).not.toContain('off +=')
+  // A rotated field has no period: the layer stays on the core code path even
+  // in a tiled build.
+  const tiled = buildGlslFragment({ layers: [layer({ octaves: 4, rotate: true })], tiled: true, size: 512 })
+  expect(tiled).toContain('float lv0(vec3 p) {')
+})
+
+test('billow and ridged fold each octave; ridged carries Musgrave feedback', () => {
   const billow = buildGlslFragment({ layers: [layer({ style: 'billow' })], tiled: false, size: 512 })
   const ridged = buildWgslShader({ layers: [layer({ style: 'ridged' })], tiled: false, size: 512 })
   expect(billow).toContain('accum += amp * abs(2.0 * nv - 1.0);')
-  expect(ridged).toContain('let r = 1.0 - abs(2.0 * nv - 1.0); accum += amp * r * r;')
+  expect(ridged).toContain('let r = max(1.0 - abs(2.0 * nv - 1.0), 0.0);')
+  expect(ridged).toContain('weight = clamp(sig * 2.0, 0.0, 1.0);')
 })
 
 test('tiled octaves scale the period with the frequency', () => {
   const cfg = { layers: [layer({ octaves: 3 })], tiled: true, size: 512 }
   const glsl = buildGlslFragment(cfg)
   const wgsl = buildWgslShader(cfg)
-  expect(glsl).toContain('lv0(bp * freq, vec2(8.0, 8.0) * freq)')
-  expect(wgsl).toContain('lv0(bp * freq, vec2f(8.0, 8.0) * freq)')
+  expect(glsl).toContain('lv0(bp * freq + off, vec2(8.0, 8.0) * freq)')
+  expect(wgsl).toContain('lv0(bp * freq + off, vec2f(8.0, 8.0) * freq)')
 })
 
 test('multi-layer build dedupes shared dependency chunks and folds blends', () => {

@@ -1,10 +1,93 @@
 // CPU sampler: folds a layer stack in TypeScript with the same math the
 // GLSL/WGSL/TSL composers emit, over the same domain (uv in [0, 1), y down)
 // and the same time input (elapsed seconds).
+//
+// The fractal operator is classic fBm: each octave folds the noise's
+// pre-clamp display value (sampleRaw) at doubled frequency plus a
+// decorrelation offset, the sum is normalized variance-preserving (see
+// fractalRms), and the result is clamped once at the end.
 
-import { applyBlend, TILE_REPEAT, translationVelocity, WARP_BLEND_STRENGTH, Z_SPEED } from './types'
+import { clamp01 } from '../noises/normalization'
+import {
+  applyBlend,
+  FRACTAL_GAIN,
+  fractalAmpSum,
+  fractalRms,
+  OCTAVE_OFFSET,
+  OCTAVE_ROT2,
+  OCTAVE_ROT3,
+  RIDGE_FEEDBACK,
+  TILE_REPEAT,
+  translationVelocity,
+  WARP_BLEND_STRENGTH,
+  Z_SPEED,
+} from './types'
 
 import type { LayerConfig, RenderConfig } from './types'
+
+const [OFF_X, OFF_Y, OFF_Z] = OCTAVE_OFFSET
+const [R2A, R2B, R2C, R2D] = OCTAVE_ROT2 as [number, number, number, number]
+const [R3A, R3B, R3C, R3D, R3E, R3F, R3G, R3H, R3I] = OCTAVE_ROT3 as [
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+]
+
+/**
+ * Folds `sample(octave)` through the layer's style and normalizes. The caller
+ * owns how the sample position advances between octaves (offset or rotate).
+ */
+const foldOctaves = (L: LayerConfig, sample: (o: number) => number): number => {
+  let acc = 0
+  let amp = 1
+  let weight = 1
+  for (let o = 0; o < L.octaves; o++) {
+    const nv = sample(o)
+    if (L.style === 'basic') acc += amp * (nv - 0.5)
+    else if (L.style === 'billow') acc += amp * Math.abs(2 * nv - 1)
+    else {
+      const r = Math.max(1 - Math.abs(2 * nv - 1), 0)
+      const sig = r * r * weight
+      acc += amp * sig
+      weight = clamp01(sig * RIDGE_FEEDBACK)
+    }
+    amp *= FRACTAL_GAIN
+  }
+  return clamp01(L.style === 'basic' ? 0.5 + acc / fractalRms(L.octaves) : acc / fractalAmpSum(L.octaves))
+}
+
+/** Rotated-octave sampler over the layer's raw variant, starting at (x, y, z). */
+const rotatedSampler = (L: LayerConfig, x: number, y: number, z: number): (() => number) => {
+  let qx = x
+  let qy = y
+  let qz = z
+  if (L.variant.dim === 3) {
+    return () => {
+      const nv = L.variant.sampleRaw(qx, qy, qz)
+      const rx = R3A * qx + R3B * qy + R3C * qz
+      const ry = R3D * qx + R3E * qy + R3F * qz
+      const rz = R3G * qx + R3H * qy + R3I * qz
+      qx = rx
+      qy = ry
+      qz = rz
+      return nv
+    }
+  }
+  return () => {
+    const nv = L.variant.sampleRaw(qx, qy, 0)
+    const rx = R2A * qx + R2B * qy
+    const ry = R2C * qx + R2D * qy
+    qx = rx
+    qy = ry
+    return nv
+  }
+}
 
 const layerValue = (
   L: LayerConfig,
@@ -20,31 +103,24 @@ const layerValue = (
   // Translation is applied in lattice cells, after the scale.
   const ox = vx * time
   const oy = vy * time
-  const one = (freq: number): number =>
-    lTiled && L.variant.sampleTileable
-      ? L.variant.sampleTileable((u * s + ox) * freq, (v * s + oy) * freq, z * freq, s * freq, s * freq)
-      : L.variant.sample((u * s + ox) * freq, (v * s + oy) * freq, z * freq)
-  if (L.octaves === 1 && L.style === 'basic') return one(1)
-  let acc = 0
-  let amp = 1
+  const one = (freq: number, o: number): number =>
+    lTiled && L.variant.sampleRawTileable
+      ? L.variant.sampleRawTileable(
+          (u * s + ox) * freq + o * OFF_X,
+          (v * s + oy) * freq + o * OFF_Y,
+          z * freq + o * OFF_Z,
+          s * freq,
+          s * freq,
+        )
+      : L.variant.sampleRaw((u * s + ox) * freq + o * OFF_X, (v * s + oy) * freq + o * OFF_Y, z * freq + o * OFF_Z)
+  if (L.octaves === 1 && L.style === 'basic') return clamp01(one(1, 0))
+  if (L.rotate) return foldOctaves(L, rotatedSampler(L, u * s + ox, v * s + oy, z))
   let freq = 1
-  let sumAmp = 0
-  let sumSq = 0
-  for (let o = 0; o < L.octaves; o++) {
-    const nv = one(freq)
-    if (L.style === 'basic') acc += amp * (nv - 0.5)
-    else if (L.style === 'billow') acc += amp * Math.abs(2 * nv - 1)
-    else {
-      const r = 1 - Math.abs(2 * nv - 1)
-      acc += amp * r * r
-    }
-    sumAmp += amp
-    sumSq += amp * amp
-    amp *= L.gain
+  return foldOctaves(L, o => {
+    const nv = one(freq, o)
     freq *= 2
-  }
-  const n = L.style === 'basic' ? 0.5 + acc / Math.sqrt(sumSq) : acc / sumAmp
-  return n < 0 ? 0 : n > 1 ? 1 : n
+    return nv
+  })
 }
 
 /**
@@ -71,34 +147,26 @@ export const createSolidSampler = (cfg: RenderConfig): ((x: number, y: number, z
       const ox = vx * time
       const oy = vy * time
       const oz = Z_SPEED * time
-      const one = (freq: number): number =>
+      const one = (freq: number, o: number): number =>
         L.variant.dim === 3
-          ? L.variant.sample((px * s + ox) * freq, (py * s + oy) * freq, (z * s + oz) * freq)
-          : L.variant.sample((px * s + ox) * freq, (py * s + oy) * freq, 0)
+          ? L.variant.sampleRaw(
+              (px * s + ox) * freq + o * OFF_X,
+              (py * s + oy) * freq + o * OFF_Y,
+              (z * s + oz) * freq + o * OFF_Z,
+            )
+          : L.variant.sampleRaw((px * s + ox) * freq + o * OFF_X, (py * s + oy) * freq + o * OFF_Y, 0)
       let val: number
       if (L.octaves === 1 && L.style === 'basic') {
-        val = one(1)
+        val = clamp01(one(1, 0))
+      } else if (L.rotate) {
+        val = foldOctaves(L, rotatedSampler(L, px * s + ox, py * s + oy, L.variant.dim === 3 ? z * s + oz : 0))
       } else {
-        let sum = 0
-        let amp = 1
         let freq = 1
-        let sumAmp = 0
-        let sumSq = 0
-        for (let o = 0; o < L.octaves; o++) {
-          const nv = one(freq)
-          if (L.style === 'basic') sum += amp * (nv - 0.5)
-          else if (L.style === 'billow') sum += amp * Math.abs(2 * nv - 1)
-          else {
-            const r = 1 - Math.abs(2 * nv - 1)
-            sum += amp * r * r
-          }
-          sumAmp += amp
-          sumSq += amp * amp
-          amp *= L.gain
+        val = foldOctaves(L, o => {
+          const nv = one(freq, o)
           freq *= 2
-        }
-        const n = L.style === 'basic' ? 0.5 + sum / Math.sqrt(sumSq) : sum / sumAmp
-        val = n < 0 ? 0 : n > 1 ? 1 : n
+          return nv
+        })
       }
       const b = applyBlend(L.blend, acc, val)
       acc += (b - acc) * L.opacity

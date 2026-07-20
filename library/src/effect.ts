@@ -22,14 +22,22 @@ export type LayerSpec = {
   variant?: string
   /** Convenience selector: pick the 2D or 3D variant. Defaults to 3D when available. */
   dim?: 2 | 3
-  /** Fractal octaves, 1-10 (lacunarity 2). Default 1. */
+  /**
+   * Fractal octaves, 1-6 — classic fBm: lacunarity 2, gain 0.5,
+   * variance-preserving normalization. Default 1. Capped at 6 because at gain
+   * 0.5 the seventh octave's contribution falls below one 8-bit display level
+   * (and below the pixel grid at the default scale), while cost stays linear
+   * in octaves — the cap is where the last just-visible octave sits.
+   */
   octaves?: number
   /**
-   * Per-octave amplitude falloff, 0.1-0.9. Default 0.5 (classic fBm). Higher
-   * values keep the fine octaves audible instead of letting them vanish under
-   * the normalization, so a high octave count actually roughens the result.
+   * Rotate each octave instead of offsetting it — the classic shader-fBm
+   * construction (iq's rotation matrices, lacunarity 2.02). Stronger octave
+   * decorrelation than the default offsets, at the price of tiling: a rotated
+   * field has no period, so a rotated layer makes the stack non-tileable.
+   * No effect at 1 octave. Default false.
    */
-  gain?: number
+  rotate?: boolean
   /** Per-octave shaping. Default 'basic'. */
   style?: FractalStyle
   /** Multiplies the noise's base lattice scale (finer detail above 1). Default 1. */
@@ -102,8 +110,8 @@ const normalizeLayer = (spec: LayerSpec, index: number): Required<LayerSpec> => 
   const noise = getNoise(spec.noise)
   if (!noise) throw new Error(`Unknown noise "${spec.noise}". Known ids: ${NOISES.map(n => n.id).join(', ')}`)
   const variant = resolveVariant(noise, spec)
-  const octaves = Math.min(10, Math.max(1, Math.round(spec.octaves ?? 1)))
-  const gain = Number.isFinite(spec.gain) ? Math.min(0.9, Math.max(0.1, spec.gain as number)) : 0.5
+  const octaves = Math.min(6, Math.max(1, Math.round(spec.octaves ?? 1)))
+  const rotate = Boolean(spec.rotate)
   const style = spec.style && STYLES.includes(spec.style) ? spec.style : 'basic'
   const blend =
     index === 0
@@ -118,7 +126,7 @@ const normalizeLayer = (spec: LayerSpec, index: number): Required<LayerSpec> => 
     variant: variant.id,
     dim: variant.dim,
     octaves,
-    gain,
+    rotate,
     style,
     scale,
     blend,
@@ -147,7 +155,8 @@ export const createEffect = (spec: EffectSpec): Effect => {
   const normalized = spec.layers.map(normalizeLayer)
   const tileable = normalized.every(l => {
     const noise = getNoise(l.noise) as NoiseDef
-    return getVariant(noise, l.variant).sampleTileable !== null
+    // Rotated octaves have no period; rotate is inert at 1 octave.
+    return getVariant(noise, l.variant).sampleTileable !== null && !(l.rotate && l.octaves > 1)
   })
   const tiled = Boolean(spec.tiled) && tileable
 
@@ -159,7 +168,7 @@ export const createEffect = (spec: EffectSpec): Effect => {
       variant: getVariant(noise, l.variant),
       scale: tiled ? Math.max(1, Math.round(raw)) : raw,
       octaves: l.octaves,
-      gain: l.gain,
+      rotate: l.rotate,
       style: l.style,
       blend: l.blend,
       opacity: l.opacity,

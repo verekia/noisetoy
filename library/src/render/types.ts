@@ -3,9 +3,73 @@ import type { NoiseVariant } from '../registry'
 /**
  * Per-octave shaping of the fractal operator: 'basic' sums signed octaves
  * (fBm), 'billow' folds each octave's absolute value (puffy look), 'ridged'
- * inverts the fold (mountain-ridge look).
+ * inverts the fold with Musgrave-style spectral feedback (mountain-ridge
+ * look: sharp detail on crests, calm basins).
  */
 export type FractalStyle = 'basic' | 'billow' | 'ridged'
+
+/**
+ * Per-octave sample offset, in lattice cells, applied as octave x this vector
+ * when a layer does NOT rotate its octaves. Octaves sample the same field at
+ * exactly doubled frequency, so without an offset every lattice point of
+ * octave o is also a lattice point of octave o+1 — and gradient noises are
+ * exactly zero at all of them simultaneously, pinning the fractal to
+ * mid-grey on a visible grid. A constant shift with a non-integer fractional
+ * part breaks the alignment (integer shifts do not: lattice noises are zero
+ * at lattice points whatever the hash cell). The stronger alternative,
+ * rotating each octave (see OCTAVE_ROT2/3), cannot tile; offsets keep the
+ * tiled and untiled paths identical. Fractional parts follow the golden
+ * ratio so small octave multiples stay away from integers.
+ */
+export const OCTAVE_OFFSET: readonly [number, number, number] = [19.618, 27.236, 41.854]
+
+/**
+ * Rotated-octave frequency step of the `rotate` fractal option, row-major —
+ * the classic shader-fBm construction popularised by Inigo Quilez
+ * (iquilezles.org/articles/fbm): a rotation by atan(3/4) in 2D and by his
+ * orthonormal m3 in 3D, both scaled by a lacunarity of 2.02. Rotation breaks
+ * every lattice alignment between octaves, not just the zero-pinning the
+ * offsets fix, but a rotated field has no period, so a rotated layer cannot
+ * tile. The 1% detune off a lacunarity of 2 is load-bearing, not decoration:
+ * the rotations are rational (built from 3-4-5 triangles), and at exactly 2
+ * they map the lattice line (±5k, 0, 0) back into integer lattice points
+ * forever, where every gradient-noise octave is exactly zero. The origin
+ * itself remains a fixed point of any linear map, so a rotated fractal over
+ * gradient noise is exactly mid-grey at the origin.
+ */
+export const OCTAVE_ROT2: readonly number[] = [1.616, 1.212, -1.212, 1.616]
+
+export const OCTAVE_ROT3: readonly number[] = [0, -1.616, -1.212, 1.616, 0.7272, -0.9696, 1.212, -0.9696, 1.2928]
+
+/**
+ * Feedback strength of the 'ridged' style: each octave's signal is scaled by
+ * the previous octave's signal (clamped to [0, 1]), after Musgrave's ridged
+ * multifractal. 2 is Musgrave's published default. (Musgrave calls this knob
+ * "gain"; the amplitude falloff here is fixed at the classic 0.5.)
+ */
+export const RIDGE_FEEDBACK = 2
+
+/**
+ * Per-octave amplitude falloff of the fractal operator, fixed at the classic
+ * fBm value. Since it is fixed, the two normalizers below are closed forms of
+ * the octave count alone and are precomputed instead of accumulated in the
+ * octave loop.
+ */
+export const FRACTAL_GAIN = 0.5
+
+/** Amplitude sum for N octaves: what 'billow' and 'ridged' divide by. */
+export const fractalAmpSum = (octaves: number): number => 2 * (1 - 0.5 ** octaves)
+
+/**
+ * RMS amplitude (sqrt of the summed squared amplitudes) for N octaves: what
+ * 'basic' divides by. Octaves are nearly independent, so variance adds, and
+ * dividing by the RMS preserves the basis noise's display contrast at any
+ * octave count. Dividing by the amplitude sum instead can never clip, but
+ * washes the result toward mid-grey and makes octave count double as an
+ * unwanted contrast knob; with the RMS the rarest extremes clip — the same
+ * top-0.1% trade the calibrated display norms make.
+ */
+export const fractalRms = (octaves: number): number => Math.sqrt((1 - 0.25 ** octaves) / 0.75)
 
 /**
  * How a layer combines with the accumulated result of the layers below it.
@@ -88,18 +152,20 @@ export type LayerConfig = {
    */
   scale: number
   /**
-   * Fractal stacking applied on top of the noise (lacunarity 2), normalized
-   * variance-preserving by sqrt(sum of squared amplitudes). This is a
-   * display-level operator kept out of the core noise implementations.
+   * Fractal stacking applied on top of the noise — classic fBm: lacunarity 2,
+   * gain FRACTAL_GAIN, per-octave decorrelation offsets, variance-preserving
+   * normalization (see fractalRms). Octaves fold the noise's pre-clamp
+   * display value and clamp once at the end, so no octave is clipped before
+   * it is summed. This is a display-level operator kept out of the core noise
+   * implementations.
    */
   octaves: number
   /**
-   * Per-octave amplitude falloff. At the classic 0.5 each octave carries half
-   * the previous one, so past ~5 octaves the additions fall below one 8-bit
-   * level and below the pixel grid; raising it keeps the fine octaves
-   * contributing.
+   * Rotate each octave (OCTAVE_ROT2/3) instead of offsetting it — the classic
+   * fBm construction. Inert at 1 octave; forces the layer off the tileable
+   * code paths, since a rotated field has no period.
    */
-  gain: number
+  rotate: boolean
   style: FractalStyle
   /** Ignored for the bottom layer. */
   blend: BlendMode

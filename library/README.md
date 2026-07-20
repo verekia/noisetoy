@@ -41,9 +41,9 @@ Layers apply bottom to top with a blend mode and opacity, Photoshop-style. Every
 | ----------------- | ----------------- | ------------------------------------------------------------------------------------------- |
 | `noise`           | —                 | Noise id, e.g. `'perlin'` (see `NOISES`)                                                    |
 | `variant` / `dim` | 3D when available | `variant: 'perlin-2d'` or `dim: 2`                                                          |
-| `octaves`         | `1`               | 1–10, lacunarity 2                                                                          |
-| `gain`            | `0.5`             | 0.1–0.9 per-octave amplitude falloff; raise it to keep fine octaves visible                 |
-| `style`           | `'basic'`         | `'basic'` (fBm), `'billow'`, `'ridged'`                                                     |
+| `octaves`         | `1`               | 1–6 fBm octaves: lacunarity 2, gain 0.5, decorrelation offsets, variance-preserving         |
+| `rotate`          | `false`           | Rotate octaves (classic fBm construction, iq matrices, lacunarity 2.02); breaks tiling      |
+| `style`           | `'basic'`         | `'basic'` (fBm), `'billow'`, `'ridged'` (Musgrave-style spectral feedback)                  |
 | `scale`           | `1`               | Multiplies the noise's base lattice scale                                                   |
 | `blend`           | `'normal'`        | `normal`, `add`, `multiply`, `screen`, `overlay`, `difference`, `darken`, `lighten`, `warp` |
 | `opacity`         | `1`               | Mixes the blended result with the layers below                                              |

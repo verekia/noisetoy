@@ -33,8 +33,6 @@ type UILayer = PickerDraft & {
 
 const SPEEDS = [0, 0.25, 0.5, 1, 2, 4]
 
-const GAINS = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
-
 let nextLayerId = 2
 
 const firstNoise = NOISES[0] as NoiseDef
@@ -50,7 +48,7 @@ export default function Home() {
       noiseId: 'perlin',
       variantId: 'perlin-3d',
       octaves: 1,
-      gain: 0.5,
+      rotate: false,
       style: 'basic',
       blend: 'normal',
       opacity: 1,
@@ -100,7 +98,7 @@ export default function Home() {
         noise: l.noiseId,
         variant: l.variantId,
         octaves: l.octaves,
-        gain: l.gain,
+        rotate: l.rotate,
         style: l.style,
         scale: l.scaleMul,
         blend: l.blend,
@@ -174,7 +172,7 @@ export default function Home() {
           noise: l.noiseId,
           variant: l.variantId,
           octaves: l.octaves,
-          gain: l.gain,
+          rotate: l.rotate,
           style: l.style,
           blend: l.blend,
           opacity: l.opacity,
@@ -213,9 +211,9 @@ export default function Home() {
         const n = getNoise(String(o.noise ?? ''))
         if (!n) throw new Error(`Layer ${i + 1}: unknown noise "${String(o.noise)}"`)
         const v = n.variants.find(x => x.id === o.variant) ?? defaultVariant(n)
-        const octaves = Math.min(10, Math.max(1, Math.round(Number(o.octaves)) || 1))
+        const octaves = Math.min(6, Math.max(1, Math.round(Number(o.octaves)) || 1))
         const style = STYLES.includes(o.style as FractalStyle) ? (o.style as FractalStyle) : 'basic'
-        const gain = GAINS.includes(Number(o.gain)) ? Number(o.gain) : 0.5
+        const rotate = Boolean(o.rotate)
         const blend = BLEND_MODES.some(m => m.id === o.blend) ? (o.blend as BlendMode) : 'normal'
         const rawOpacity = Number(o.opacity)
         const opacity = Number.isFinite(rawOpacity) ? Math.min(1, Math.max(0, rawOpacity)) : 1
@@ -228,7 +226,7 @@ export default function Home() {
           noiseId: n.id,
           variantId: v.id,
           octaves,
-          gain,
+          rotate,
           style,
           blend,
           opacity,
@@ -307,7 +305,7 @@ export default function Home() {
       noise: l.noiseId,
       variant: l.variantId,
       octaves: l.octaves,
-      gain: l.gain,
+      rotate: l.rotate,
       style: l.style,
       scale: l.scaleMul,
       blend: l.blend,
@@ -495,7 +493,7 @@ export default function Home() {
                             onChange={e => updateLayer(l.id, { octaves: Number(e.target.value) })}
                             className={selectClass}
                           >
-                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(o => (
+                            {[1, 2, 3, 4, 5, 6].map(o => (
                               <option key={o} value={o}>
                                 {o}
                               </option>
@@ -503,19 +501,16 @@ export default function Home() {
                           </select>
                         </label>
                         {l.octaves > 1 && (
-                          <label className="flex items-center gap-1.5 text-xs text-zinc-500">
-                            Gain
-                            <select
-                              value={l.gain}
-                              onChange={e => updateLayer(l.id, { gain: Number(e.target.value) })}
-                              className={selectClass}
-                            >
-                              {GAINS.map(g => (
-                                <option key={g} value={g}>
-                                  {g}
-                                </option>
-                              ))}
-                            </select>
+                          <label
+                            className="flex items-center gap-1.5 text-xs text-zinc-500"
+                            title="Classic fBm construction: rotated octaves, stronger decorrelation. Breaks tiling."
+                          >
+                            fBm
+                            <input
+                              type="checkbox"
+                              checked={l.rotate}
+                              onChange={e => updateLayer(l.id, { rotate: e.target.checked })}
+                            />
                           </label>
                         )}
                         <label className="flex items-center gap-1.5 text-xs text-zinc-500">

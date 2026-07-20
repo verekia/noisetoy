@@ -90,8 +90,8 @@ describe('estimateCost', () => {
   // The measured relationship: an octave and a layer cost the same.
   test('octaves scale linearly', () => {
     const one = cost({ layers: [{ noise: 'perlin', dim: 3 }] }).units
-    const eight = cost({ layers: [{ noise: 'perlin', dim: 3, octaves: 8 }] }).units
-    expect(eight).toBeCloseTo(one * 8, 5)
+    const six = cost({ layers: [{ noise: 'perlin', dim: 3, octaves: 6 }] }).units
+    expect(six).toBeCloseTo(one * 6, 5)
   })
 
   test('a layer costs the same as an octave', () => {
@@ -113,7 +113,7 @@ describe('estimateCost', () => {
   test('layers under an opaque normal blend are free', () => {
     const e = cost({
       layers: [
-        { noise: 'ripple', dim: 3, octaves: 10 },
+        { noise: 'ripple', dim: 3, octaves: 6 },
         { noise: 'perlin', dim: 3, blend: 'normal', opacity: 1 },
       ],
     })

@@ -1,12 +1,18 @@
 // Central registry of all noises. For each noise variant it exposes:
-// - `sample` / `sampleTileable`: TS display functions returning [0, 1]
+// - `sampleRaw` / `sampleRawTileable`: TS functions returning the display
+//   value BEFORE the [0, 1] clamp (centered at 0.5 for signed noises)
+// - `sample` / `sampleTileable`: the same, clamped to [0, 1]
 // - `glsl` / `glslTileable`: self-contained GLSL sources defining
 //   `float noiseMain(vecN p)` / `float noiseMainT(vecN p, vec2 per)`
 // - `wgsl` / `wgslTileable`: WGSL sources defining
 //   `fn noiseMain(p: vecNf) -> f32` / `fn noiseMainT(p: vecNf, per: vec2f) -> f32`
 //
-// The display mapping (normalization + clamp to [0, 1]) lives here, not in the
-// algorithm files, so the core implementations keep their natural ranges.
+// The display mapping (normalization to nominal [0, 1]) lives here, not in the
+// algorithm files, so the core implementations keep their natural ranges. The
+// clamp is applied by the consumers: the composers clamp a single octave
+// directly, and the fractal operator folds the UNCLAMPED value and clamps once
+// at the end — clamping per octave would flatten each octave's peaks before
+// they are summed, which is not fBm.
 
 import { crackle2, crackle3, foam2, foam3, mosaic2, mosaic3, stars2, stars3 } from './noises/cellular'
 import { CELLULAR_GLSL } from './noises/cellular.glsl'
@@ -151,9 +157,11 @@ export type SampleTileableFn = (x: number, y: number, z: number, px: number, py:
 
 /**
  * Composable shader source: dependency chunks (excluding the common hash
- * library, which renderers prepend once) plus a display expression in [0, 1]
- * over `p` (and `per` for tileable specs). Kept as pieces rather than a
- * composed program so multi-layer renders can deduplicate shared chunks.
+ * library, which renderers prepend once) plus the pre-clamp display expression
+ * over `p` (and `per` for tileable specs) — nominally [0, 1], unclamped so the
+ * fractal operator can fold it; composers clamp at display. Kept as pieces
+ * rather than a composed program so multi-layer renders can deduplicate
+ * shared chunks.
  */
 export type ShaderSpec = { dim: 2 | 3; deps: string[]; expr: string }
 
@@ -161,8 +169,12 @@ export type NoiseVariant = {
   id: string
   label: string
   dim: 2 | 3
+  /** Display sample, clamped to [0, 1]. */
   sample: SampleFn
   sampleTileable: SampleTileableFn | null
+  /** Pre-clamp display value; what the fractal operator folds per octave. */
+  sampleRaw: SampleFn
+  sampleRawTileable: SampleTileableFn | null
   glsl: ShaderSpec
   glslTileable: ShaderSpec | null
   wgsl: ShaderSpec
@@ -172,8 +184,11 @@ export type NoiseVariant = {
   tslTileable: ShaderSpec | null
 }
 
-/** Registry entries are defined without TSL specs; they are merged in below from tsl-specs.ts. */
-type NoiseVariantBase = Omit<NoiseVariant, 'tsl' | 'tslTileable'>
+/**
+ * Registry entries define only the raw samplers and no TSL specs; the clamped
+ * display samplers and the TSL specs are derived/merged in below.
+ */
+type NoiseVariantBase = Omit<NoiseVariant, 'tsl' | 'tslTileable' | 'sample' | 'sampleTileable'>
 type NoiseDefBase = Omit<NoiseDef, 'variants'> & { variants: NoiseVariantBase[] }
 
 export type NoiseDef = {
@@ -217,12 +232,12 @@ const glslMainT = spec
 const wgslMain = spec
 const wgslMainT = spec
 
-const signedExpr = (norm: number, call: string): string => `clamp(0.5 + 0.5 * ${fmt(norm)} * ${call}, 0.0, 1.0)`
+const signedExpr = (norm: number, call: string): string => `0.5 + 0.5 * ${fmt(norm)} * ${call}`
 
 const signedTs =
   (norm: number, fn: (...args: number[]) => number) =>
   (...args: number[]): number =>
-    clamp01(0.5 + 0.5 * norm * fn(...args))
+    0.5 + 0.5 * norm * fn(...args)
 
 const RAW_NOISES: NoiseDefBase[] = [
   {
@@ -238,8 +253,8 @@ const RAW_NOISES: NoiseDefBase[] = [
         id: 'value-2d',
         label: '2D',
         dim: 2,
-        sample: (x, y) => value2(x, y),
-        sampleTileable: (x, y, _z, px, py) => value2Tileable(x, y, px, py),
+        sampleRaw: (x, y) => value2(x, y),
+        sampleRawTileable: (x, y, _z, px, py) => value2Tileable(x, y, px, py),
         glsl: glslMain(2, [VALUE_GLSL], 'value2(p)'),
         glslTileable: glslMainT(2, [VALUE_TILEABLE_GLSL], 'value2T(p, per)'),
         wgsl: wgslMain(2, [VALUE_WGSL], 'value2(p)'),
@@ -249,8 +264,8 @@ const RAW_NOISES: NoiseDefBase[] = [
         id: 'value-3d',
         label: '3D',
         dim: 3,
-        sample: (x, y, z) => value3(x, y, z),
-        sampleTileable: (x, y, z, px, py) => value3Tileable(x, y, z, px, py),
+        sampleRaw: (x, y, z) => value3(x, y, z),
+        sampleRawTileable: (x, y, z, px, py) => value3Tileable(x, y, z, px, py),
         glsl: glslMain(3, [VALUE_GLSL], 'value3(p)'),
         glslTileable: glslMainT(3, [VALUE_TILEABLE_GLSL], 'value3T(p, per)'),
         wgsl: wgslMain(3, [VALUE_WGSL], 'value3(p)'),
@@ -272,8 +287,8 @@ const RAW_NOISES: NoiseDefBase[] = [
         id: 'white-2d',
         label: '2D',
         dim: 2,
-        sample: (x, y) => white2(x, y),
-        sampleTileable: (x, y, _z, px, py) => white2Tileable(x, y, px, py),
+        sampleRaw: (x, y) => white2(x, y),
+        sampleRawTileable: (x, y, _z, px, py) => white2Tileable(x, y, px, py),
         glsl: glslMain(2, [WHITE_GLSL], 'white2(p)'),
         glslTileable: glslMainT(2, [WHITE_TILEABLE_GLSL], 'white2T(p, per)'),
         wgsl: wgslMain(2, [WHITE_WGSL], 'white2(p)'),
@@ -283,8 +298,8 @@ const RAW_NOISES: NoiseDefBase[] = [
         id: 'white-3d',
         label: '3D',
         dim: 3,
-        sample: (x, y, z) => white3(x, y, z),
-        sampleTileable: (x, y, z, px, py) => white3Tileable(x, y, z, px, py),
+        sampleRaw: (x, y, z) => white3(x, y, z),
+        sampleRawTileable: (x, y, z, px, py) => white3Tileable(x, y, z, px, py),
         glsl: glslMain(3, [WHITE_GLSL], 'white3(p)'),
         glslTileable: glslMainT(3, [WHITE_TILEABLE_GLSL], 'white3T(p, per)'),
         wgsl: wgslMain(3, [WHITE_WGSL], 'white3(p)'),
@@ -305,8 +320,8 @@ const RAW_NOISES: NoiseDefBase[] = [
         id: 'perlin-2d',
         label: '2D',
         dim: 2,
-        sample: (x, y) => clamp01(0.5 + 0.5 * PERLIN2_NORM * perlin2(x, y)),
-        sampleTileable: (x, y, _z, px, py) => clamp01(0.5 + 0.5 * PERLIN2_NORM * perlin2Tileable(x, y, px, py)),
+        sampleRaw: (x, y) => 0.5 + 0.5 * PERLIN2_NORM * perlin2(x, y),
+        sampleRawTileable: (x, y, _z, px, py) => 0.5 + 0.5 * PERLIN2_NORM * perlin2Tileable(x, y, px, py),
         glsl: glslMain(2, [PERLIN_GLSL], signedExpr(PERLIN2_NORM, 'perlin2(p)')),
         glslTileable: glslMainT(2, [PERLIN_GLSL, PERLIN_TILEABLE_GLSL], signedExpr(PERLIN2_NORM, 'perlin2T(p, per)')),
         wgsl: wgslMain(2, [PERLIN_WGSL], signedExpr(PERLIN2_NORM, 'perlin2(p)')),
@@ -316,8 +331,8 @@ const RAW_NOISES: NoiseDefBase[] = [
         id: 'perlin-3d',
         label: '3D',
         dim: 3,
-        sample: (x, y, z) => clamp01(0.5 + 0.5 * PERLIN3_NORM * perlin3(x, y, z)),
-        sampleTileable: (x, y, z, px, py) => clamp01(0.5 + 0.5 * PERLIN3_NORM * perlin3Tileable(x, y, z, px, py)),
+        sampleRaw: (x, y, z) => 0.5 + 0.5 * PERLIN3_NORM * perlin3(x, y, z),
+        sampleRawTileable: (x, y, z, px, py) => 0.5 + 0.5 * PERLIN3_NORM * perlin3Tileable(x, y, z, px, py),
         glsl: glslMain(3, [PERLIN_GLSL], signedExpr(PERLIN3_NORM, 'perlin3(p)')),
         glslTileable: glslMainT(3, [PERLIN_GLSL, PERLIN_TILEABLE_GLSL], signedExpr(PERLIN3_NORM, 'perlin3T(p, per)')),
         wgsl: wgslMain(3, [PERLIN_WGSL], signedExpr(PERLIN3_NORM, 'perlin3(p)')),
@@ -339,8 +354,8 @@ const RAW_NOISES: NoiseDefBase[] = [
         id: 'flow-3d',
         label: '3D',
         dim: 3,
-        sample: signedTs(PERLIN2_NORM, flow3),
-        sampleTileable: (x, y, z, px, py) => clamp01(0.5 + 0.5 * PERLIN2_NORM * flow3Tileable(x, y, z, px, py)),
+        sampleRaw: signedTs(PERLIN2_NORM, flow3),
+        sampleRawTileable: (x, y, z, px, py) => 0.5 + 0.5 * PERLIN2_NORM * flow3Tileable(x, y, z, px, py),
         glsl: glslMain(3, [FLOW_GLSL], signedExpr(PERLIN2_NORM, 'flow3(p)')),
         glslTileable: glslMainT(3, [FLOW_GLSL, FLOW_TILEABLE_GLSL], signedExpr(PERLIN2_NORM, 'flow3T(p, per)')),
         wgsl: wgslMain(3, [FLOW_WGSL], signedExpr(PERLIN2_NORM, 'flow3(p)')),
@@ -361,8 +376,8 @@ const RAW_NOISES: NoiseDefBase[] = [
         id: 'simplex-2d',
         label: '2D',
         dim: 2,
-        sample: signedTs(SIMPLEX2_NORM, simplex2),
-        sampleTileable: (x, y, _z, px, py) => clamp01(0.5 + 0.5 * SIMPLEX4_NORM * simplex2TileableTorus(x, y, px, py)),
+        sampleRaw: signedTs(SIMPLEX2_NORM, simplex2),
+        sampleRawTileable: (x, y, _z, px, py) => 0.5 + 0.5 * SIMPLEX4_NORM * simplex2TileableTorus(x, y, px, py),
         glsl: glslMain(2, [SIMPLEX_GLSL], signedExpr(SIMPLEX2_NORM, 'simplex2(p)')),
         glslTileable: glslMainT(
           2,
@@ -380,8 +395,8 @@ const RAW_NOISES: NoiseDefBase[] = [
         id: 'simplex-3d',
         label: '3D',
         dim: 3,
-        sample: signedTs(SIMPLEX3_NORM, simplex3),
-        sampleTileable: null,
+        sampleRaw: signedTs(SIMPLEX3_NORM, simplex3),
+        sampleRawTileable: null,
         glsl: glslMain(3, [SIMPLEX_GLSL], signedExpr(SIMPLEX3_NORM, 'simplex3(p)')),
         glslTileable: null,
         wgsl: wgslMain(3, [SIMPLEX_WGSL], signedExpr(SIMPLEX3_NORM, 'simplex3(p)')),
@@ -402,8 +417,8 @@ const RAW_NOISES: NoiseDefBase[] = [
         id: 'simplex-loop-3d',
         label: '3D',
         dim: 3,
-        sample: signedTs(SIMPLEX4_NORM, simplexLoop3),
-        sampleTileable: null,
+        sampleRaw: signedTs(SIMPLEX4_NORM, simplexLoop3),
+        sampleRawTileable: null,
         glsl: glslMain(3, [SIMPLEX4_GLSL, SIMPLEX_LOOP_GLSL], signedExpr(SIMPLEX4_NORM, 'simplexLoop3(p)')),
         glslTileable: null,
         wgsl: wgslMain(3, [SIMPLEX4_WGSL, SIMPLEX_LOOP_WGSL], signedExpr(SIMPLEX4_NORM, 'simplexLoop3(p)')),
@@ -424,23 +439,23 @@ const RAW_NOISES: NoiseDefBase[] = [
         id: 'worley-2d',
         label: '2D',
         dim: 2,
-        sample: (x, y) => clamp01(worley2(x, y)),
-        sampleTileable: (x, y, _z, px, py) => clamp01(worley2Tileable(x, y, px, py)),
-        glsl: glslMain(2, [WORLEY_GLSL], 'clamp(worley2(p), 0.0, 1.0)'),
-        glslTileable: glslMainT(2, [WORLEY_TILEABLE_GLSL], 'clamp(worley2T(p, per), 0.0, 1.0)'),
-        wgsl: wgslMain(2, [WORLEY_WGSL], 'clamp(worley2(p), 0.0, 1.0)'),
-        wgslTileable: wgslMainT(2, [WORLEY_TILEABLE_WGSL], 'clamp(worley2T(p, per), 0.0, 1.0)'),
+        sampleRaw: (x, y) => worley2(x, y),
+        sampleRawTileable: (x, y, _z, px, py) => worley2Tileable(x, y, px, py),
+        glsl: glslMain(2, [WORLEY_GLSL], 'worley2(p)'),
+        glslTileable: glslMainT(2, [WORLEY_TILEABLE_GLSL], 'worley2T(p, per)'),
+        wgsl: wgslMain(2, [WORLEY_WGSL], 'worley2(p)'),
+        wgslTileable: wgslMainT(2, [WORLEY_TILEABLE_WGSL], 'worley2T(p, per)'),
       },
       {
         id: 'worley-3d',
         label: '3D',
         dim: 3,
-        sample: (x, y, z) => clamp01(worley3(x, y, z)),
-        sampleTileable: (x, y, z, px, py) => clamp01(worley3Tileable(x, y, z, px, py)),
-        glsl: glslMain(3, [WORLEY_GLSL], 'clamp(worley3(p), 0.0, 1.0)'),
-        glslTileable: glslMainT(3, [WORLEY_TILEABLE_GLSL], 'clamp(worley3T(p, per), 0.0, 1.0)'),
-        wgsl: wgslMain(3, [WORLEY_WGSL], 'clamp(worley3(p), 0.0, 1.0)'),
-        wgslTileable: wgslMainT(3, [WORLEY_TILEABLE_WGSL], 'clamp(worley3T(p, per), 0.0, 1.0)'),
+        sampleRaw: (x, y, z) => worley3(x, y, z),
+        sampleRawTileable: (x, y, z, px, py) => worley3Tileable(x, y, z, px, py),
+        glsl: glslMain(3, [WORLEY_GLSL], 'worley3(p)'),
+        glslTileable: glslMainT(3, [WORLEY_TILEABLE_GLSL], 'worley3T(p, per)'),
+        wgsl: wgslMain(3, [WORLEY_WGSL], 'worley3(p)'),
+        wgslTileable: wgslMainT(3, [WORLEY_TILEABLE_WGSL], 'worley3T(p, per)'),
       },
     ],
   },
@@ -458,39 +473,23 @@ const RAW_NOISES: NoiseDefBase[] = [
         id: 'worley-manhattan-2d',
         label: '2D',
         dim: 2,
-        sample: (x, y) => clamp01(MANHATTAN2_NORM * manhattan2(x, y)),
-        sampleTileable: (x, y, _z, px, py) => clamp01(MANHATTAN2_NORM * manhattan2Tileable(x, y, px, py)),
-        glsl: glslMain(2, [WORLEY_METRICS_GLSL], `clamp(${fmt(MANHATTAN2_NORM)} * manhattan2(p), 0.0, 1.0)`),
-        glslTileable: glslMainT(
-          2,
-          [WORLEY_METRICS_TILEABLE_GLSL],
-          `clamp(${fmt(MANHATTAN2_NORM)} * manhattan2T(p, per), 0.0, 1.0)`,
-        ),
-        wgsl: wgslMain(2, [WORLEY_METRICS_WGSL], `clamp(${fmt(MANHATTAN2_NORM)} * manhattan2(p), 0.0, 1.0)`),
-        wgslTileable: wgslMainT(
-          2,
-          [WORLEY_METRICS_TILEABLE_WGSL],
-          `clamp(${fmt(MANHATTAN2_NORM)} * manhattan2T(p, per), 0.0, 1.0)`,
-        ),
+        sampleRaw: (x, y) => MANHATTAN2_NORM * manhattan2(x, y),
+        sampleRawTileable: (x, y, _z, px, py) => MANHATTAN2_NORM * manhattan2Tileable(x, y, px, py),
+        glsl: glslMain(2, [WORLEY_METRICS_GLSL], `${fmt(MANHATTAN2_NORM)} * manhattan2(p)`),
+        glslTileable: glslMainT(2, [WORLEY_METRICS_TILEABLE_GLSL], `${fmt(MANHATTAN2_NORM)} * manhattan2T(p, per)`),
+        wgsl: wgslMain(2, [WORLEY_METRICS_WGSL], `${fmt(MANHATTAN2_NORM)} * manhattan2(p)`),
+        wgslTileable: wgslMainT(2, [WORLEY_METRICS_TILEABLE_WGSL], `${fmt(MANHATTAN2_NORM)} * manhattan2T(p, per)`),
       },
       {
         id: 'worley-manhattan-3d',
         label: '3D',
         dim: 3,
-        sample: (x, y, z) => clamp01(MANHATTAN3_NORM * manhattan3(x, y, z)),
-        sampleTileable: (x, y, z, px, py) => clamp01(MANHATTAN3_NORM * manhattan3Tileable(x, y, z, px, py)),
-        glsl: glslMain(3, [WORLEY_METRICS_GLSL], `clamp(${fmt(MANHATTAN3_NORM)} * manhattan3(p), 0.0, 1.0)`),
-        glslTileable: glslMainT(
-          3,
-          [WORLEY_METRICS_TILEABLE_GLSL],
-          `clamp(${fmt(MANHATTAN3_NORM)} * manhattan3T(p, per), 0.0, 1.0)`,
-        ),
-        wgsl: wgslMain(3, [WORLEY_METRICS_WGSL], `clamp(${fmt(MANHATTAN3_NORM)} * manhattan3(p), 0.0, 1.0)`),
-        wgslTileable: wgslMainT(
-          3,
-          [WORLEY_METRICS_TILEABLE_WGSL],
-          `clamp(${fmt(MANHATTAN3_NORM)} * manhattan3T(p, per), 0.0, 1.0)`,
-        ),
+        sampleRaw: (x, y, z) => MANHATTAN3_NORM * manhattan3(x, y, z),
+        sampleRawTileable: (x, y, z, px, py) => MANHATTAN3_NORM * manhattan3Tileable(x, y, z, px, py),
+        glsl: glslMain(3, [WORLEY_METRICS_GLSL], `${fmt(MANHATTAN3_NORM)} * manhattan3(p)`),
+        glslTileable: glslMainT(3, [WORLEY_METRICS_TILEABLE_GLSL], `${fmt(MANHATTAN3_NORM)} * manhattan3T(p, per)`),
+        wgsl: wgslMain(3, [WORLEY_METRICS_WGSL], `${fmt(MANHATTAN3_NORM)} * manhattan3(p)`),
+        wgslTileable: wgslMainT(3, [WORLEY_METRICS_TILEABLE_WGSL], `${fmt(MANHATTAN3_NORM)} * manhattan3T(p, per)`),
       },
     ],
   },
@@ -508,39 +507,23 @@ const RAW_NOISES: NoiseDefBase[] = [
         id: 'worley-chebyshev-2d',
         label: '2D',
         dim: 2,
-        sample: (x, y) => clamp01(CHEBYSHEV2_NORM * chebyshev2(x, y)),
-        sampleTileable: (x, y, _z, px, py) => clamp01(CHEBYSHEV2_NORM * chebyshev2Tileable(x, y, px, py)),
-        glsl: glslMain(2, [WORLEY_METRICS_GLSL], `clamp(${fmt(CHEBYSHEV2_NORM)} * chebyshev2(p), 0.0, 1.0)`),
-        glslTileable: glslMainT(
-          2,
-          [WORLEY_METRICS_TILEABLE_GLSL],
-          `clamp(${fmt(CHEBYSHEV2_NORM)} * chebyshev2T(p, per), 0.0, 1.0)`,
-        ),
-        wgsl: wgslMain(2, [WORLEY_METRICS_WGSL], `clamp(${fmt(CHEBYSHEV2_NORM)} * chebyshev2(p), 0.0, 1.0)`),
-        wgslTileable: wgslMainT(
-          2,
-          [WORLEY_METRICS_TILEABLE_WGSL],
-          `clamp(${fmt(CHEBYSHEV2_NORM)} * chebyshev2T(p, per), 0.0, 1.0)`,
-        ),
+        sampleRaw: (x, y) => CHEBYSHEV2_NORM * chebyshev2(x, y),
+        sampleRawTileable: (x, y, _z, px, py) => CHEBYSHEV2_NORM * chebyshev2Tileable(x, y, px, py),
+        glsl: glslMain(2, [WORLEY_METRICS_GLSL], `${fmt(CHEBYSHEV2_NORM)} * chebyshev2(p)`),
+        glslTileable: glslMainT(2, [WORLEY_METRICS_TILEABLE_GLSL], `${fmt(CHEBYSHEV2_NORM)} * chebyshev2T(p, per)`),
+        wgsl: wgslMain(2, [WORLEY_METRICS_WGSL], `${fmt(CHEBYSHEV2_NORM)} * chebyshev2(p)`),
+        wgslTileable: wgslMainT(2, [WORLEY_METRICS_TILEABLE_WGSL], `${fmt(CHEBYSHEV2_NORM)} * chebyshev2T(p, per)`),
       },
       {
         id: 'worley-chebyshev-3d',
         label: '3D',
         dim: 3,
-        sample: (x, y, z) => clamp01(CHEBYSHEV3_NORM * chebyshev3(x, y, z)),
-        sampleTileable: (x, y, z, px, py) => clamp01(CHEBYSHEV3_NORM * chebyshev3Tileable(x, y, z, px, py)),
-        glsl: glslMain(3, [WORLEY_METRICS_GLSL], `clamp(${fmt(CHEBYSHEV3_NORM)} * chebyshev3(p), 0.0, 1.0)`),
-        glslTileable: glslMainT(
-          3,
-          [WORLEY_METRICS_TILEABLE_GLSL],
-          `clamp(${fmt(CHEBYSHEV3_NORM)} * chebyshev3T(p, per), 0.0, 1.0)`,
-        ),
-        wgsl: wgslMain(3, [WORLEY_METRICS_WGSL], `clamp(${fmt(CHEBYSHEV3_NORM)} * chebyshev3(p), 0.0, 1.0)`),
-        wgslTileable: wgslMainT(
-          3,
-          [WORLEY_METRICS_TILEABLE_WGSL],
-          `clamp(${fmt(CHEBYSHEV3_NORM)} * chebyshev3T(p, per), 0.0, 1.0)`,
-        ),
+        sampleRaw: (x, y, z) => CHEBYSHEV3_NORM * chebyshev3(x, y, z),
+        sampleRawTileable: (x, y, z, px, py) => CHEBYSHEV3_NORM * chebyshev3Tileable(x, y, z, px, py),
+        glsl: glslMain(3, [WORLEY_METRICS_GLSL], `${fmt(CHEBYSHEV3_NORM)} * chebyshev3(p)`),
+        glslTileable: glslMainT(3, [WORLEY_METRICS_TILEABLE_GLSL], `${fmt(CHEBYSHEV3_NORM)} * chebyshev3T(p, per)`),
+        wgsl: wgslMain(3, [WORLEY_METRICS_WGSL], `${fmt(CHEBYSHEV3_NORM)} * chebyshev3(p)`),
+        wgslTileable: wgslMainT(3, [WORLEY_METRICS_TILEABLE_WGSL], `${fmt(CHEBYSHEV3_NORM)} * chebyshev3T(p, per)`),
       },
     ],
   },
@@ -558,8 +541,8 @@ const RAW_NOISES: NoiseDefBase[] = [
         id: 'gabor-2d',
         label: '2D',
         dim: 2,
-        sample: signedTs(GABOR2_NORM, gabor2),
-        sampleTileable: (x, y, _z, px, py) => clamp01(0.5 + 0.5 * GABOR2_NORM * gabor2Tileable(x, y, px, py)),
+        sampleRaw: signedTs(GABOR2_NORM, gabor2),
+        sampleRawTileable: (x, y, _z, px, py) => 0.5 + 0.5 * GABOR2_NORM * gabor2Tileable(x, y, px, py),
         glsl: glslMain(2, [GABOR_GLSL], signedExpr(GABOR2_NORM, 'gabor2(p)')),
         glslTileable: glslMainT(2, [GABOR_TILEABLE_GLSL], signedExpr(GABOR2_NORM, 'gabor2T(p, per)')),
         wgsl: wgslMain(2, [GABOR_WGSL], signedExpr(GABOR2_NORM, 'gabor2(p)')),
@@ -569,8 +552,8 @@ const RAW_NOISES: NoiseDefBase[] = [
         id: 'gabor-3d',
         label: '3D',
         dim: 3,
-        sample: signedTs(GABOR3_NORM, gabor3),
-        sampleTileable: (x, y, z, px, py) => clamp01(0.5 + 0.5 * GABOR3_NORM * gabor3Tileable(x, y, z, px, py)),
+        sampleRaw: signedTs(GABOR3_NORM, gabor3),
+        sampleRawTileable: (x, y, z, px, py) => 0.5 + 0.5 * GABOR3_NORM * gabor3Tileable(x, y, z, px, py),
         glsl: glslMain(3, [GABOR_GLSL], signedExpr(GABOR3_NORM, 'gabor3(p)')),
         glslTileable: glslMainT(3, [GABOR_TILEABLE_GLSL], signedExpr(GABOR3_NORM, 'gabor3T(p, per)')),
         wgsl: wgslMain(3, [GABOR_WGSL], signedExpr(GABOR3_NORM, 'gabor3(p)')),
@@ -593,9 +576,9 @@ const RAW_NOISES: NoiseDefBase[] = [
         id: 'simplex-value-2d',
         label: '2D',
         dim: 2,
-        sample: signedTs(SIMPLEX_VALUE_NORM, simplexValue2),
-        sampleTileable: (x, y, _z, px, py) =>
-          clamp01(0.5 + 0.5 * SIMPLEX_VALUE4_NORM * simplexValue2TileableTorus(x, y, px, py)),
+        sampleRaw: signedTs(SIMPLEX_VALUE_NORM, simplexValue2),
+        sampleRawTileable: (x, y, _z, px, py) =>
+          0.5 + 0.5 * SIMPLEX_VALUE4_NORM * simplexValue2TileableTorus(x, y, px, py),
         glsl: glslMain(2, [SIMPLEX_VALUE_GLSL], signedExpr(SIMPLEX_VALUE_NORM, 'simplexValue2(p)')),
         glslTileable: glslMainT(
           2,
@@ -613,8 +596,8 @@ const RAW_NOISES: NoiseDefBase[] = [
         id: 'simplex-value-3d',
         label: '3D',
         dim: 3,
-        sample: signedTs(SIMPLEX_VALUE_NORM, simplexValue3),
-        sampleTileable: null,
+        sampleRaw: signedTs(SIMPLEX_VALUE_NORM, simplexValue3),
+        sampleRawTileable: null,
         glsl: glslMain(3, [SIMPLEX_VALUE_GLSL], signedExpr(SIMPLEX_VALUE_NORM, 'simplexValue3(p)')),
         glslTileable: null,
         wgsl: wgslMain(3, [SIMPLEX_VALUE_WGSL], signedExpr(SIMPLEX_VALUE_NORM, 'simplexValue3(p)')),
@@ -637,23 +620,23 @@ const RAW_NOISES: NoiseDefBase[] = [
         id: 'wave-2d',
         label: '2D',
         dim: 2,
-        sample: (x, y) => clamp01(0.5 + 0.5 * wave2(x, y)),
-        sampleTileable: (x, y, _z, px, py) => clamp01(0.5 + 0.5 * wave2Tileable(x, y, px, py)),
-        glsl: glslMain(2, [WAVE_GLSL], 'clamp(0.5 + 0.5 * wave2(p), 0.0, 1.0)'),
-        glslTileable: glslMainT(2, [WAVE_GLSL, WAVE_TILEABLE_GLSL], 'clamp(0.5 + 0.5 * wave2T(p, per), 0.0, 1.0)'),
-        wgsl: wgslMain(2, [WAVE_WGSL], 'clamp(0.5 + 0.5 * wave2(p), 0.0, 1.0)'),
-        wgslTileable: wgslMainT(2, [WAVE_WGSL, WAVE_TILEABLE_WGSL], 'clamp(0.5 + 0.5 * wave2T(p, per), 0.0, 1.0)'),
+        sampleRaw: (x, y) => 0.5 + 0.5 * wave2(x, y),
+        sampleRawTileable: (x, y, _z, px, py) => 0.5 + 0.5 * wave2Tileable(x, y, px, py),
+        glsl: glslMain(2, [WAVE_GLSL], '0.5 + 0.5 * wave2(p)'),
+        glslTileable: glslMainT(2, [WAVE_GLSL, WAVE_TILEABLE_GLSL], '0.5 + 0.5 * wave2T(p, per)'),
+        wgsl: wgslMain(2, [WAVE_WGSL], '0.5 + 0.5 * wave2(p)'),
+        wgslTileable: wgslMainT(2, [WAVE_WGSL, WAVE_TILEABLE_WGSL], '0.5 + 0.5 * wave2T(p, per)'),
       },
       {
         id: 'wave-3d',
         label: '3D',
         dim: 3,
-        sample: (x, y, z) => clamp01(0.5 + 0.5 * wave3(x, y, z)),
-        sampleTileable: (x, y, z, px, py) => clamp01(0.5 + 0.5 * wave3Tileable(x, y, z, px, py)),
-        glsl: glslMain(3, [WAVE_GLSL], 'clamp(0.5 + 0.5 * wave3(p), 0.0, 1.0)'),
-        glslTileable: glslMainT(3, [WAVE_GLSL, WAVE_TILEABLE_GLSL], 'clamp(0.5 + 0.5 * wave3T(p, per), 0.0, 1.0)'),
-        wgsl: wgslMain(3, [WAVE_WGSL], 'clamp(0.5 + 0.5 * wave3(p), 0.0, 1.0)'),
-        wgslTileable: wgslMainT(3, [WAVE_WGSL, WAVE_TILEABLE_WGSL], 'clamp(0.5 + 0.5 * wave3T(p, per), 0.0, 1.0)'),
+        sampleRaw: (x, y, z) => 0.5 + 0.5 * wave3(x, y, z),
+        sampleRawTileable: (x, y, z, px, py) => 0.5 + 0.5 * wave3Tileable(x, y, z, px, py),
+        glsl: glslMain(3, [WAVE_GLSL], '0.5 + 0.5 * wave3(p)'),
+        glslTileable: glslMainT(3, [WAVE_GLSL, WAVE_TILEABLE_GLSL], '0.5 + 0.5 * wave3T(p, per)'),
+        wgsl: wgslMain(3, [WAVE_WGSL], '0.5 + 0.5 * wave3(p)'),
+        wgslTileable: wgslMainT(3, [WAVE_WGSL, WAVE_TILEABLE_WGSL], '0.5 + 0.5 * wave3T(p, per)'),
       },
     ],
   },
@@ -672,8 +655,8 @@ const RAW_NOISES: NoiseDefBase[] = [
         id: 'ripple-2d',
         label: '2D',
         dim: 2,
-        sample: signedTs(RIPPLE_NORM, ripple2),
-        sampleTileable: (x, y, _z, px, py) => clamp01(0.5 + 0.5 * RIPPLE_NORM * ripple2Tileable(x, y, px, py)),
+        sampleRaw: signedTs(RIPPLE_NORM, ripple2),
+        sampleRawTileable: (x, y, _z, px, py) => 0.5 + 0.5 * RIPPLE_NORM * ripple2Tileable(x, y, px, py),
         glsl: glslMain(2, [RIPPLE_GLSL], signedExpr(RIPPLE_NORM, 'ripple2(p)')),
         glslTileable: glslMainT(2, [RIPPLE_TILEABLE_GLSL], signedExpr(RIPPLE_NORM, 'ripple2T(p, per)')),
         wgsl: wgslMain(2, [RIPPLE_WGSL], signedExpr(RIPPLE_NORM, 'ripple2(p)')),
@@ -683,8 +666,8 @@ const RAW_NOISES: NoiseDefBase[] = [
         id: 'ripple-3d',
         label: '3D',
         dim: 3,
-        sample: signedTs(RIPPLE_NORM, ripple3),
-        sampleTileable: (x, y, z, px, py) => clamp01(0.5 + 0.5 * RIPPLE_NORM * ripple3Tileable(x, y, z, px, py)),
+        sampleRaw: signedTs(RIPPLE_NORM, ripple3),
+        sampleRawTileable: (x, y, z, px, py) => 0.5 + 0.5 * RIPPLE_NORM * ripple3Tileable(x, y, z, px, py),
         glsl: glslMain(3, [RIPPLE_GLSL], signedExpr(RIPPLE_NORM, 'ripple3(p)')),
         glslTileable: glslMainT(3, [RIPPLE_TILEABLE_GLSL], signedExpr(RIPPLE_NORM, 'ripple3T(p, per)')),
         wgsl: wgslMain(3, [RIPPLE_WGSL], signedExpr(RIPPLE_NORM, 'ripple3(p)')),
@@ -706,38 +689,38 @@ const RAW_NOISES: NoiseDefBase[] = [
         id: 'marble-2d',
         label: '2D',
         dim: 2,
-        sample: (x, y) => clamp01(0.5 + 0.5 * marble2(x, y)),
-        sampleTileable: (x, y, _z, px, py) => clamp01(0.5 + 0.5 * marble2Tileable(x, y, px, py)),
-        glsl: glslMain(2, [PERLIN_GLSL, PERLIN_DERIVED_GLSL], 'clamp(0.5 + 0.5 * marble2(p), 0.0, 1.0)'),
+        sampleRaw: (x, y) => 0.5 + 0.5 * marble2(x, y),
+        sampleRawTileable: (x, y, _z, px, py) => 0.5 + 0.5 * marble2Tileable(x, y, px, py),
+        glsl: glslMain(2, [PERLIN_GLSL, PERLIN_DERIVED_GLSL], '0.5 + 0.5 * marble2(p)'),
         glslTileable: glslMainT(
           2,
           [PERLIN_GLSL, PERLIN_TILEABLE_GLSL, PERLIN_DERIVED_TILEABLE_GLSL],
-          'clamp(0.5 + 0.5 * marble2T(p, per), 0.0, 1.0)',
+          '0.5 + 0.5 * marble2T(p, per)',
         ),
-        wgsl: wgslMain(2, [PERLIN_WGSL, PERLIN_DERIVED_WGSL], 'clamp(0.5 + 0.5 * marble2(p), 0.0, 1.0)'),
+        wgsl: wgslMain(2, [PERLIN_WGSL, PERLIN_DERIVED_WGSL], '0.5 + 0.5 * marble2(p)'),
         wgslTileable: wgslMainT(
           2,
           [PERLIN_WGSL, PERLIN_TILEABLE_WGSL, PERLIN_DERIVED_TILEABLE_WGSL],
-          'clamp(0.5 + 0.5 * marble2T(p, per), 0.0, 1.0)',
+          '0.5 + 0.5 * marble2T(p, per)',
         ),
       },
       {
         id: 'marble-3d',
         label: '3D',
         dim: 3,
-        sample: (x, y, z) => clamp01(0.5 + 0.5 * marble3(x, y, z)),
-        sampleTileable: (x, y, z, px, py) => clamp01(0.5 + 0.5 * marble3Tileable(x, y, z, px, py)),
-        glsl: glslMain(3, [PERLIN_GLSL, PERLIN_DERIVED_GLSL], 'clamp(0.5 + 0.5 * marble3(p), 0.0, 1.0)'),
+        sampleRaw: (x, y, z) => 0.5 + 0.5 * marble3(x, y, z),
+        sampleRawTileable: (x, y, z, px, py) => 0.5 + 0.5 * marble3Tileable(x, y, z, px, py),
+        glsl: glslMain(3, [PERLIN_GLSL, PERLIN_DERIVED_GLSL], '0.5 + 0.5 * marble3(p)'),
         glslTileable: glslMainT(
           3,
           [PERLIN_GLSL, PERLIN_TILEABLE_GLSL, PERLIN_DERIVED_TILEABLE_GLSL],
-          'clamp(0.5 + 0.5 * marble3T(p, per), 0.0, 1.0)',
+          '0.5 + 0.5 * marble3T(p, per)',
         ),
-        wgsl: wgslMain(3, [PERLIN_WGSL, PERLIN_DERIVED_WGSL], 'clamp(0.5 + 0.5 * marble3(p), 0.0, 1.0)'),
+        wgsl: wgslMain(3, [PERLIN_WGSL, PERLIN_DERIVED_WGSL], '0.5 + 0.5 * marble3(p)'),
         wgslTileable: wgslMainT(
           3,
           [PERLIN_WGSL, PERLIN_TILEABLE_WGSL, PERLIN_DERIVED_TILEABLE_WGSL],
-          'clamp(0.5 + 0.5 * marble3T(p, per), 0.0, 1.0)',
+          '0.5 + 0.5 * marble3T(p, per)',
         ),
       },
     ],
@@ -756,38 +739,38 @@ const RAW_NOISES: NoiseDefBase[] = [
         id: 'contour-2d',
         label: '2D',
         dim: 2,
-        sample: (x, y) => clamp01(0.5 + 0.5 * contour2(x, y)),
-        sampleTileable: (x, y, _z, px, py) => clamp01(0.5 + 0.5 * contour2Tileable(x, y, px, py)),
-        glsl: glslMain(2, [PERLIN_GLSL, PERLIN_DERIVED_GLSL], 'clamp(0.5 + 0.5 * contour2(p), 0.0, 1.0)'),
+        sampleRaw: (x, y) => 0.5 + 0.5 * contour2(x, y),
+        sampleRawTileable: (x, y, _z, px, py) => 0.5 + 0.5 * contour2Tileable(x, y, px, py),
+        glsl: glslMain(2, [PERLIN_GLSL, PERLIN_DERIVED_GLSL], '0.5 + 0.5 * contour2(p)'),
         glslTileable: glslMainT(
           2,
           [PERLIN_GLSL, PERLIN_TILEABLE_GLSL, PERLIN_DERIVED_TILEABLE_GLSL],
-          'clamp(0.5 + 0.5 * contour2T(p, per), 0.0, 1.0)',
+          '0.5 + 0.5 * contour2T(p, per)',
         ),
-        wgsl: wgslMain(2, [PERLIN_WGSL, PERLIN_DERIVED_WGSL], 'clamp(0.5 + 0.5 * contour2(p), 0.0, 1.0)'),
+        wgsl: wgslMain(2, [PERLIN_WGSL, PERLIN_DERIVED_WGSL], '0.5 + 0.5 * contour2(p)'),
         wgslTileable: wgslMainT(
           2,
           [PERLIN_WGSL, PERLIN_TILEABLE_WGSL, PERLIN_DERIVED_TILEABLE_WGSL],
-          'clamp(0.5 + 0.5 * contour2T(p, per), 0.0, 1.0)',
+          '0.5 + 0.5 * contour2T(p, per)',
         ),
       },
       {
         id: 'contour-3d',
         label: '3D',
         dim: 3,
-        sample: (x, y, z) => clamp01(0.5 + 0.5 * contour3(x, y, z)),
-        sampleTileable: (x, y, z, px, py) => clamp01(0.5 + 0.5 * contour3Tileable(x, y, z, px, py)),
-        glsl: glslMain(3, [PERLIN_GLSL, PERLIN_DERIVED_GLSL], 'clamp(0.5 + 0.5 * contour3(p), 0.0, 1.0)'),
+        sampleRaw: (x, y, z) => 0.5 + 0.5 * contour3(x, y, z),
+        sampleRawTileable: (x, y, z, px, py) => 0.5 + 0.5 * contour3Tileable(x, y, z, px, py),
+        glsl: glslMain(3, [PERLIN_GLSL, PERLIN_DERIVED_GLSL], '0.5 + 0.5 * contour3(p)'),
         glslTileable: glslMainT(
           3,
           [PERLIN_GLSL, PERLIN_TILEABLE_GLSL, PERLIN_DERIVED_TILEABLE_GLSL],
-          'clamp(0.5 + 0.5 * contour3T(p, per), 0.0, 1.0)',
+          '0.5 + 0.5 * contour3T(p, per)',
         ),
-        wgsl: wgslMain(3, [PERLIN_WGSL, PERLIN_DERIVED_WGSL], 'clamp(0.5 + 0.5 * contour3(p), 0.0, 1.0)'),
+        wgsl: wgslMain(3, [PERLIN_WGSL, PERLIN_DERIVED_WGSL], '0.5 + 0.5 * contour3(p)'),
         wgslTileable: wgslMainT(
           3,
           [PERLIN_WGSL, PERLIN_TILEABLE_WGSL, PERLIN_DERIVED_TILEABLE_WGSL],
-          'clamp(0.5 + 0.5 * contour3T(p, per), 0.0, 1.0)',
+          '0.5 + 0.5 * contour3T(p, per)',
         ),
       },
     ],
@@ -806,8 +789,8 @@ const RAW_NOISES: NoiseDefBase[] = [
         id: 'mosaic-2d',
         label: '2D',
         dim: 2,
-        sample: (x, y) => mosaic2(x, y),
-        sampleTileable: (x, y, _z, px, py) => mosaic2Tileable(x, y, px, py),
+        sampleRaw: (x, y) => mosaic2(x, y),
+        sampleRawTileable: (x, y, _z, px, py) => mosaic2Tileable(x, y, px, py),
         glsl: glslMain(2, [CELLULAR_GLSL], 'mosaic2(p)'),
         glslTileable: glslMainT(2, [CELLULAR_TILEABLE_GLSL], 'mosaic2T(p, per)'),
         wgsl: wgslMain(2, [CELLULAR_WGSL], 'mosaic2(p)'),
@@ -817,8 +800,8 @@ const RAW_NOISES: NoiseDefBase[] = [
         id: 'mosaic-3d',
         label: '3D',
         dim: 3,
-        sample: (x, y, z) => mosaic3(x, y, z),
-        sampleTileable: (x, y, z, px, py) => mosaic3Tileable(x, y, z, px, py),
+        sampleRaw: (x, y, z) => mosaic3(x, y, z),
+        sampleRawTileable: (x, y, z, px, py) => mosaic3Tileable(x, y, z, px, py),
         glsl: glslMain(3, [CELLULAR_GLSL], 'mosaic3(p)'),
         glslTileable: glslMainT(3, [CELLULAR_TILEABLE_GLSL], 'mosaic3T(p, per)'),
         wgsl: wgslMain(3, [CELLULAR_WGSL], 'mosaic3(p)'),
@@ -840,39 +823,23 @@ const RAW_NOISES: NoiseDefBase[] = [
         id: 'crackle-2d',
         label: '2D',
         dim: 2,
-        sample: (x, y) => clamp01(CRACKLE_NORM * crackle2(x, y)),
-        sampleTileable: (x, y, _z, px, py) => clamp01(CRACKLE_NORM * crackle2Tileable(x, y, px, py)),
-        glsl: glslMain(2, [CELLULAR_GLSL], `clamp(${fmt(CRACKLE_NORM)} * crackle2(p), 0.0, 1.0)`),
-        glslTileable: glslMainT(
-          2,
-          [CELLULAR_TILEABLE_GLSL],
-          `clamp(${fmt(CRACKLE_NORM)} * crackle2T(p, per), 0.0, 1.0)`,
-        ),
-        wgsl: wgslMain(2, [CELLULAR_WGSL], `clamp(${fmt(CRACKLE_NORM)} * crackle2(p), 0.0, 1.0)`),
-        wgslTileable: wgslMainT(
-          2,
-          [CELLULAR_TILEABLE_WGSL],
-          `clamp(${fmt(CRACKLE_NORM)} * crackle2T(p, per), 0.0, 1.0)`,
-        ),
+        sampleRaw: (x, y) => CRACKLE_NORM * crackle2(x, y),
+        sampleRawTileable: (x, y, _z, px, py) => CRACKLE_NORM * crackle2Tileable(x, y, px, py),
+        glsl: glslMain(2, [CELLULAR_GLSL], `${fmt(CRACKLE_NORM)} * crackle2(p)`),
+        glslTileable: glslMainT(2, [CELLULAR_TILEABLE_GLSL], `${fmt(CRACKLE_NORM)} * crackle2T(p, per)`),
+        wgsl: wgslMain(2, [CELLULAR_WGSL], `${fmt(CRACKLE_NORM)} * crackle2(p)`),
+        wgslTileable: wgslMainT(2, [CELLULAR_TILEABLE_WGSL], `${fmt(CRACKLE_NORM)} * crackle2T(p, per)`),
       },
       {
         id: 'crackle-3d',
         label: '3D',
         dim: 3,
-        sample: (x, y, z) => clamp01(CRACKLE_NORM * crackle3(x, y, z)),
-        sampleTileable: (x, y, z, px, py) => clamp01(CRACKLE_NORM * crackle3Tileable(x, y, z, px, py)),
-        glsl: glslMain(3, [CELLULAR_GLSL], `clamp(${fmt(CRACKLE_NORM)} * crackle3(p), 0.0, 1.0)`),
-        glslTileable: glslMainT(
-          3,
-          [CELLULAR_TILEABLE_GLSL],
-          `clamp(${fmt(CRACKLE_NORM)} * crackle3T(p, per), 0.0, 1.0)`,
-        ),
-        wgsl: wgslMain(3, [CELLULAR_WGSL], `clamp(${fmt(CRACKLE_NORM)} * crackle3(p), 0.0, 1.0)`),
-        wgslTileable: wgslMainT(
-          3,
-          [CELLULAR_TILEABLE_WGSL],
-          `clamp(${fmt(CRACKLE_NORM)} * crackle3T(p, per), 0.0, 1.0)`,
-        ),
+        sampleRaw: (x, y, z) => CRACKLE_NORM * crackle3(x, y, z),
+        sampleRawTileable: (x, y, z, px, py) => CRACKLE_NORM * crackle3Tileable(x, y, z, px, py),
+        glsl: glslMain(3, [CELLULAR_GLSL], `${fmt(CRACKLE_NORM)} * crackle3(p)`),
+        glslTileable: glslMainT(3, [CELLULAR_TILEABLE_GLSL], `${fmt(CRACKLE_NORM)} * crackle3T(p, per)`),
+        wgsl: wgslMain(3, [CELLULAR_WGSL], `${fmt(CRACKLE_NORM)} * crackle3(p)`),
+        wgslTileable: wgslMainT(3, [CELLULAR_TILEABLE_WGSL], `${fmt(CRACKLE_NORM)} * crackle3T(p, per)`),
       },
     ],
   },
@@ -891,8 +858,8 @@ const RAW_NOISES: NoiseDefBase[] = [
         id: 'foam-2d',
         label: '2D',
         dim: 2,
-        sample: (x, y) => foam2(x, y),
-        sampleTileable: (x, y, _z, px, py) => foam2Tileable(x, y, px, py),
+        sampleRaw: (x, y) => foam2(x, y),
+        sampleRawTileable: (x, y, _z, px, py) => foam2Tileable(x, y, px, py),
         glsl: glslMain(2, [CELLULAR_GLSL], 'foam2(p)'),
         glslTileable: glslMainT(2, [CELLULAR_TILEABLE_GLSL], 'foam2T(p, per)'),
         wgsl: wgslMain(2, [CELLULAR_WGSL], 'foam2(p)'),
@@ -902,8 +869,8 @@ const RAW_NOISES: NoiseDefBase[] = [
         id: 'foam-3d',
         label: '3D',
         dim: 3,
-        sample: (x, y, z) => foam3(x, y, z),
-        sampleTileable: (x, y, z, px, py) => foam3Tileable(x, y, z, px, py),
+        sampleRaw: (x, y, z) => foam3(x, y, z),
+        sampleRawTileable: (x, y, z, px, py) => foam3Tileable(x, y, z, px, py),
         glsl: glslMain(3, [CELLULAR_GLSL], 'foam3(p)'),
         glslTileable: glslMainT(3, [CELLULAR_TILEABLE_GLSL], 'foam3T(p, per)'),
         wgsl: wgslMain(3, [CELLULAR_WGSL], 'foam3(p)'),
@@ -926,23 +893,23 @@ const RAW_NOISES: NoiseDefBase[] = [
         id: 'stars-2d',
         label: '2D',
         dim: 2,
-        sample: (x, y) => clamp01(STARS_NORM * stars2(x, y)),
-        sampleTileable: (x, y, _z, px, py) => clamp01(STARS_NORM * stars2Tileable(x, y, px, py)),
-        glsl: glslMain(2, [CELLULAR_GLSL], `clamp(${fmt(STARS_NORM)} * stars2(p), 0.0, 1.0)`),
-        glslTileable: glslMainT(2, [CELLULAR_TILEABLE_GLSL], `clamp(${fmt(STARS_NORM)} * stars2T(p, per), 0.0, 1.0)`),
-        wgsl: wgslMain(2, [CELLULAR_WGSL], `clamp(${fmt(STARS_NORM)} * stars2(p), 0.0, 1.0)`),
-        wgslTileable: wgslMainT(2, [CELLULAR_TILEABLE_WGSL], `clamp(${fmt(STARS_NORM)} * stars2T(p, per), 0.0, 1.0)`),
+        sampleRaw: (x, y) => STARS_NORM * stars2(x, y),
+        sampleRawTileable: (x, y, _z, px, py) => STARS_NORM * stars2Tileable(x, y, px, py),
+        glsl: glslMain(2, [CELLULAR_GLSL], `${fmt(STARS_NORM)} * stars2(p)`),
+        glslTileable: glslMainT(2, [CELLULAR_TILEABLE_GLSL], `${fmt(STARS_NORM)} * stars2T(p, per)`),
+        wgsl: wgslMain(2, [CELLULAR_WGSL], `${fmt(STARS_NORM)} * stars2(p)`),
+        wgslTileable: wgslMainT(2, [CELLULAR_TILEABLE_WGSL], `${fmt(STARS_NORM)} * stars2T(p, per)`),
       },
       {
         id: 'stars-3d',
         label: '3D',
         dim: 3,
-        sample: (x, y, z) => clamp01(STARS_NORM * stars3(x, y, z)),
-        sampleTileable: (x, y, z, px, py) => clamp01(STARS_NORM * stars3Tileable(x, y, z, px, py)),
-        glsl: glslMain(3, [CELLULAR_GLSL], `clamp(${fmt(STARS_NORM)} * stars3(p), 0.0, 1.0)`),
-        glslTileable: glslMainT(3, [CELLULAR_TILEABLE_GLSL], `clamp(${fmt(STARS_NORM)} * stars3T(p, per), 0.0, 1.0)`),
-        wgsl: wgslMain(3, [CELLULAR_WGSL], `clamp(${fmt(STARS_NORM)} * stars3(p), 0.0, 1.0)`),
-        wgslTileable: wgslMainT(3, [CELLULAR_TILEABLE_WGSL], `clamp(${fmt(STARS_NORM)} * stars3T(p, per), 0.0, 1.0)`),
+        sampleRaw: (x, y, z) => STARS_NORM * stars3(x, y, z),
+        sampleRawTileable: (x, y, z, px, py) => STARS_NORM * stars3Tileable(x, y, z, px, py),
+        glsl: glslMain(3, [CELLULAR_GLSL], `${fmt(STARS_NORM)} * stars3(p)`),
+        glslTileable: glslMainT(3, [CELLULAR_TILEABLE_GLSL], `${fmt(STARS_NORM)} * stars3T(p, per)`),
+        wgsl: wgslMain(3, [CELLULAR_WGSL], `${fmt(STARS_NORM)} * stars3(p)`),
+        wgslTileable: wgslMainT(3, [CELLULAR_TILEABLE_WGSL], `${fmt(STARS_NORM)} * stars3T(p, per)`),
       },
     ],
   },
@@ -961,23 +928,23 @@ const RAW_NOISES: NoiseDefBase[] = [
         id: 'vortex-2d',
         label: '2D',
         dim: 2,
-        sample: (x, y) => clamp01(0.5 + 0.5 * vortex2(x, y)),
-        sampleTileable: (x, y, _z, px, py) => clamp01(0.5 + 0.5 * vortex2Tileable(x, y, px, py)),
-        glsl: glslMain(2, [VORTEX_GLSL], 'clamp(0.5 + 0.5 * vortex2(p), 0.0, 1.0)'),
-        glslTileable: glslMainT(2, [VORTEX_TILEABLE_GLSL], 'clamp(0.5 + 0.5 * vortex2T(p, per), 0.0, 1.0)'),
-        wgsl: wgslMain(2, [VORTEX_WGSL], 'clamp(0.5 + 0.5 * vortex2(p), 0.0, 1.0)'),
-        wgslTileable: wgslMainT(2, [VORTEX_TILEABLE_WGSL], 'clamp(0.5 + 0.5 * vortex2T(p, per), 0.0, 1.0)'),
+        sampleRaw: (x, y) => 0.5 + 0.5 * vortex2(x, y),
+        sampleRawTileable: (x, y, _z, px, py) => 0.5 + 0.5 * vortex2Tileable(x, y, px, py),
+        glsl: glslMain(2, [VORTEX_GLSL], '0.5 + 0.5 * vortex2(p)'),
+        glslTileable: glslMainT(2, [VORTEX_TILEABLE_GLSL], '0.5 + 0.5 * vortex2T(p, per)'),
+        wgsl: wgslMain(2, [VORTEX_WGSL], '0.5 + 0.5 * vortex2(p)'),
+        wgslTileable: wgslMainT(2, [VORTEX_TILEABLE_WGSL], '0.5 + 0.5 * vortex2T(p, per)'),
       },
       {
         id: 'vortex-3d',
         label: '3D',
         dim: 3,
-        sample: (x, y, z) => clamp01(0.5 + 0.5 * vortex3(x, y, z)),
-        sampleTileable: (x, y, z, px, py) => clamp01(0.5 + 0.5 * vortex3Tileable(x, y, z, px, py)),
-        glsl: glslMain(3, [VORTEX_GLSL], 'clamp(0.5 + 0.5 * vortex3(p), 0.0, 1.0)'),
-        glslTileable: glslMainT(3, [VORTEX_TILEABLE_GLSL], 'clamp(0.5 + 0.5 * vortex3T(p, per), 0.0, 1.0)'),
-        wgsl: wgslMain(3, [VORTEX_WGSL], 'clamp(0.5 + 0.5 * vortex3(p), 0.0, 1.0)'),
-        wgslTileable: wgslMainT(3, [VORTEX_TILEABLE_WGSL], 'clamp(0.5 + 0.5 * vortex3T(p, per), 0.0, 1.0)'),
+        sampleRaw: (x, y, z) => 0.5 + 0.5 * vortex3(x, y, z),
+        sampleRawTileable: (x, y, z, px, py) => 0.5 + 0.5 * vortex3Tileable(x, y, z, px, py),
+        glsl: glslMain(3, [VORTEX_GLSL], '0.5 + 0.5 * vortex3(p)'),
+        glslTileable: glslMainT(3, [VORTEX_TILEABLE_GLSL], '0.5 + 0.5 * vortex3T(p, per)'),
+        wgsl: wgslMain(3, [VORTEX_WGSL], '0.5 + 0.5 * vortex3(p)'),
+        wgslTileable: wgslMainT(3, [VORTEX_TILEABLE_WGSL], '0.5 + 0.5 * vortex3T(p, per)'),
       },
     ],
   },
@@ -995,12 +962,12 @@ const RAW_NOISES: NoiseDefBase[] = [
         id: 'truchet-2d',
         label: '2D',
         dim: 2,
-        sample: (x, y) => clamp01(0.5 + 0.5 * truchet2(x, y)),
-        sampleTileable: (x, y, _z, px, py) => clamp01(0.5 + 0.5 * truchet2Tileable(x, y, px, py)),
-        glsl: glslMain(2, [TRUCHET_GLSL], 'clamp(0.5 + 0.5 * truchet2(p), 0.0, 1.0)'),
-        glslTileable: glslMainT(2, [TRUCHET_TILEABLE_GLSL], 'clamp(0.5 + 0.5 * truchet2T(p, per), 0.0, 1.0)'),
-        wgsl: wgslMain(2, [TRUCHET_WGSL], 'clamp(0.5 + 0.5 * truchet2(p), 0.0, 1.0)'),
-        wgslTileable: wgslMainT(2, [TRUCHET_TILEABLE_WGSL], 'clamp(0.5 + 0.5 * truchet2T(p, per), 0.0, 1.0)'),
+        sampleRaw: (x, y) => 0.5 + 0.5 * truchet2(x, y),
+        sampleRawTileable: (x, y, _z, px, py) => 0.5 + 0.5 * truchet2Tileable(x, y, px, py),
+        glsl: glslMain(2, [TRUCHET_GLSL], '0.5 + 0.5 * truchet2(p)'),
+        glslTileable: glslMainT(2, [TRUCHET_TILEABLE_GLSL], '0.5 + 0.5 * truchet2T(p, per)'),
+        wgsl: wgslMain(2, [TRUCHET_WGSL], '0.5 + 0.5 * truchet2(p)'),
+        wgslTileable: wgslMainT(2, [TRUCHET_TILEABLE_WGSL], '0.5 + 0.5 * truchet2T(p, per)'),
       },
     ],
   },
@@ -1008,7 +975,17 @@ const RAW_NOISES: NoiseDefBase[] = [
 
 export const NOISES: NoiseDef[] = RAW_NOISES.map(n => ({
   ...n,
-  variants: n.variants.map(v => ({ ...v, ...getTslSpec(v.id) })),
+  variants: n.variants.map(v => {
+    const rawT = v.sampleRawTileable
+    return {
+      ...v,
+      sample: (x: number, y: number, z: number) => clamp01(v.sampleRaw(x, y, z)),
+      sampleTileable: rawT
+        ? (x: number, y: number, z: number, px: number, py: number) => clamp01(rawT(x, y, z, px, py))
+        : null,
+      ...getTslSpec(v.id),
+    }
+  }),
 }))
 
 export const getNoise = (id: string): NoiseDef | undefined => NOISES.find(n => n.id === id)
