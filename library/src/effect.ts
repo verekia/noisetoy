@@ -7,7 +7,7 @@ import { defaultVariant, getNoise, getVariant, NOISES } from './registry'
 import { buildGlslFragment } from './render/glsl'
 import { createSampler, createSolidSampler } from './render/sampler'
 import { buildTslBody, buildTslModule } from './render/tsl'
-import { BLEND_MODES } from './render/types'
+import { BLEND_MODES, STEP_SMOOTHING } from './render/types'
 import { buildWgslShader } from './render/wgsl'
 
 import type { CostEstimate } from './cost'
@@ -69,6 +69,21 @@ export type EffectSpec = {
    * possible when every layer's variant is tileable (see `isTileable`).
    */
   tiled?: boolean
+  /**
+   * Posterize the folded stack into this many evenly spaced levels (2-32),
+   * the first at exactly 0 and the last at exactly 1 — stepped bands instead
+   * of a smooth gradient. A display option like `tiled`, applied after all
+   * layers fold. Omit or 0 for the smooth gradient.
+   */
+  steps?: number
+  /**
+   * Fraction of a band over which stepped rendering eases into the next
+   * level, 0.01-1. The default (STEP_SMOOTHING, 0.03) keeps borders crisp on
+   * pixels; renders that displace geometry should widen it (~0.25), because a
+   * vertex grid cannot resolve a near-vertical cliff and shows sawtooth edges
+   * where triangles snap to either side of it.
+   */
+  stepSmoothing?: number
 }
 
 export type Effect = {
@@ -182,8 +197,12 @@ export const createEffect = (spec: EffectSpec): Effect => {
   })
 
   const domain: SampleDomain = spec.domain === 'position' ? 'position' : 'uv'
-  const cfg = { layers, tiled, size: 1, domain }
-  const resolvedSpec: Required<EffectSpec> = { layers: normalized, tiled, domain }
+  const steps = spec.steps && spec.steps >= 2 ? Math.min(32, Math.round(spec.steps)) : 0
+  const stepSmoothing = Number.isFinite(spec.stepSmoothing)
+    ? Math.min(1, Math.max(0.01, spec.stepSmoothing as number))
+    : STEP_SMOOTHING
+  const cfg = { layers, tiled, size: 1, domain, steps, stepSmoothing }
+  const resolvedSpec: Required<EffectSpec> = { layers: normalized, tiled, domain, steps, stepSmoothing }
 
   return {
     spec: resolvedSpec,

@@ -21,7 +21,10 @@
 import type { RenderOptions, Renderer } from '#/lib/render/types'
 import type { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 
-const SPHERE_SEGMENTS = 320
+// Denser than the plane per surface area: the sphere's vertex grid is what
+// resolves stepped cliffs, and its equator spans 2*pi local units against the
+// plane's 2, so it needs the extra segments to keep terrace edges clean.
+const SPHERE_SEGMENTS = 512
 
 const FOV = 40
 
@@ -61,8 +64,12 @@ export const createThreeRenderer = async (
   const SOLID_UNIT = 0.5
   // The plane flattens its local xy into the field; the sphere keeps its own
   // surface point, which is what keeps the field uniform all the way around.
-  const planePosition = TSL.vec3(TSL.positionLocal.x.mul(SOLID_UNIT), TSL.positionLocal.y.mul(SOLID_UNIT), 0)
-  const spherePosition = TSL.positionLocal.mul(SOLID_UNIT)
+  // Sample positions read positionGeometry, NOT positionLocal: positionNode
+  // overwrites positionLocal, so in the fragment stage it carries the
+  // displaced point and the color pattern slides off the relief (worst on the
+  // sphere, which displaces along all three axes).
+  const planePosition = TSL.vec3(TSL.positionGeometry.x.mul(SOLID_UNIT), TSL.positionGeometry.y.mul(SOLID_UNIT), 0)
+  const spherePosition = TSL.positionGeometry.mul(SOLID_UNIT)
   const solid = effect.domain === 'position'
   const samplePosition = view === 'plane' ? planePosition : view === 'sphere' ? spherePosition : undefined
   const height01 = effectNode(effect, { time: timeUniform, position: solid ? samplePosition : undefined })

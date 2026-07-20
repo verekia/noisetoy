@@ -13,6 +13,7 @@ import {
   OCTAVE_ROT2,
   OCTAVE_ROT3,
   RIDGE_FEEDBACK,
+  STEP_SMOOTHING,
   TILE_REPEAT,
   translationVelocity,
   WARP_BLEND_STRENGTH,
@@ -114,6 +115,8 @@ float layerVal${i}(vec2 uv, float t) {
 
 export const buildGlslFragment = (cfg: RenderConfig): string => {
   const { layers, tiled } = cfg
+  const steps = cfg.steps && cfg.steps >= 2 ? cfg.steps : 0
+  const smoothing = cfg.stepSmoothing ?? STEP_SMOOTHING
   const chunks: string[] = [COMMON_GLSL]
   const seen = new Set<string>(chunks)
   const fns: string[] = []
@@ -151,6 +154,13 @@ void main() {
   float acc = 0.0;
   vec2 uvw;
   ${mainLines.join('\n  ')}
+  ${
+    steps
+      ? `float sp = acc * ${f(steps)};
+  float sb = floor(sp);
+  acc = min(sb + smoothstep(${f(1 - smoothing)}, 1.0, sp - sb), ${f(steps - 1)}) / ${f(steps - 1)};`
+      : ''
+  }
   outColor = vec4(vec3(acc), 1.0);
 }
 `

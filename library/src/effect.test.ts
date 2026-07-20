@@ -145,6 +145,69 @@ test('octaves are decorrelated: fBm is not pinned to 0.5 at lattice corners', ()
   }
 })
 
+describe('steps', () => {
+  test('defaults to 0 (smooth) and clamps to 2-32', () => {
+    expect(createEffect({ layers: [{ noise: 'perlin' }] }).spec.steps).toBe(0)
+    expect(createEffect({ layers: [{ noise: 'perlin' }], steps: 1 }).spec.steps).toBe(0)
+    expect(createEffect({ layers: [{ noise: 'perlin' }], steps: 100 }).spec.steps).toBe(32)
+  })
+
+  test('stepSmoothing defaults to the crisp pixel ease and clamps to 0.01-1', () => {
+    expect(createEffect({ layers: [{ noise: 'perlin' }] }).spec.stepSmoothing).toBe(0.03)
+    expect(createEffect({ layers: [{ noise: 'perlin' }], stepSmoothing: 0.25 }).spec.stepSmoothing).toBe(0.25)
+    expect(createEffect({ layers: [{ noise: 'perlin' }], stepSmoothing: 0 }).spec.stepSmoothing).toBe(0.01)
+    expect(createEffect({ layers: [{ noise: 'perlin' }], stepSmoothing: 5 }).spec.stepSmoothing).toBe(1)
+  })
+
+  // A wider ease is what displaced geometry uses: the same bands, terraced
+  // with beveled cliffs a vertex grid can resolve without sawtooth edges.
+  test('a wider ease keeps the same levels but spends more samples in transition', () => {
+    const crisp = createEffect({ layers: [{ noise: 'perlin', dim: 2, octaves: 4 }], steps: 4 })
+    const beveled = createEffect({ layers: [{ noise: 'perlin', dim: 2, octaves: 4 }], steps: 4, stepSmoothing: 0.25 })
+    let crispFlat = 0
+    let beveledFlat = 0
+    const onLattice = (q: number) => q === 0 || q === 1 / 3 || q === 2 / 3 || q === 1
+    for (let i = 0; i < 2000; i++) {
+      const u = (i * 0.7131) % 1
+      const v = (i * 0.2917) % 1
+      if (onLattice(crisp.sample(u, v))) crispFlat++
+      if (onLattice(beveled.sample(u, v))) beveledFlat++
+    }
+    expect(crispFlat).toBeGreaterThan(beveledFlat)
+    expect(beveledFlat).toBeGreaterThan(0)
+  })
+
+  // The band borders ease into the next level over the top STEP_SMOOTHING of
+  // each band (hard steps alias; fwidth AA is fragment-only and the effect
+  // also runs on the CPU and in the vertex stage), so flat levels cover the
+  // rest of each band and the transitions stay monotone between neighbours.
+  test('posterizes the smooth field into n levels with eased borders', () => {
+    const smooth = createEffect({ layers: [{ noise: 'perlin', dim: 2, octaves: 4 }] })
+    const stepped = createEffect({ layers: [{ noise: 'perlin', dim: 2, octaves: 4 }], steps: 4 })
+    let flat = 0
+    const total = 2000
+    for (let i = 0; i < total; i++) {
+      const u = (i * 0.7131) % 1
+      const v = (i * 0.2917) % 1
+      const q = stepped.sample(u, v)
+      const s = smooth.sample(u, v)
+      const band = Math.min(Math.floor(s * 4), 3)
+      const frac = s * 4 - band
+      if (frac < 0.97) {
+        // Below the eased top of the band: exactly on the level lattice.
+        expect(q).toBe(band / 3)
+        flat++
+      } else {
+        // Inside the transition: between this level and the next.
+        expect(q).toBeGreaterThanOrEqual(band / 3)
+        expect(q).toBeLessThanOrEqual((band + 1) / 3)
+      }
+    }
+    // The eased zone is a sliver of each band; nearly all samples sit on flat levels.
+    expect(flat / total).toBeGreaterThan(0.9)
+  })
+})
+
 // Rotated octaves are the classic fBm construction (iq's matrices, lacunarity
 // 2.02): stronger decorrelation than the offsets — every lattice alignment is
 // broken, not just the zero-pinning — at the price of tiling.

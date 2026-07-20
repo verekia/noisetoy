@@ -42,7 +42,12 @@ export type NodeOptions = {
   uv?: Vec2Node
   /**
    * vec3 sample position, for effects created with `domain: 'position'`.
-   * Defaults to `positionLocal`, which is the surface point of a unit sphere.
+   * Defaults to `positionGeometry` — the raw geometry attribute, which for a
+   * unit sphere is the surface point. Deliberately NOT `positionLocal`: a
+   * material's `positionNode` overwrites positionLocal, so in the fragment
+   * stage positionLocal carries the DISPLACED position and a color node
+   * sampling through it reads the field somewhere else than the geometry
+   * did — the pattern visibly slides off the relief.
    */
   position?: Vec3Node
   /** Elapsed seconds as a float node, driving 3D variants and translation. Defaults to 0. */
@@ -61,7 +66,7 @@ const defaultUv = (): Vec2Node => TSL.vec2(TSL.uv().x, TSL.uv().y.oneMinus())
 export const effectNode = (effect: Effect, options: NodeOptions = {}): Node => {
   const { time = TSL.float(0) as unknown as Node } = options
   if (effect.domain === 'position') {
-    return effectFn(effect)(options.position ?? TSL.positionLocal, time)
+    return effectFn(effect)(options.position ?? TSL.positionGeometry, time)
   }
   return effectFn(effect)(options.uv ?? defaultUv(), time)
 }
@@ -92,7 +97,7 @@ export const effectNormalNode = (effect: Effect, options: DisplacementOptions = 
   if (effect.domain === 'position') {
     // Solid domain: step along the surface's own x/y, which both point the
     // usual way, so the tangents cross straight into +Z.
-    const p = options.position ?? (TSL.positionLocal as unknown as Vec3Node)
+    const p = options.position ?? (TSL.positionGeometry as unknown as Vec3Node)
     const h = fn(p, time)
     const hx = fn(p.add(TSL.vec3(epsilon, 0, 0)), time)
     const hy = fn(p.add(TSL.vec3(0, epsilon, 0)), time)

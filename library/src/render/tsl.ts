@@ -13,6 +13,7 @@ import {
   OCTAVE_ROT2,
   OCTAVE_ROT3,
   RIDGE_FEEDBACK,
+  STEP_SMOOTHING,
   TILE_REPEAT,
   translationVelocity,
   WARP_BLEND_STRENGTH,
@@ -44,6 +45,7 @@ export const TSL_IMPORTS = [
   'max',
   'clamp',
   'sqrt',
+  'smoothstep',
   'cos',
   'sin',
   'exp',
@@ -177,6 +179,8 @@ ${body}
 export const buildTslBody = (cfg: RenderConfig): string => {
   const { layers, tiled } = cfg
   const solid = cfg.domain === 'position'
+  const steps = cfg.steps && cfg.steps >= 2 ? cfg.steps : 0
+  const smoothing = cfg.stepSmoothing ?? STEP_SMOOTHING
   const chunks: string[] = [COMMON_TSL]
   const seen = new Set<string>(chunks)
   const fns: string[] = []
@@ -210,7 +214,12 @@ const effect = Fn(([uvIn, t]) => {
   const uv = ${!solid && tiled ? `fract(uvIn.mul(${TILE_REPEAT})).toVar()` : 'uvIn.toVar()'}
   const acc = float(0).toVar()
   ${mainLines.join('\n  ')}
-  return acc
+  ${steps ? `const sp = acc.mul(${steps})\n  const sb = sp.floor()` : ''}
+  return ${
+    steps
+      ? `sb.add(smoothstep(float(${1 - smoothing}), float(1), sp.sub(sb))).min(${steps - 1}).div(${steps - 1})`
+      : 'acc'
+  }
 })`
 }
 

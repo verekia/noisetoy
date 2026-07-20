@@ -17,6 +17,7 @@ import {
   OCTAVE_ROT2,
   OCTAVE_ROT3,
   RIDGE_FEEDBACK,
+  STEP_SMOOTHING,
   TILE_REPEAT,
   translationVelocity,
   WARP_BLEND_STRENGTH,
@@ -26,6 +27,18 @@ import {
 import type { LayerConfig, RenderConfig } from './types'
 
 const [OFF_X, OFF_Y, OFF_Z] = OCTAVE_OFFSET
+
+/**
+ * N evenly spaced levels, the first at exactly 0 and the last at exactly 1,
+ * easing into the next level over the top STEP_SMOOTHING of each band so the
+ * borders do not alias.
+ */
+const posterize = (v: number, steps: number, smoothing: number): number => {
+  const s = v * steps
+  const b = Math.floor(s)
+  const t = Math.min(Math.max((s - b - (1 - smoothing)) / smoothing, 0), 1)
+  return Math.min(b + t * t * (3 - 2 * t), steps - 1) / (steps - 1)
+}
 const [R2A, R2B, R2C, R2D] = OCTAVE_ROT2 as [number, number, number, number]
 const [R3A, R3B, R3C, R3D, R3E, R3F, R3G, R3H, R3I] = OCTAVE_ROT3 as [
   number,
@@ -130,6 +143,8 @@ const layerValue = (
  */
 export const createSolidSampler = (cfg: RenderConfig): ((x: number, y: number, z: number, time?: number) => number) => {
   const { layers } = cfg
+  const steps = cfg.steps && cfg.steps >= 2 ? cfg.steps : 0
+  const smoothing = cfg.stepSmoothing ?? STEP_SMOOTHING
   const velocities = layers.map(l => translationVelocity(l.speed, l.angle, l.scale))
   return (x, y, z, time = 0) => {
     let acc = 0
@@ -171,7 +186,7 @@ export const createSolidSampler = (cfg: RenderConfig): ((x: number, y: number, z
       const b = applyBlend(L.blend, acc, val)
       acc += (b - acc) * L.opacity
     }
-    return acc
+    return steps ? posterize(acc, steps, smoothing) : acc
   }
 }
 
@@ -182,6 +197,8 @@ export const createSolidSampler = (cfg: RenderConfig): ((x: number, y: number, z
  */
 export const createSampler = (cfg: RenderConfig): ((u: number, v: number, time?: number) => number) => {
   const { layers, tiled } = cfg
+  const steps = cfg.steps && cfg.steps >= 2 ? cfg.steps : 0
+  const smoothing = cfg.stepSmoothing ?? STEP_SMOOTHING
   const tiledFlags = layers.map(l => tiled && l.variant.sampleTileable !== null)
   const velocities = layers.map(l => translationVelocity(l.speed, l.angle, l.scale))
   return (u, v, time = 0) => {
@@ -206,6 +223,6 @@ export const createSampler = (cfg: RenderConfig): ((u: number, v: number, time?:
       const b = applyBlend(L.blend, acc, val)
       acc += (b - acc) * L.opacity
     }
-    return acc
+    return steps ? posterize(acc, steps, smoothing) : acc
   }
 }

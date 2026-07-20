@@ -11,6 +11,7 @@ import {
   OCTAVE_ROT2,
   OCTAVE_ROT3,
   RIDGE_FEEDBACK,
+  STEP_SMOOTHING,
   TILE_REPEAT,
   translationVelocity,
   WARP_BLEND_STRENGTH,
@@ -112,6 +113,8 @@ fn layerVal${i}(uv: vec2f, t: f32) -> f32 {
 
 export const buildWgslShader = (cfg: RenderConfig): string => {
   const { layers, tiled } = cfg
+  const steps = cfg.steps && cfg.steps >= 2 ? cfg.steps : 0
+  const smoothing = cfg.stepSmoothing ?? STEP_SMOOTHING
   const chunks: string[] = [COMMON_WGSL]
   const seen = new Set<string>(chunks)
   const fns: string[] = []
@@ -154,6 +157,13 @@ ${fns.join('\n')}
   var acc = 0.0;
   var uvw = vec2f(0.0);
   ${mainLines.join('\n  ')}
+  ${
+    steps
+      ? `let sp = acc * ${f(steps)};
+  let sb = floor(sp);
+  acc = min(sb + smoothstep(${f(1 - smoothing)}, 1.0, sp - sb), ${f(steps - 1)}) / ${f(steps - 1)};`
+      : ''
+  }
   return vec4f(acc, acc, acc, 1.0);
 }
 `

@@ -81,6 +81,8 @@ export default function Home() {
   const [backend, setBackend] = useState<Backend>('webgl')
   const [view, setView] = useState<ViewMode>('2d')
   const [tiled, setTiled] = useState(false)
+  /** Posterization levels for the whole stack; 0 renders the smooth gradient. */
+  const [steps, setSteps] = useState(0)
   const [hasWebgpu, setHasWebgpu] = useState(false)
   const [copied, setCopied] = useState<'json' | 'glsl' | 'wgsl' | 'tsl' | null>(null)
   const [importOpen, setImportOpen] = useState(false)
@@ -110,6 +112,13 @@ export default function Home() {
     const active = visible.length > 0 ? visible : [{ ...(layers[0] as UILayer), opacity: 0 }]
     return createEffect({
       tiled,
+      steps,
+      // The 3D views displace a vertex grid, which cannot resolve the crisp
+      // 2D band edges: cliffs falling between grid columns render as sawtooth.
+      // A wide ease bevels the terraces over several grid cells instead. The
+      // sphere eases wider still: its grid is coarser in field units than the
+      // plane's (an equator of 2*pi local units against the plane's 2).
+      stepSmoothing: view === 'sphere' ? 0.4 : view === 'plane' ? 0.25 : undefined,
       // The 3D views read the stack in 3D space: no uv wrap seam on the
       // sphere, and both views slice the same volume. Tiling is the one
       // exception — it needs the wrapped uv code paths.
@@ -127,7 +136,7 @@ export default function Home() {
         angle: l.angle,
       })),
     })
-  }, [layers, tiled, view])
+  }, [layers, tiled, view, steps])
 
   const cost = effect.cost()
 
@@ -731,6 +740,14 @@ export default function Home() {
                   disabled: !hasWebgpu,
                   title: hasWebgpu ? 'Displace a subdivided sphere (Three.js)' : 'The 3D views require WebGPU',
                 },
+              ]}
+            />
+            <Segmented
+              value={steps}
+              onChange={setSteps}
+              options={[
+                { value: 0, label: 'Smooth' },
+                ...[2, 3, 4, 6, 8].map(n => ({ value: n, label: String(n), title: `${n} stepped levels` })),
               ]}
             />
             {/* A sphere always reads the solid field, where tiling has no meaning. */}

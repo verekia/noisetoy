@@ -215,7 +215,31 @@ export type RenderConfig = {
   view?: ViewMode
   /** Sampling domain. Defaults to 'uv'. Tiling does not apply to 'position'. */
   domain?: SampleDomain
+  /**
+   * Posterize the folded stack into this many evenly spaced levels, first at
+   * exactly 0 and last at exactly 1. 0/undefined renders the smooth gradient.
+   */
+  steps?: number
+  /** Band-edge ease fraction for stepped rendering. Default STEP_SMOOTHING. */
+  stepSmoothing?: number
 }
+
+/**
+ * Fraction of a band over which stepped rendering eases into the next level
+ * (smoothstep over the band's top). Hard steps alias badly along band
+ * borders; screen-space derivative AA (fwidth) would be the precise fix but
+ * exists only in fragment shaders — the effect also runs on the CPU and in
+ * the vertex stage for 3D displacement — so the transition is a fixed
+ * fraction of a band instead, keeping all four backends bit-consistent.
+ * 0.03 is tuned by eye: crisp borders, no visible staircase at 1000px.
+ *
+ * This is the DEFAULT; EffectSpec.stepSmoothing overrides it per effect.
+ * Displaced geometry needs a much wider ease than pixels do — a vertex grid
+ * cannot resolve a near-vertical cliff, and triangles snapping to either side
+ * of one produce sawtooth edges — so 3D views should render terraces with a
+ * transition spanning several grid cells (~0.25).
+ */
+export const STEP_SMOOTHING = 0.03
 
 export type Renderer = {
   render: (timeSec: number) => void
