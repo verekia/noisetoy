@@ -311,10 +311,10 @@ describe('band rendering', () => {
 
   test('every language emits the band pass', () => {
     const effect = createEffect({ layers: [{ noise: 'perlin' }], band: { center: 0.25, width: 0.04 } })
-    // lo = 0.23; the eased rise ends at lo + width * BAND_SMOOTHING = 0.236.
-    expect(effect.glsl()).toContain('smoothstep(0.23, 0.236')
-    expect(effect.wgsl()).toContain('smoothstep(0.23, 0.236')
-    expect(effect.tslBody()).toContain('smoothstep(float(0.23), float(0.236')
+    // lo = 0.23; the eased rise ends at lo + BAND_SMOOTHING = 0.2375.
+    expect(effect.glsl()).toContain('smoothstep(0.23, 0.2375')
+    expect(effect.wgsl()).toContain('smoothstep(0.23, 0.2375')
+    expect(effect.tslBody()).toContain('smoothstep(float(0.23), float(0.2375')
     expect(effect.spec.band).toEqual({ center: 0.25, width: 0.04 })
   })
 

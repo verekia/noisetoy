@@ -142,9 +142,11 @@ export default function Home() {
       tiled: tiled && altCount === 0,
       steps: band ? 0 : steps,
       band: band ? { center: BAND_CENTER[band.level], width: BAND_WIDTH[band.width] } : undefined,
-      // Same displaced-geometry reasoning as stepSmoothing below: a vertex
-      // grid cannot resolve the band's walls, so the 3D views ease wider.
-      bandSmoothing: view === 'sphere' ? 0.5 : view === 'plane' ? 0.4 : undefined,
+      // Same displaced-geometry reasoning as stepSmoothing below, at the same
+      // ABSOLUTE easing stepped mode gets at 4 levels (0.4/4 and 0.25/4): a
+      // vertex grid cannot resolve the band's walls, so the 3D views ease
+      // wider.
+      bandSmoothing: view === 'sphere' ? 0.1 : view === 'plane' ? 0.0625 : undefined,
       // The 3D views displace a vertex grid, which cannot resolve the crisp
       // 2D band edges: cliffs falling between grid columns render as sawtooth.
       // A wide ease bevels the terraces over several grid cells instead. The

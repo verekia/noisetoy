@@ -41,12 +41,13 @@ const sstep = (a: number, b: number, v: number): number => {
 
 /**
  * 1 inside [center - width/2, center + width/2], 0 outside, eased from the
- * inside of each edge over `width * smoothing` so the band's walls do not
- * alias — the same idea as posterize's eased level borders.
+ * inside of each edge over `smoothing` value units (clamped to the half
+ * width) so the band's walls do not alias — the same idea, and the same
+ * absolute crispness, as posterize's eased level borders.
  */
 const bandpass = (v: number, center: number, width: number, smoothing: number): number => {
   const half = width / 2
-  const e = width * smoothing
+  const e = Math.min(smoothing, half)
   return sstep(center - half, center - half + e, v) - sstep(center + half - e, center + half, v)
 }
 

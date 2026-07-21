@@ -94,10 +94,11 @@ export type EffectSpec = {
    */
   band?: { center: number; width: number } | null
   /**
-   * Fraction of the band width over which each band edge eases, 0.01-0.5,
-   * from the INSIDE of the edge. The default (BAND_SMOOTHING, 0.15) keeps
-   * edges crisp on pixels without aliasing; renders that displace geometry
-   * should widen it (~0.4), for the same sawtooth reason as stepSmoothing.
+   * ABSOLUTE width, in value units, over which each band edge eases from the
+   * inside — the same edge crispness regardless of band width. The default
+   * (BAND_SMOOTHING, 0.0075) matches stepped rendering's absolute easing;
+   * renders that displace geometry should widen it (~0.06-0.1), for the same
+   * sawtooth reason as stepSmoothing. Clamped to half the band width.
    */
   bandSmoothing?: number
 }
@@ -225,7 +226,7 @@ export const createEffect = (spec: EffectSpec): Effect => {
     : null
   if (band && steps) throw new Error('steps and band are mutually exclusive display options')
   const bandSmoothing = Number.isFinite(spec.bandSmoothing)
-    ? Math.min(0.5, Math.max(0.01, spec.bandSmoothing as number))
+    ? Math.min(0.5, Math.max(0.001, spec.bandSmoothing as number))
     : BAND_SMOOTHING
   const cfg = { layers, tiled, size: 1, domain, steps, stepSmoothing, band: band ?? undefined, bandSmoothing }
   const resolvedSpec: Required<EffectSpec> = {

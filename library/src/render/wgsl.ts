@@ -117,7 +117,7 @@ export const buildWgslShader = (cfg: RenderConfig): string => {
   const steps = cfg.steps && cfg.steps >= 2 ? cfg.steps : 0
   const smoothing = cfg.stepSmoothing ?? STEP_SMOOTHING
   const band = cfg.band ?? null
-  const be = band ? band.width * (cfg.bandSmoothing ?? BAND_SMOOTHING) : 0
+  const be = band ? Math.min(cfg.bandSmoothing ?? BAND_SMOOTHING, band.width / 2) : 0
   const bandLo = band ? band.center - band.width / 2 : 0
   const bandHi = band ? band.center + band.width / 2 : 0
   const chunks: string[] = [COMMON_WGSL]

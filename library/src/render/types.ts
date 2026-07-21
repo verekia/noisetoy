@@ -228,7 +228,7 @@ export type RenderConfig = {
    * with `steps`.
    */
   band?: { center: number; width: number }
-  /** Inside-edge ease fraction of the band width. Default BAND_SMOOTHING. */
+  /** Absolute inside-edge ease width, in value units. Default BAND_SMOOTHING. */
   bandSmoothing?: number
 }
 
@@ -250,16 +250,19 @@ export type RenderConfig = {
 export const STEP_SMOOTHING = 0.03
 
 /**
- * Fraction of the band width over which an isolated band eases from 0 to 1
- * on the INSIDE of each edge. Higher than STEP_SMOOTHING because it is
- * relative to the band itself, which can be a twentieth of the value range —
- * the same absolute crispness a stepped level gets needs a larger fraction
- * here. Renders that displace geometry should widen it further (~0.4): a
- * vertex grid cannot resolve the band's near-vertical walls.
+ * ABSOLUTE width, in value-range units, over which an isolated band eases
+ * from 0 to 1 on the inside of each edge. Absolute, not a fraction of the
+ * band, so Thin and Thick bands get the identical edge crispness — and the
+ * identical crispness stepped rendering gets: STEP_SMOOTHING is 0.03 of a
+ * level, which at the 4-level midpoint of the explorer's 2-8 range is
+ * 0.03 / 4 = 0.0075 of the value range. Renders that displace geometry
+ * should widen it the same way stepped mode does (0.25/4 and 0.4/4).
+ * Clamped to half the band width at application, so a heavily eased narrow
+ * band degrades into a smooth bump rather than inverting.
  *
  * This is the DEFAULT; EffectSpec.bandSmoothing overrides it per effect.
  */
-export const BAND_SMOOTHING = 0.15
+export const BAND_SMOOTHING = 0.0075
 
 export type Renderer = {
   render: (timeSec: number) => void
