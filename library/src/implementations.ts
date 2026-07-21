@@ -405,6 +405,28 @@ export const IMPLEMENTATIONS: Record<string, NoiseImplementation[]> = {
         "One point per cell is the ubiquitous real-time simplification — it is what essentially every shader implementation of cellular noise does, because a fixed loop count vectorises and a Poisson count does not.\n\nA complication worth knowing before treating either as gospel: WORLEY'S OWN CODE DISAGREES WITH WORLEY'S OWN PAPER. The paper describes mean density about 3-4 with the count clamped to 1..9, and offers 541i + 79j + 31k as an admittedly poor example hash. The released cellular.c uses mean 2.5, an unclamped 0..5 drawn from a 256-entry Poisson table indexed by the high byte of the seed, and the hash 702395077i + 915488749j + 2120969693k with an LCG. What the world reproduces is the code, so 'the Worley reference' has to name which one you mean.",
       variantIds: ['worley-2d', 'worley-3d'],
     },
+    {
+      id: 'split-bits-pruned',
+      name: 'Split-bit offsets, pruned search',
+      kind: 'alternative',
+      evidence: 'paper-only',
+      status: 'candidate',
+      archivedAt: 'src/alt/worley-fast.ts',
+      reference: {
+        paper:
+          'Steven Worley, "A Cellular Texture Basis Function" (SIGGRAPH 1996). No code was published with the paper — it is prose and references only.',
+        url: 'https://cedric.cnam.fr/~cubaud/PROCEDURAL/worley.pdf',
+      },
+      follows: "Steven Worley, 'A Cellular Texture Basis Function' (SIGGRAPH 1996)",
+      deviations: [
+        ONE_POINT_PER_CELL,
+        'A cell costs one xor-shift, one multiply by 2^32/phi and one closing xor-shift, with ALL offset axes split out of the single 32-bit product (16+16 bits in 2D, 10+10+10 in 3D) — against the shipping three (2D) or five (3D) chained lowbias32 avalanches per cell. Feature-point positions are therefore quantized to 2^-16 / 2^-10 of a cell; offset uniformity and cross-cell independence measured inside the 95% chi-square criticals over 1M cells.',
+        "The neighbourhood search prunes: centre column/plane first, then a neighbouring column or plane only if its boundary distance still beats the current F1. Conservative, so the result is exactly the unpruned minimum (verified, zero mismatches over 600k probes). This is closer to the paper's own algorithm — Worley skips cubes that cannot contain a closer point — than the shipping exhaustive 9/27-cell loop is.",
+      ],
+      rationale:
+        'The current challenger. Measured with `bun run bench:impl`: 2.0x the shipping worley2 and ~3.8x worley3 on the CPU (best and median agreeing) — the win grows with dimension because a pruned 3D plane is nine cells never hashed. The 3D search is written out longhand because routing each plane through a many-argument helper left the speedup at the mercy of a fragile JIT inlining decision, measured swinging between 430 and 550 ms for identical semantics. Field mean/rms/extrema match the shipping worley to three decimals (different draw, same distribution). Not promoted for the same reasons as the Perlin candidate: no GLSL/WGSL/TSL backends yet, and the pruning branches are exactly what a GPU pays divergence for, so the GPU needs its own measurement.',
+      variantIds: [],
+    },
   ],
   'worley-manhattan': [
     {

@@ -1,6 +1,6 @@
 // Head-to-head benchmark of each shipping implementation against the
 // non-shipping one kept in src/alt: the trig-gradient Simplex it replaced, and
-// the fast-hash Perlin candidate that challenges it.
+// the fast-hash Perlin and pruned-search Worley candidates that challenge it.
 //
 // The reference implementations of Perlin and Simplex were removed from the
 // repo: both were built on Perlin's 256-entry permutation table, and while it
@@ -24,8 +24,10 @@
 
 import { perlin2, perlin3 } from '../noises/perlin'
 import { simplex2 as simplexTable2, simplex3 as simplexTable3 } from '../noises/simplex'
+import { worley2, worley3 } from '../noises/worley'
 import { perlinFast2, perlinFast3 } from './perlin-fast'
 import { simplex2 as simplexTrig2, simplex3 as simplexTrig3 } from './simplex-trig'
+import { worleyFast2, worleyFast3 } from './worley-fast'
 
 type Fn3 = (x: number, y: number, z: number) => number
 
@@ -96,3 +98,9 @@ compare(
   ['candidate (Fibonacci hash)', (x, y) => perlinFast2(x, y)],
 )
 compare('Perlin 3D', ['shipping  (folded lowbias32)', perlin3], ['candidate (Fibonacci hash)', perlinFast3])
+compare(
+  'Worley 2D',
+  ['shipping  (chained avalanches)', (x, y) => worley2(x, y)],
+  ['candidate (split bits, pruned)', (x, y) => worleyFast2(x, y)],
+)
+compare('Worley 3D', ['shipping  (chained avalanches)', worley3], ['candidate (split bits, pruned)', worleyFast3])
