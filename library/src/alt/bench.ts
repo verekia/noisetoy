@@ -30,13 +30,22 @@
 // width, which a GPU also prices differently. Treat this as a strong hint,
 // not a settled answer.
 
-import { crackle2, crackle3, foam2, foam3, mosaic2, mosaic3 } from '../noises/cellular'
+import { crackle2, crackle3, foam2, foam3, mosaic2, mosaic3, stars2, stars3 } from '../noises/cellular'
 import { flow3 } from '../noises/flow'
 import { perlin2, perlin3 } from '../noises/perlin'
 import { simplex2 as simplexTable2, simplex3 as simplexTable3 } from '../noises/simplex'
 import { worley2, worley3 } from '../noises/worley'
 import { chebyshev2, chebyshev3, manhattan2, manhattan3 } from '../noises/worley-metrics'
-import { crackleFast2, crackleFast3, foamFast2, foamFast3, mosaicFast2, mosaicFast3 } from './cellular-fast'
+import {
+  crackleFast2,
+  crackleFast3,
+  foamFast2,
+  foamFast3,
+  mosaicFast2,
+  mosaicFast3,
+  starsFast2,
+  starsFast3,
+} from './cellular-fast'
 import { flowFast3 } from './flow-fast'
 import { perlinFast2, perlinFast3 } from './perlin-fast'
 import { simplexFast2, simplexFast3 } from './simplex-fast'
@@ -151,6 +160,12 @@ compare(
   ['candidate (split bits, pruned)', (x, y) => foamFast2(x, y)],
 )
 compare('Foam 3D', ['shipping  (chained avalanches)', foam3], ['candidate (split bits, pruned)', foamFast3])
+compare(
+  'Stars 2D',
+  ['shipping  (chained avalanches)', (x, y) => stars2(x, y)],
+  ['candidate (split bits, pruned)', (x, y) => starsFast2(x, y)],
+)
+compare('Stars 3D', ['shipping  (chained avalanches)', stars3], ['candidate (split bits, pruned)', starsFast3])
 compare(
   'Simplex 2D vs candidate',
   ['shipping  (folded lowbias32)', (x, y) => simplexTable2(x, y)],

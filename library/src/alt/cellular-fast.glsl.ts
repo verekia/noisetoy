@@ -268,4 +268,96 @@ float foamFast3(vec3 p) {
   }
   return q > 0.0 ? sqrt(q) * (1.0 / 1.1) : 0.0;
 }
+float strFastCell2(uint s, vec2 b, float sum) {
+  uint h = fibMix(s);
+  h ^= h >> 16u;
+  vec2 v = b + vec2(float(h >> 16u), float(h & 0xffffu)) * (1.0 / 65536.0);
+  float d2 = dot(v, v);
+  if (d2 < 0.77) {
+    uint bh = (h ^ (h >> 15u)) * ALT_FIB;
+    return sum + float(bh >> 8u) * (1.0 / 16777216.0) * exp(-d2 * 18.0);
+  }
+  return sum;
+}
+
+float strFastCell3(uint s, vec3 b, float sum) {
+  uint h = lowbias32(s);
+  vec3 v = b + vec3(float(h >> 22u), float((h >> 12u) & 1023u), float((h >> 2u) & 1023u)) * (1.0 / 1024.0);
+  float d2 = dot(v, v);
+  if (d2 < 0.77) {
+    uint bh = (h ^ (h >> 15u)) * ALT_FIB;
+    return sum + float(bh >> 8u) * (1.0 / 16777216.0) * exp(-d2 * 18.0);
+  }
+  return sum;
+}
+
+float starsFast2(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = p - i;
+  uint xc = uint(int(i.x)) * LATTICE_HX;
+  uint yc = uint(int(i.y)) * LATTICE_HY;
+  uint ym = yc - LATTICE_HY;
+  uint yp = yc + LATTICE_HY;
+  float sum = strFastCell2(xc + yc, vec2(-f.x, -f.y), 0.0);
+  sum = strFastCell2(xc + ym, vec2(-f.x, -1.0 - f.y), sum);
+  sum = strFastCell2(xc + yp, vec2(-f.x, 1.0 - f.y), sum);
+  if (f.x * f.x < 0.77) {
+    uint xm = xc - LATTICE_HX;
+    sum = strFastCell2(xm + yc, vec2(-1.0 - f.x, -f.y), sum);
+    sum = strFastCell2(xm + ym, vec2(-1.0 - f.x, -1.0 - f.y), sum);
+    sum = strFastCell2(xm + yp, vec2(-1.0 - f.x, 1.0 - f.y), sum);
+  }
+  float gx = 1.0 - f.x;
+  if (gx * gx < 0.77) {
+    uint xp = xc + LATTICE_HX;
+    sum = strFastCell2(xp + yc, vec2(1.0 - f.x, -f.y), sum);
+    sum = strFastCell2(xp + ym, vec2(1.0 - f.x, -1.0 - f.y), sum);
+    sum = strFastCell2(xp + yp, vec2(1.0 - f.x, 1.0 - f.y), sum);
+  }
+  return sum;
+}
+
+float strFastPlane3(uint xc, uint ymz, uint ycz, uint ypz, vec2 fxy, float bz, float zz, float sumin) {
+  float sum = sumin;
+  sum = strFastCell3(xc + ycz, vec3(-fxy.x, -fxy.y, bz), sum);
+  sum = strFastCell3(xc + ymz, vec3(-fxy.x, -1.0 - fxy.y, bz), sum);
+  sum = strFastCell3(xc + ypz, vec3(-fxy.x, 1.0 - fxy.y, bz), sum);
+  if (fxy.x * fxy.x + zz < 0.77) {
+    uint xm = xc - LATTICE_HX;
+    sum = strFastCell3(xm + ycz, vec3(-1.0 - fxy.x, -fxy.y, bz), sum);
+    sum = strFastCell3(xm + ymz, vec3(-1.0 - fxy.x, -1.0 - fxy.y, bz), sum);
+    sum = strFastCell3(xm + ypz, vec3(-1.0 - fxy.x, 1.0 - fxy.y, bz), sum);
+  }
+  float gx = 1.0 - fxy.x;
+  if (gx * gx + zz < 0.77) {
+    uint xp = xc + LATTICE_HX;
+    sum = strFastCell3(xp + ycz, vec3(1.0 - fxy.x, -fxy.y, bz), sum);
+    sum = strFastCell3(xp + ymz, vec3(1.0 - fxy.x, -1.0 - fxy.y, bz), sum);
+    sum = strFastCell3(xp + ypz, vec3(1.0 - fxy.x, 1.0 - fxy.y, bz), sum);
+  }
+  return sum;
+}
+
+float starsFast3(vec3 p) {
+  vec3 i = floor(p);
+  vec3 f = p - i;
+  uint xc = uint(int(i.x)) * LATTICE_HX;
+  uint yc = uint(int(i.y)) * LATTICE_HY;
+  uint zc = uint(int(i.z)) * LATTICE_HZ;
+  uint ym = yc - LATTICE_HY;
+  uint yp = yc + LATTICE_HY;
+  float sum = strFastPlane3(xc, ym + zc, yc + zc, yp + zc, f.xy, -f.z, 0.0, 0.0);
+  float zzm = f.z * f.z;
+  if (zzm < 0.77) {
+    uint zm = zc - LATTICE_HZ;
+    sum = strFastPlane3(xc, ym + zm, yc + zm, yp + zm, f.xy, -1.0 - f.z, zzm, sum);
+  }
+  float gz = 1.0 - f.z;
+  float zzp = gz * gz;
+  if (zzp < 0.77) {
+    uint zp = zc + LATTICE_HZ;
+    sum = strFastPlane3(xc, ym + zp, yc + zp, yp + zp, f.xy, 1.0 - f.z, zzp, sum);
+  }
+  return sum;
+}
 `

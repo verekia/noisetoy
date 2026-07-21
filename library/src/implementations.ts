@@ -66,7 +66,16 @@
 // GPUs. The table gradients live alongside it in common.ts as `gradTable2` /
 // `gradTable3`, so switching a noise over is a small change.
 
-import { crackleFast2, crackleFast3, foamFast2, foamFast3, mosaicFast2, mosaicFast3 } from './alt/cellular-fast'
+import {
+  crackleFast2,
+  crackleFast3,
+  foamFast2,
+  foamFast3,
+  mosaicFast2,
+  mosaicFast3,
+  starsFast2,
+  starsFast3,
+} from './alt/cellular-fast'
 import { CELLULAR_FAST_GLSL } from './alt/cellular-fast.glsl'
 import { CELLULAR_FAST_TSL } from './alt/cellular-fast.tsl'
 import { CELLULAR_FAST_WGSL } from './alt/cellular-fast.wgsl'
@@ -105,6 +114,7 @@ import {
   PERLIN3_NORM,
   SIMPLEX2_NORM,
   SIMPLEX3_NORM,
+  STARS_NORM,
 } from './noises/normalization'
 
 export type ImplementationKind = 'canonical' | 'alternative' | 'conventional' | 'novel'
@@ -778,6 +788,17 @@ export const IMPLEMENTATIONS: Record<string, NoiseImplementation[]> = {
         'Sum of exp(-d^2 * k) splats with hashed brightness over the feature points. Gaussian splatting is folklore; this particular basis is original.',
       variantIds: ['stars-2d', 'stars-3d'],
     },
+    {
+      id: 'split-bits-pruned',
+      name: 'Split-bit offsets, cutoff-pruned splat sum',
+      kind: 'novel',
+      evidence: 'none',
+      status: 'candidate',
+      archivedAt: 'src/alt/cellular-fast.ts',
+      rationale:
+        'The worley split-bits-pruned substrate over the splat sum, with one deliberate approximation a SUM requires for pruning: contributions with d^2 >= 0.77 — where exp(-18 d^2) is under 1e-6, three orders below an 8-bit display quantum — are dropped, and any column or plane whose boundary clears that cutoff is never hashed. Brightness comes from one cheap remix of the cell hash. Field mean/rms/extrema match shipping to three decimals. Measured with `bun run bench:impl`: ~2.1-2.3x the shipping stars2 and ~4.1x stars3 on the CPU — the largest 3D win of the cellular sweep, because the cutoff also eliminates most exp() calls. GPU: 1.05x (2D) and 1.55x (3D) on WebGL+WebGPU; the Three.js TSL 3D column reads ~0.73x — the one backend where the divergent early-outs cost more than the skipped exps save. Not promoted: no tileable paths yet.',
+      variantIds: [],
+    },
   ],
   vortex: [
     {
@@ -1008,6 +1029,24 @@ export const ALT_VARIANTS: AltVariant[] = [
   // Metric-candidate costs: shipping VARIANT_COST x measured GPU throughput
   // ratio (WebGL+WebGPU medians). Manhattan: 0.94 (2D) / 0.65 (3D).
   // Chebyshev: 0.92 (2D) / 0.52 (3D).
+  // Stars costs: shipping VARIANT_COST x measured GPU ratio, 0.97 (2D) and
+  // 0.65 (3D) — WebGL+WebGPU medians.
+  altVariant(
+    'stars',
+    'split-bits-pruned',
+    2,
+    0.81,
+    (x, y) => STARS_NORM * starsFast2(x, y),
+    fastShaders(2, CELLULAR_FAST_CHUNKS, 'starsFast2(p)', STARS_NORM, 'unsigned'),
+  ),
+  altVariant(
+    'stars',
+    'split-bits-pruned',
+    3,
+    2.0,
+    (x, y, z) => STARS_NORM * starsFast3(x, y, z),
+    fastShaders(3, CELLULAR_FAST_CHUNKS, 'starsFast3(p)', STARS_NORM, 'unsigned'),
+  ),
   // Foam costs: shipping VARIANT_COST x measured GPU ratio, 0.94 (2D) and
   // 0.50 (3D) — WebGL+WebGPU medians.
   altVariant(
