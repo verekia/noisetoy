@@ -314,4 +314,75 @@ const starsFast3 = Fn(([p]) => {
   })
   return sum
 })
+const rippleFastCell2 = Fn(([s, b, sumin]) => {
+  const out = float(sumin).toVar()
+  const h = fibMix(s).toVar()
+  h.assign(h.bitXor(h.shiftRight(uint(16))))
+  const v = b.add(vec2(float(h.shiftRight(uint(16))), float(h.bitAnd(uint(0xffff)))).mul(1 / 65536))
+  const d2 = dot(v, v).toVar()
+  If(d2.lessThan(2.25), () => {
+    const d = sqrt(d2).toVar()
+    const w = d.mul(1 / 1.5).oneMinus()
+    const bh = h.bitXor(h.shiftRight(uint(15))).mul(ALT_FIB)
+    out.addAssign(w.mul(w).mul(cos(d.mul(15).sub(float(bh.shiftRight(uint(24))).mul(0.02454369260617026)))))
+  })
+  return out
+})
+
+const rippleFastCell3 = Fn(([s, b, sumin]) => {
+  const out = float(sumin).toVar()
+  const h = lowbias32(s).toVar()
+  const v = b.add(
+    vec3(
+      float(h.shiftRight(uint(22))),
+      float(h.shiftRight(uint(12)).bitAnd(uint(1023))),
+      float(h.shiftRight(uint(2)).bitAnd(uint(1023))),
+    ).mul(1 / 1024),
+  )
+  const d2 = dot(v, v).toVar()
+  If(d2.lessThan(2.25), () => {
+    const d = sqrt(d2).toVar()
+    const w = d.mul(1 / 1.5).oneMinus()
+    const bh = h.bitXor(h.shiftRight(uint(15))).mul(ALT_FIB)
+    out.addAssign(w.mul(w).mul(cos(d.mul(15).sub(float(bh.shiftRight(uint(24))).mul(0.02454369260617026)))))
+  })
+  return out
+})
+
+const rippleFast2 = Fn(([p]) => {
+  const i = floor(p)
+  const f = p.sub(i).toVar()
+  const xc = uint(int(i.x)).mul(LATTICE_HX).toVar()
+  const yc = uint(int(i.y)).mul(LATTICE_HY).toVar()
+  const sum = float(0).toVar()
+  Loop({ start: int(-1), end: int(1), condition: '<=' }, ({ i: dy }) => {
+    const yv = yc.add(uint(dy).mul(LATTICE_HY)).toVar()
+    const by = float(dy).sub(f.y).toVar()
+    sum.assign(rippleFastCell2(xc.sub(LATTICE_HX).add(yv), vec2(f.x.negate().sub(1), by), sum))
+    sum.assign(rippleFastCell2(xc.add(yv), vec2(f.x.negate(), by), sum))
+    sum.assign(rippleFastCell2(xc.add(LATTICE_HX).add(yv), vec2(f.x.oneMinus(), by), sum))
+  })
+  return sum
+})
+
+const rippleFast3 = Fn(([p]) => {
+  const i = floor(p)
+  const f = p.sub(i).toVar()
+  const xc = uint(int(i.x)).mul(LATTICE_HX).toVar()
+  const yc = uint(int(i.y)).mul(LATTICE_HY).toVar()
+  const zc = uint(int(i.z)).mul(LATTICE_HZ).toVar()
+  const sum = float(0).toVar()
+  Loop({ start: int(-1), end: int(1), condition: '<=' }, ({ i: dz }) => {
+    const zv = zc.add(uint(dz).mul(LATTICE_HZ)).toVar()
+    const bz = float(dz).sub(f.z).toVar()
+    Loop({ start: int(-1), end: int(1), condition: '<=' }, ({ i: dy }) => {
+      const yzv = zv.add(yc).add(uint(dy).mul(LATTICE_HY)).toVar()
+      const by = float(dy).sub(f.y).toVar()
+      sum.assign(rippleFastCell3(xc.sub(LATTICE_HX).add(yzv), vec3(f.x.negate().sub(1), by, bz), sum))
+      sum.assign(rippleFastCell3(xc.add(yzv), vec3(f.x.negate(), by, bz), sum))
+      sum.assign(rippleFastCell3(xc.add(LATTICE_HX).add(yzv), vec3(f.x.oneMinus(), by, bz), sum))
+    })
+  })
+  return sum
+})
 `

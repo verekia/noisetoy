@@ -33,6 +33,7 @@
 import { crackle2, crackle3, foam2, foam3, mosaic2, mosaic3, stars2, stars3 } from '../noises/cellular'
 import { flow3 } from '../noises/flow'
 import { perlin2, perlin3 } from '../noises/perlin'
+import { ripple2, ripple3 } from '../noises/ripple'
 import { simplex2 as simplexTable2, simplex3 as simplexTable3 } from '../noises/simplex'
 import { worley2, worley3 } from '../noises/worley'
 import { chebyshev2, chebyshev3, manhattan2, manhattan3 } from '../noises/worley-metrics'
@@ -43,6 +44,8 @@ import {
   foamFast3,
   mosaicFast2,
   mosaicFast3,
+  rippleFast2,
+  rippleFast3,
   starsFast2,
   starsFast3,
 } from './cellular-fast'
@@ -166,6 +169,12 @@ compare(
   ['candidate (split bits, pruned)', (x, y) => starsFast2(x, y)],
 )
 compare('Stars 3D', ['shipping  (chained avalanches)', stars3], ['candidate (split bits, pruned)', starsFast3])
+compare(
+  'Ripple 2D',
+  ['shipping  (chained avalanches)', (x, y) => ripple2(x, y)],
+  ['candidate (split bits, gated)', (x, y) => rippleFast2(x, y)],
+)
+compare('Ripple 3D', ['shipping  (chained avalanches)', ripple3], ['candidate (split bits, gated)', rippleFast3])
 compare(
   'Simplex 2D vs candidate',
   ['shipping  (folded lowbias32)', (x, y) => simplexTable2(x, y)],

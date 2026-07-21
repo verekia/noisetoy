@@ -14,6 +14,7 @@
 
 import { FOAM_R, STARS_SHARP } from '../noises/cellular'
 import { LATTICE_HX, LATTICE_HY, LATTICE_HZ } from '../noises/common'
+import { RIPPLE_FREQ, RIPPLE_RANGE } from '../noises/ripple'
 
 /** 2^32 / phi, odd — Knuth's multiplicative hashing constant. */
 const FIB = 0x9e3779b1
@@ -29,6 +30,11 @@ const FOAM_INV_R = 1 / FOAM_R
  */
 const STARS_CUT = 0.77
 const INV24 = 1 / 16777216
+const TAU = 6.283185307179586
+/** Window support: contributions vanish at d >= RIPPLE_RANGE. */
+const RIPPLE_CUT2 = RIPPLE_RANGE * RIPPLE_RANGE
+const INV_RANGE = 1 / RIPPLE_RANGE
+const PHASE_SCALE = TAU / 256
 
 const eCell2 = (s: number, bx: number, by: number, f1: number): number => {
   let h = Math.imul(s ^ (s >>> 16), FIB)
@@ -2309,6 +2315,90 @@ export const starsFast3 = (x: number, y: number, z: number): number => {
           sum += (bh >>> 8) * INV24 * Math.exp(-d2 * STARS_SHARP)
         }
       }
+    }
+  }
+  return sum
+}
+
+// RIPPLE. Windowed radial waves. The window radius (1.5 cells) exceeds every
+// column bound, so no cell can be pruned away — but a cell whose d^2 clears
+// the window support contributes exactly zero, and the shipping loop still
+// pays its sqrt and cos before multiplying by that zero. Here the window
+// test comes first, so far cells cost one mix and one compare. Offsets come
+// from the usual split bits; the wave phase from one cheap remix.
+
+const rippleFastCell2 = (s: number, bx: number, by: number, sum: number): number => {
+  let h = Math.imul(s ^ (s >>> 16), FIB)
+  h ^= h >>> 16
+  const vx = bx + (h >>> 16) * INV16
+  const vy = by + (h & 0xffff) * INV16
+  const d2 = vx * vx + vy * vy
+  if (d2 >= RIPPLE_CUT2) return sum
+  const d = Math.sqrt(d2)
+  const w = 1 - d * INV_RANGE
+  const bh = Math.imul(h ^ (h >>> 15), FIB)
+  return sum + w * w * Math.cos(d * RIPPLE_FREQ - (bh >>> 24) * PHASE_SCALE)
+}
+
+const rippleFastCell3 = (s: number, bx: number, by: number, bz: number, sum: number): number => {
+  let h = s ^ (s >>> 16)
+  h = Math.imul(h, 0x7feb352d)
+  h ^= h >>> 15
+  h = Math.imul(h, 0x846ca68b)
+  h ^= h >>> 16
+  const vx = bx + (h >>> 22) * INV10
+  const vy = by + ((h >>> 12) & 1023) * INV10
+  const vz = bz + ((h >>> 2) & 1023) * INV10
+  const d2 = vx * vx + vy * vy + vz * vz
+  if (d2 >= RIPPLE_CUT2) return sum
+  const d = Math.sqrt(d2)
+  const w = 1 - d * INV_RANGE
+  const bh = Math.imul(h ^ (h >>> 15), FIB)
+  return sum + w * w * Math.cos(d * RIPPLE_FREQ - (bh >>> 24) * PHASE_SCALE)
+}
+
+export const rippleFast2 = (x: number, y: number): number => {
+  const ix = Math.floor(x)
+  const iy = Math.floor(y)
+  const fx = x - ix
+  const fy = y - iy
+  const xc = Math.imul(ix, LATTICE_HX)
+  const yc = Math.imul(iy, LATTICE_HY)
+  const xm = (xc - LATTICE_HX) | 0
+  const xp = (xc + LATTICE_HX) | 0
+  let sum = 0
+  for (let dy = -1; dy <= 1; dy++) {
+    const yv = (yc + Math.imul(dy, LATTICE_HY)) | 0
+    const by = dy - fy
+    sum = rippleFastCell2((xm + yv) | 0, -1 - fx, by, sum)
+    sum = rippleFastCell2((xc + yv) | 0, -fx, by, sum)
+    sum = rippleFastCell2((xp + yv) | 0, 1 - fx, by, sum)
+  }
+  return sum
+}
+
+export const rippleFast3 = (x: number, y: number, z: number): number => {
+  const ix = Math.floor(x)
+  const iy = Math.floor(y)
+  const iz = Math.floor(z)
+  const fx = x - ix
+  const fy = y - iy
+  const fz = z - iz
+  const xc = Math.imul(ix, LATTICE_HX)
+  const yc = Math.imul(iy, LATTICE_HY)
+  const zc = Math.imul(iz, LATTICE_HZ)
+  const xm = (xc - LATTICE_HX) | 0
+  const xp = (xc + LATTICE_HX) | 0
+  let sum = 0
+  for (let dz = -1; dz <= 1; dz++) {
+    const zv = (zc + Math.imul(dz, LATTICE_HZ)) | 0
+    const bz = dz - fz
+    for (let dy = -1; dy <= 1; dy++) {
+      const yzv = (zv + yc + Math.imul(dy, LATTICE_HY)) | 0
+      const by = dy - fy
+      sum = rippleFastCell3((xm + yzv) | 0, -1 - fx, by, bz, sum)
+      sum = rippleFastCell3((xc + yzv) | 0, -fx, by, bz, sum)
+      sum = rippleFastCell3((xp + yzv) | 0, 1 - fx, by, bz, sum)
     }
   }
   return sum

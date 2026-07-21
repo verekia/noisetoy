@@ -360,4 +360,63 @@ float starsFast3(vec3 p) {
   }
   return sum;
 }
+float rippleFastCell2(uint s, vec2 b, float sum) {
+  uint h = fibMix(s);
+  h ^= h >> 16u;
+  vec2 v = b + vec2(float(h >> 16u), float(h & 0xffffu)) * (1.0 / 65536.0);
+  float d2 = dot(v, v);
+  if (d2 >= 2.25) return sum;
+  float d = sqrt(d2);
+  float w = 1.0 - d * (1.0 / 1.5);
+  uint bh = (h ^ (h >> 15u)) * ALT_FIB;
+  return sum + w * w * cos(d * 15.0 - float(bh >> 24u) * 0.02454369260617026);
+}
+
+float rippleFastCell3(uint s, vec3 b, float sum) {
+  uint h = lowbias32(s);
+  vec3 v = b + vec3(float(h >> 22u), float((h >> 12u) & 1023u), float((h >> 2u) & 1023u)) * (1.0 / 1024.0);
+  float d2 = dot(v, v);
+  if (d2 >= 2.25) return sum;
+  float d = sqrt(d2);
+  float w = 1.0 - d * (1.0 / 1.5);
+  uint bh = (h ^ (h >> 15u)) * ALT_FIB;
+  return sum + w * w * cos(d * 15.0 - float(bh >> 24u) * 0.02454369260617026);
+}
+
+float rippleFast2(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = p - i;
+  uint xc = uint(int(i.x)) * LATTICE_HX;
+  uint yc = uint(int(i.y)) * LATTICE_HY;
+  float sum = 0.0;
+  for (int dy = -1; dy <= 1; dy++) {
+    uint yv = yc + uint(dy) * LATTICE_HY;
+    float by = float(dy) - f.y;
+    sum = rippleFastCell2(xc - LATTICE_HX + yv, vec2(-1.0 - f.x, by), sum);
+    sum = rippleFastCell2(xc + yv, vec2(-f.x, by), sum);
+    sum = rippleFastCell2(xc + LATTICE_HX + yv, vec2(1.0 - f.x, by), sum);
+  }
+  return sum;
+}
+
+float rippleFast3(vec3 p) {
+  vec3 i = floor(p);
+  vec3 f = p - i;
+  uint xc = uint(int(i.x)) * LATTICE_HX;
+  uint yc = uint(int(i.y)) * LATTICE_HY;
+  uint zc = uint(int(i.z)) * LATTICE_HZ;
+  float sum = 0.0;
+  for (int dz = -1; dz <= 1; dz++) {
+    uint zv = zc + uint(dz) * LATTICE_HZ;
+    float bz = float(dz) - f.z;
+    for (int dy = -1; dy <= 1; dy++) {
+      uint yzv = zv + yc + uint(dy) * LATTICE_HY;
+      float by = float(dy) - f.y;
+      sum = rippleFastCell3(xc - LATTICE_HX + yzv, vec3(-1.0 - f.x, by, bz), sum);
+      sum = rippleFastCell3(xc + yzv, vec3(-f.x, by, bz), sum);
+      sum = rippleFastCell3(xc + LATTICE_HX + yzv, vec3(1.0 - f.x, by, bz), sum);
+    }
+  }
+  return sum;
+}
 `

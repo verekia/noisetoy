@@ -73,6 +73,8 @@ import {
   foamFast3,
   mosaicFast2,
   mosaicFast3,
+  rippleFast2,
+  rippleFast3,
   starsFast2,
   starsFast3,
 } from './alt/cellular-fast'
@@ -112,6 +114,7 @@ import {
   MANHATTAN3_NORM,
   PERLIN2_NORM,
   PERLIN3_NORM,
+  RIPPLE_NORM,
   SIMPLEX2_NORM,
   SIMPLEX3_NORM,
   STARS_NORM,
@@ -755,6 +758,17 @@ export const IMPLEMENTATIONS: Record<string, NoiseImplementation[]> = {
         "Radial cosine waves emitted from Worley-style feature points, windowed so contributions vanish inside the searched neighbourhood. A sparse-convolution noise with a radial kernel; inherits the cellular loop's one-point-per-cell substrate.",
       variantIds: ['ripple-2d', 'ripple-3d'],
     },
+    {
+      id: 'split-bits-pruned',
+      name: 'Split-bit offsets, window-gated kernel',
+      kind: 'novel',
+      evidence: 'none',
+      status: 'candidate',
+      archivedAt: 'src/alt/cellular-fast.ts',
+      rationale:
+        'One hash per cell with split-bit offsets and the wave phase from a cheap remix, against the shipping 4-6 chained avalanches. The window radius (1.5 cells) exceeds every column bound, so — uniquely in the cellular sweep — NO cell can be pruned; but a cell outside the window support contributes exactly zero, and the shipping loop still pays its sqrt and cos before multiplying by that zero. Gating on d^2 >= 2.25 first makes far cells cost one mix and one compare, exactly (same values as an ungated loop with this hash). Field mean/rms match shipping. Measured with `bun run bench:impl`: ~1.5x the shipping ripple2 and ~2.15x ripple3 on the CPU; GPU 1.1x (2D) and 1.26x (3D) on WebGL+WebGPU. Not promoted: no tileable paths yet.',
+      variantIds: [],
+    },
   ],
   foam: [
     {
@@ -1029,6 +1043,24 @@ export const ALT_VARIANTS: AltVariant[] = [
   // Metric-candidate costs: shipping VARIANT_COST x measured GPU throughput
   // ratio (WebGL+WebGPU medians). Manhattan: 0.94 (2D) / 0.65 (3D).
   // Chebyshev: 0.92 (2D) / 0.52 (3D).
+  // Ripple costs: shipping VARIANT_COST x measured GPU ratio, 0.91 (2D) and
+  // 0.79 (3D) — WebGL+WebGPU medians.
+  altVariant(
+    'ripple',
+    'split-bits-pruned',
+    2,
+    0.9,
+    (x, y) => 0.5 + 0.5 * RIPPLE_NORM * rippleFast2(x, y),
+    fastShaders(2, CELLULAR_FAST_CHUNKS, 'rippleFast2(p)', RIPPLE_NORM),
+  ),
+  altVariant(
+    'ripple',
+    'split-bits-pruned',
+    3,
+    2.8,
+    (x, y, z) => 0.5 + 0.5 * RIPPLE_NORM * rippleFast3(x, y, z),
+    fastShaders(3, CELLULAR_FAST_CHUNKS, 'rippleFast3(p)', RIPPLE_NORM),
+  ),
   // Stars costs: shipping VARIANT_COST x measured GPU ratio, 0.97 (2D) and
   // 0.65 (3D) — WebGL+WebGPU medians.
   altVariant(
