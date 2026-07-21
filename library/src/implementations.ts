@@ -66,7 +66,7 @@
 // GPUs. The table gradients live alongside it in common.ts as `gradTable2` /
 // `gradTable3`, so switching a noise over is a small change.
 
-import { crackleFast2, crackleFast3, mosaicFast2, mosaicFast3 } from './alt/cellular-fast'
+import { crackleFast2, crackleFast3, foamFast2, foamFast3, mosaicFast2, mosaicFast3 } from './alt/cellular-fast'
 import { CELLULAR_FAST_GLSL } from './alt/cellular-fast.glsl'
 import { CELLULAR_FAST_TSL } from './alt/cellular-fast.tsl'
 import { CELLULAR_FAST_WGSL } from './alt/cellular-fast.wgsl'
@@ -756,6 +756,17 @@ export const IMPLEMENTATIONS: Record<string, NoiseImplementation[]> = {
         'Maximum of sqrt(R^2 - d^2) domes over the feature points. Related to metaball and sparse-convolution folklore, but the max-of-domes formulation appears to be original.',
       variantIds: ['foam-2d', 'foam-3d'],
     },
+    {
+      id: 'split-bits-pruned',
+      name: 'Split-bit offsets, dome-pruned search, one sqrt',
+      kind: 'novel',
+      evidence: 'none',
+      status: 'candidate',
+      archivedAt: 'src/alt/cellular-fast.ts',
+      rationale:
+        'The worley split-bits-pruned substrate tracking q = max(R^2 - d^2), which is monotone with the dome height — so the whole search costs ONE sqrt where the shipping loop pays one per contributing cell, and R^2 - q doubles as the prune threshold, tightening as q grows. Exact (zero mismatches over 400k probes). Measured with `bun run bench:impl`: ~1.8-2.2x the shipping foam2 and ~3.0x foam3 on the CPU. GPU: 2.05x shipping in 3D and ~1.07x in 2D (WebGL+WebGPU medians). Not promoted: no tileable paths yet.',
+      variantIds: [],
+    },
   ],
   stars: [
     {
@@ -997,6 +1008,24 @@ export const ALT_VARIANTS: AltVariant[] = [
   // Metric-candidate costs: shipping VARIANT_COST x measured GPU throughput
   // ratio (WebGL+WebGPU medians). Manhattan: 0.94 (2D) / 0.65 (3D).
   // Chebyshev: 0.92 (2D) / 0.52 (3D).
+  // Foam costs: shipping VARIANT_COST x measured GPU ratio, 0.94 (2D) and
+  // 0.50 (3D) — WebGL+WebGPU medians.
+  altVariant(
+    'foam',
+    'split-bits-pruned',
+    2,
+    0.59,
+    (x, y) => foamFast2(x, y),
+    fastShaders(2, CELLULAR_FAST_CHUNKS, 'foamFast2(p)', null),
+  ),
+  altVariant(
+    'foam',
+    'split-bits-pruned',
+    3,
+    1.25,
+    (x, y, z) => foamFast3(x, y, z),
+    fastShaders(3, CELLULAR_FAST_CHUNKS, 'foamFast3(p)', null),
+  ),
   // Crackle costs: shipping VARIANT_COST x measured GPU ratio, 0.97 (2D)
   // and 0.61 (3D) — WebGL+WebGPU medians.
   altVariant(

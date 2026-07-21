@@ -12,6 +12,7 @@
 //
 // Longhand for the same fragile-JIT-inlining reason as worley-fast.ts.
 
+import { FOAM_R } from '../noises/cellular'
 import { LATTICE_HX, LATTICE_HY, LATTICE_HZ } from '../noises/common'
 
 /** 2^32 / phi, odd — Knuth's multiplicative hashing constant. */
@@ -19,6 +20,8 @@ const FIB = 0x9e3779b1
 const INV16 = 1 / 65536
 const INV10 = 1 / 1024
 const INV32 = 1 / 4294967296
+const FOAM_R2 = FOAM_R * FOAM_R
+const FOAM_INV_R = 1 / FOAM_R
 
 const eCell2 = (s: number, bx: number, by: number, f1: number): number => {
   let h = Math.imul(s ^ (s >>> 16), FIB)
@@ -1138,4 +1141,532 @@ export const crackleFast3 = (x: number, y: number, z: number): number => {
     }
   }
   return Math.sqrt(f2) - Math.sqrt(f1)
+}
+
+// FOAM. Max of sqrt(R^2 - d^2) / R domes. Tracks q = max(R^2 - d^2), which
+// is monotone with the dome height, so the whole search costs ONE sqrt at
+// the end where the shipping loop pays one per contributing cell. A cell can
+// only raise the max if its d^2 beats R^2 - q, which is also the prune
+// threshold — it tightens as q grows.
+
+export const foamFast2 = (x: number, y: number): number => {
+  const ix = Math.floor(x)
+  const iy = Math.floor(y)
+  const fx = x - ix
+  const fy = y - iy
+  const xc = Math.imul(ix, LATTICE_HX)
+  const yc = Math.imul(iy, LATTICE_HY)
+  const ym = (yc - LATTICE_HY) | 0
+  const yp = (yc + LATTICE_HY) | 0
+  const bxc = -fx
+  const bym = -1 - fy
+  const byc = -fy
+  const byp = 1 - fy
+  let q = 0
+  {
+    const s = (xc + yc) | 0
+    let h = Math.imul(s ^ (s >>> 16), FIB)
+    h ^= h >>> 16
+    const vx = bxc + (h >>> 16) * INV16
+    const vy = byc + (h & 0xffff) * INV16
+    const t = FOAM_R2 - (vx * vx + vy * vy)
+    if (t > q) q = t
+  }
+  {
+    const s = (xc + ym) | 0
+    let h = Math.imul(s ^ (s >>> 16), FIB)
+    h ^= h >>> 16
+    const vx = bxc + (h >>> 16) * INV16
+    const vy = bym + (h & 0xffff) * INV16
+    const t = FOAM_R2 - (vx * vx + vy * vy)
+    if (t > q) q = t
+  }
+  {
+    const s = (xc + yp) | 0
+    let h = Math.imul(s ^ (s >>> 16), FIB)
+    h ^= h >>> 16
+    const vx = bxc + (h >>> 16) * INV16
+    const vy = byp + (h & 0xffff) * INV16
+    const t = FOAM_R2 - (vx * vx + vy * vy)
+    if (t > q) q = t
+  }
+  if (fx * fx < FOAM_R2 - q) {
+    const xm = (xc - LATTICE_HX) | 0
+    const bxm = -1 - fx
+    {
+      const s = (xm + yc) | 0
+      let h = Math.imul(s ^ (s >>> 16), FIB)
+      h ^= h >>> 16
+      const vx = bxm + (h >>> 16) * INV16
+      const vy = byc + (h & 0xffff) * INV16
+      const t = FOAM_R2 - (vx * vx + vy * vy)
+      if (t > q) q = t
+    }
+    {
+      const s = (xm + ym) | 0
+      let h = Math.imul(s ^ (s >>> 16), FIB)
+      h ^= h >>> 16
+      const vx = bxm + (h >>> 16) * INV16
+      const vy = bym + (h & 0xffff) * INV16
+      const t = FOAM_R2 - (vx * vx + vy * vy)
+      if (t > q) q = t
+    }
+    {
+      const s = (xm + yp) | 0
+      let h = Math.imul(s ^ (s >>> 16), FIB)
+      h ^= h >>> 16
+      const vx = bxm + (h >>> 16) * INV16
+      const vy = byp + (h & 0xffff) * INV16
+      const t = FOAM_R2 - (vx * vx + vy * vy)
+      if (t > q) q = t
+    }
+  }
+  const gx = 1 - fx
+  if (gx * gx < FOAM_R2 - q) {
+    const xp = (xc + LATTICE_HX) | 0
+    const bxp = 1 - fx
+    {
+      const s = (xp + yc) | 0
+      let h = Math.imul(s ^ (s >>> 16), FIB)
+      h ^= h >>> 16
+      const vx = bxp + (h >>> 16) * INV16
+      const vy = byc + (h & 0xffff) * INV16
+      const t = FOAM_R2 - (vx * vx + vy * vy)
+      if (t > q) q = t
+    }
+    {
+      const s = (xp + ym) | 0
+      let h = Math.imul(s ^ (s >>> 16), FIB)
+      h ^= h >>> 16
+      const vx = bxp + (h >>> 16) * INV16
+      const vy = bym + (h & 0xffff) * INV16
+      const t = FOAM_R2 - (vx * vx + vy * vy)
+      if (t > q) q = t
+    }
+    {
+      const s = (xp + yp) | 0
+      let h = Math.imul(s ^ (s >>> 16), FIB)
+      h ^= h >>> 16
+      const vx = bxp + (h >>> 16) * INV16
+      const vy = byp + (h & 0xffff) * INV16
+      const t = FOAM_R2 - (vx * vx + vy * vy)
+      if (t > q) q = t
+    }
+  }
+  return q > 0 ? Math.sqrt(q) * FOAM_INV_R : 0
+}
+
+export const foamFast3 = (x: number, y: number, z: number): number => {
+  const ix = Math.floor(x)
+  const iy = Math.floor(y)
+  const iz = Math.floor(z)
+  const fx = x - ix
+  const fy = y - iy
+  const fz = z - iz
+  const xc = Math.imul(ix, LATTICE_HX)
+  const yc = Math.imul(iy, LATTICE_HY)
+  const zc = Math.imul(iz, LATTICE_HZ)
+  const xm = (xc - LATTICE_HX) | 0
+  const xp = (xc + LATTICE_HX) | 0
+  const ym = (yc - LATTICE_HY) | 0
+  const yp = (yc + LATTICE_HY) | 0
+  const bxm = -1 - fx
+  const bxc = -fx
+  const bxp = 1 - fx
+  const bym = -1 - fy
+  const byc = -fy
+  const byp = 1 - fy
+  const fx2 = fx * fx
+  const gx = 1 - fx
+  const gx2 = gx * gx
+  let ymz = 0
+  let ycz = 0
+  let ypz = 0
+  let bz = 0
+  let q = 0
+  ymz = (ym + zc) | 0
+  ycz = (yc + zc) | 0
+  ypz = (yp + zc) | 0
+  bz = -fz
+  {
+    const s = (xc + ycz) | 0
+    let h = s ^ (s >>> 16)
+    h = Math.imul(h, 0x7feb352d)
+    h ^= h >>> 15
+    h = Math.imul(h, 0x846ca68b)
+    h ^= h >>> 16
+    const vx = bxc + (h >>> 22) * INV10
+    const vy = byc + ((h >>> 12) & 1023) * INV10
+    const vz = bz + ((h >>> 2) & 1023) * INV10
+    const t = FOAM_R2 - (vx * vx + vy * vy + vz * vz)
+    if (t > q) q = t
+  }
+  {
+    const s = (xc + ymz) | 0
+    let h = s ^ (s >>> 16)
+    h = Math.imul(h, 0x7feb352d)
+    h ^= h >>> 15
+    h = Math.imul(h, 0x846ca68b)
+    h ^= h >>> 16
+    const vx = bxc + (h >>> 22) * INV10
+    const vy = bym + ((h >>> 12) & 1023) * INV10
+    const vz = bz + ((h >>> 2) & 1023) * INV10
+    const t = FOAM_R2 - (vx * vx + vy * vy + vz * vz)
+    if (t > q) q = t
+  }
+  {
+    const s = (xc + ypz) | 0
+    let h = s ^ (s >>> 16)
+    h = Math.imul(h, 0x7feb352d)
+    h ^= h >>> 15
+    h = Math.imul(h, 0x846ca68b)
+    h ^= h >>> 16
+    const vx = bxc + (h >>> 22) * INV10
+    const vy = byp + ((h >>> 12) & 1023) * INV10
+    const vz = bz + ((h >>> 2) & 1023) * INV10
+    const t = FOAM_R2 - (vx * vx + vy * vy + vz * vz)
+    if (t > q) q = t
+  }
+  if (fx2 < FOAM_R2 - q) {
+    {
+      const s = (xm + ycz) | 0
+      let h = s ^ (s >>> 16)
+      h = Math.imul(h, 0x7feb352d)
+      h ^= h >>> 15
+      h = Math.imul(h, 0x846ca68b)
+      h ^= h >>> 16
+      const vx = bxm + (h >>> 22) * INV10
+      const vy = byc + ((h >>> 12) & 1023) * INV10
+      const vz = bz + ((h >>> 2) & 1023) * INV10
+      const t = FOAM_R2 - (vx * vx + vy * vy + vz * vz)
+      if (t > q) q = t
+    }
+    {
+      const s = (xm + ymz) | 0
+      let h = s ^ (s >>> 16)
+      h = Math.imul(h, 0x7feb352d)
+      h ^= h >>> 15
+      h = Math.imul(h, 0x846ca68b)
+      h ^= h >>> 16
+      const vx = bxm + (h >>> 22) * INV10
+      const vy = bym + ((h >>> 12) & 1023) * INV10
+      const vz = bz + ((h >>> 2) & 1023) * INV10
+      const t = FOAM_R2 - (vx * vx + vy * vy + vz * vz)
+      if (t > q) q = t
+    }
+    {
+      const s = (xm + ypz) | 0
+      let h = s ^ (s >>> 16)
+      h = Math.imul(h, 0x7feb352d)
+      h ^= h >>> 15
+      h = Math.imul(h, 0x846ca68b)
+      h ^= h >>> 16
+      const vx = bxm + (h >>> 22) * INV10
+      const vy = byp + ((h >>> 12) & 1023) * INV10
+      const vz = bz + ((h >>> 2) & 1023) * INV10
+      const t = FOAM_R2 - (vx * vx + vy * vy + vz * vz)
+      if (t > q) q = t
+    }
+  }
+  if (gx2 < FOAM_R2 - q) {
+    {
+      const s = (xp + ycz) | 0
+      let h = s ^ (s >>> 16)
+      h = Math.imul(h, 0x7feb352d)
+      h ^= h >>> 15
+      h = Math.imul(h, 0x846ca68b)
+      h ^= h >>> 16
+      const vx = bxp + (h >>> 22) * INV10
+      const vy = byc + ((h >>> 12) & 1023) * INV10
+      const vz = bz + ((h >>> 2) & 1023) * INV10
+      const t = FOAM_R2 - (vx * vx + vy * vy + vz * vz)
+      if (t > q) q = t
+    }
+    {
+      const s = (xp + ymz) | 0
+      let h = s ^ (s >>> 16)
+      h = Math.imul(h, 0x7feb352d)
+      h ^= h >>> 15
+      h = Math.imul(h, 0x846ca68b)
+      h ^= h >>> 16
+      const vx = bxp + (h >>> 22) * INV10
+      const vy = bym + ((h >>> 12) & 1023) * INV10
+      const vz = bz + ((h >>> 2) & 1023) * INV10
+      const t = FOAM_R2 - (vx * vx + vy * vy + vz * vz)
+      if (t > q) q = t
+    }
+    {
+      const s = (xp + ypz) | 0
+      let h = s ^ (s >>> 16)
+      h = Math.imul(h, 0x7feb352d)
+      h ^= h >>> 15
+      h = Math.imul(h, 0x846ca68b)
+      h ^= h >>> 16
+      const vx = bxp + (h >>> 22) * INV10
+      const vy = byp + ((h >>> 12) & 1023) * INV10
+      const vz = bz + ((h >>> 2) & 1023) * INV10
+      const t = FOAM_R2 - (vx * vx + vy * vy + vz * vz)
+      if (t > q) q = t
+    }
+  }
+  const zzm = fz * fz
+  if (zzm < FOAM_R2 - q) {
+    const zm = (zc - LATTICE_HZ) | 0
+    ymz = (ym + zm) | 0
+    ycz = (yc + zm) | 0
+    ypz = (yp + zm) | 0
+    bz = -1 - fz
+    {
+      const s = (xc + ycz) | 0
+      let h = s ^ (s >>> 16)
+      h = Math.imul(h, 0x7feb352d)
+      h ^= h >>> 15
+      h = Math.imul(h, 0x846ca68b)
+      h ^= h >>> 16
+      const vx = bxc + (h >>> 22) * INV10
+      const vy = byc + ((h >>> 12) & 1023) * INV10
+      const vz = bz + ((h >>> 2) & 1023) * INV10
+      const t = FOAM_R2 - (vx * vx + vy * vy + vz * vz)
+      if (t > q) q = t
+    }
+    {
+      const s = (xc + ymz) | 0
+      let h = s ^ (s >>> 16)
+      h = Math.imul(h, 0x7feb352d)
+      h ^= h >>> 15
+      h = Math.imul(h, 0x846ca68b)
+      h ^= h >>> 16
+      const vx = bxc + (h >>> 22) * INV10
+      const vy = bym + ((h >>> 12) & 1023) * INV10
+      const vz = bz + ((h >>> 2) & 1023) * INV10
+      const t = FOAM_R2 - (vx * vx + vy * vy + vz * vz)
+      if (t > q) q = t
+    }
+    {
+      const s = (xc + ypz) | 0
+      let h = s ^ (s >>> 16)
+      h = Math.imul(h, 0x7feb352d)
+      h ^= h >>> 15
+      h = Math.imul(h, 0x846ca68b)
+      h ^= h >>> 16
+      const vx = bxc + (h >>> 22) * INV10
+      const vy = byp + ((h >>> 12) & 1023) * INV10
+      const vz = bz + ((h >>> 2) & 1023) * INV10
+      const t = FOAM_R2 - (vx * vx + vy * vy + vz * vz)
+      if (t > q) q = t
+    }
+    if (fx2 + zzm < FOAM_R2 - q) {
+      {
+        const s = (xm + ycz) | 0
+        let h = s ^ (s >>> 16)
+        h = Math.imul(h, 0x7feb352d)
+        h ^= h >>> 15
+        h = Math.imul(h, 0x846ca68b)
+        h ^= h >>> 16
+        const vx = bxm + (h >>> 22) * INV10
+        const vy = byc + ((h >>> 12) & 1023) * INV10
+        const vz = bz + ((h >>> 2) & 1023) * INV10
+        const t = FOAM_R2 - (vx * vx + vy * vy + vz * vz)
+        if (t > q) q = t
+      }
+      {
+        const s = (xm + ymz) | 0
+        let h = s ^ (s >>> 16)
+        h = Math.imul(h, 0x7feb352d)
+        h ^= h >>> 15
+        h = Math.imul(h, 0x846ca68b)
+        h ^= h >>> 16
+        const vx = bxm + (h >>> 22) * INV10
+        const vy = bym + ((h >>> 12) & 1023) * INV10
+        const vz = bz + ((h >>> 2) & 1023) * INV10
+        const t = FOAM_R2 - (vx * vx + vy * vy + vz * vz)
+        if (t > q) q = t
+      }
+      {
+        const s = (xm + ypz) | 0
+        let h = s ^ (s >>> 16)
+        h = Math.imul(h, 0x7feb352d)
+        h ^= h >>> 15
+        h = Math.imul(h, 0x846ca68b)
+        h ^= h >>> 16
+        const vx = bxm + (h >>> 22) * INV10
+        const vy = byp + ((h >>> 12) & 1023) * INV10
+        const vz = bz + ((h >>> 2) & 1023) * INV10
+        const t = FOAM_R2 - (vx * vx + vy * vy + vz * vz)
+        if (t > q) q = t
+      }
+    }
+    if (gx2 + zzm < FOAM_R2 - q) {
+      {
+        const s = (xp + ycz) | 0
+        let h = s ^ (s >>> 16)
+        h = Math.imul(h, 0x7feb352d)
+        h ^= h >>> 15
+        h = Math.imul(h, 0x846ca68b)
+        h ^= h >>> 16
+        const vx = bxp + (h >>> 22) * INV10
+        const vy = byc + ((h >>> 12) & 1023) * INV10
+        const vz = bz + ((h >>> 2) & 1023) * INV10
+        const t = FOAM_R2 - (vx * vx + vy * vy + vz * vz)
+        if (t > q) q = t
+      }
+      {
+        const s = (xp + ymz) | 0
+        let h = s ^ (s >>> 16)
+        h = Math.imul(h, 0x7feb352d)
+        h ^= h >>> 15
+        h = Math.imul(h, 0x846ca68b)
+        h ^= h >>> 16
+        const vx = bxp + (h >>> 22) * INV10
+        const vy = bym + ((h >>> 12) & 1023) * INV10
+        const vz = bz + ((h >>> 2) & 1023) * INV10
+        const t = FOAM_R2 - (vx * vx + vy * vy + vz * vz)
+        if (t > q) q = t
+      }
+      {
+        const s = (xp + ypz) | 0
+        let h = s ^ (s >>> 16)
+        h = Math.imul(h, 0x7feb352d)
+        h ^= h >>> 15
+        h = Math.imul(h, 0x846ca68b)
+        h ^= h >>> 16
+        const vx = bxp + (h >>> 22) * INV10
+        const vy = byp + ((h >>> 12) & 1023) * INV10
+        const vz = bz + ((h >>> 2) & 1023) * INV10
+        const t = FOAM_R2 - (vx * vx + vy * vy + vz * vz)
+        if (t > q) q = t
+      }
+    }
+  }
+  const gz = 1 - fz
+  const zzp = gz * gz
+  if (zzp < FOAM_R2 - q) {
+    const zp = (zc + LATTICE_HZ) | 0
+    ymz = (ym + zp) | 0
+    ycz = (yc + zp) | 0
+    ypz = (yp + zp) | 0
+    bz = 1 - fz
+    {
+      const s = (xc + ycz) | 0
+      let h = s ^ (s >>> 16)
+      h = Math.imul(h, 0x7feb352d)
+      h ^= h >>> 15
+      h = Math.imul(h, 0x846ca68b)
+      h ^= h >>> 16
+      const vx = bxc + (h >>> 22) * INV10
+      const vy = byc + ((h >>> 12) & 1023) * INV10
+      const vz = bz + ((h >>> 2) & 1023) * INV10
+      const t = FOAM_R2 - (vx * vx + vy * vy + vz * vz)
+      if (t > q) q = t
+    }
+    {
+      const s = (xc + ymz) | 0
+      let h = s ^ (s >>> 16)
+      h = Math.imul(h, 0x7feb352d)
+      h ^= h >>> 15
+      h = Math.imul(h, 0x846ca68b)
+      h ^= h >>> 16
+      const vx = bxc + (h >>> 22) * INV10
+      const vy = bym + ((h >>> 12) & 1023) * INV10
+      const vz = bz + ((h >>> 2) & 1023) * INV10
+      const t = FOAM_R2 - (vx * vx + vy * vy + vz * vz)
+      if (t > q) q = t
+    }
+    {
+      const s = (xc + ypz) | 0
+      let h = s ^ (s >>> 16)
+      h = Math.imul(h, 0x7feb352d)
+      h ^= h >>> 15
+      h = Math.imul(h, 0x846ca68b)
+      h ^= h >>> 16
+      const vx = bxc + (h >>> 22) * INV10
+      const vy = byp + ((h >>> 12) & 1023) * INV10
+      const vz = bz + ((h >>> 2) & 1023) * INV10
+      const t = FOAM_R2 - (vx * vx + vy * vy + vz * vz)
+      if (t > q) q = t
+    }
+    if (fx2 + zzp < FOAM_R2 - q) {
+      {
+        const s = (xm + ycz) | 0
+        let h = s ^ (s >>> 16)
+        h = Math.imul(h, 0x7feb352d)
+        h ^= h >>> 15
+        h = Math.imul(h, 0x846ca68b)
+        h ^= h >>> 16
+        const vx = bxm + (h >>> 22) * INV10
+        const vy = byc + ((h >>> 12) & 1023) * INV10
+        const vz = bz + ((h >>> 2) & 1023) * INV10
+        const t = FOAM_R2 - (vx * vx + vy * vy + vz * vz)
+        if (t > q) q = t
+      }
+      {
+        const s = (xm + ymz) | 0
+        let h = s ^ (s >>> 16)
+        h = Math.imul(h, 0x7feb352d)
+        h ^= h >>> 15
+        h = Math.imul(h, 0x846ca68b)
+        h ^= h >>> 16
+        const vx = bxm + (h >>> 22) * INV10
+        const vy = bym + ((h >>> 12) & 1023) * INV10
+        const vz = bz + ((h >>> 2) & 1023) * INV10
+        const t = FOAM_R2 - (vx * vx + vy * vy + vz * vz)
+        if (t > q) q = t
+      }
+      {
+        const s = (xm + ypz) | 0
+        let h = s ^ (s >>> 16)
+        h = Math.imul(h, 0x7feb352d)
+        h ^= h >>> 15
+        h = Math.imul(h, 0x846ca68b)
+        h ^= h >>> 16
+        const vx = bxm + (h >>> 22) * INV10
+        const vy = byp + ((h >>> 12) & 1023) * INV10
+        const vz = bz + ((h >>> 2) & 1023) * INV10
+        const t = FOAM_R2 - (vx * vx + vy * vy + vz * vz)
+        if (t > q) q = t
+      }
+    }
+    if (gx2 + zzp < FOAM_R2 - q) {
+      {
+        const s = (xp + ycz) | 0
+        let h = s ^ (s >>> 16)
+        h = Math.imul(h, 0x7feb352d)
+        h ^= h >>> 15
+        h = Math.imul(h, 0x846ca68b)
+        h ^= h >>> 16
+        const vx = bxp + (h >>> 22) * INV10
+        const vy = byc + ((h >>> 12) & 1023) * INV10
+        const vz = bz + ((h >>> 2) & 1023) * INV10
+        const t = FOAM_R2 - (vx * vx + vy * vy + vz * vz)
+        if (t > q) q = t
+      }
+      {
+        const s = (xp + ymz) | 0
+        let h = s ^ (s >>> 16)
+        h = Math.imul(h, 0x7feb352d)
+        h ^= h >>> 15
+        h = Math.imul(h, 0x846ca68b)
+        h ^= h >>> 16
+        const vx = bxp + (h >>> 22) * INV10
+        const vy = bym + ((h >>> 12) & 1023) * INV10
+        const vz = bz + ((h >>> 2) & 1023) * INV10
+        const t = FOAM_R2 - (vx * vx + vy * vy + vz * vz)
+        if (t > q) q = t
+      }
+      {
+        const s = (xp + ypz) | 0
+        let h = s ^ (s >>> 16)
+        h = Math.imul(h, 0x7feb352d)
+        h ^= h >>> 15
+        h = Math.imul(h, 0x846ca68b)
+        h ^= h >>> 16
+        const vx = bxp + (h >>> 22) * INV10
+        const vy = byp + ((h >>> 12) & 1023) * INV10
+        const vz = bz + ((h >>> 2) & 1023) * INV10
+        const t = FOAM_R2 - (vx * vx + vy * vy + vz * vz)
+        if (t > q) q = t
+      }
+    }
+  }
+  return q > 0 ? Math.sqrt(q) * FOAM_INV_R : 0
 }

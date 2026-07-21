@@ -186,4 +186,86 @@ float crackleFast3(vec3 p) {
   }
   return sqrt(ff.y) - sqrt(ff.x);
 }
+float foamFastCell2(uint s, vec2 b, float q) {
+  uint h = fibMix(s);
+  h ^= h >> 16u;
+  vec2 v = b + vec2(float(h >> 16u), float(h & 0xffffu)) * (1.0 / 65536.0);
+  return max(q, 1.21 - dot(v, v));
+}
+
+float foamFastCell3(uint s, vec3 b, float q) {
+  uint h = lowbias32(s);
+  vec3 v = b + vec3(float(h >> 22u), float((h >> 12u) & 1023u), float((h >> 2u) & 1023u)) * (1.0 / 1024.0);
+  return max(q, 1.21 - dot(v, v));
+}
+
+float foamFast2(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = p - i;
+  uint xc = uint(int(i.x)) * LATTICE_HX;
+  uint yc = uint(int(i.y)) * LATTICE_HY;
+  uint ym = yc - LATTICE_HY;
+  uint yp = yc + LATTICE_HY;
+  float q = foamFastCell2(xc + yc, vec2(-f.x, -f.y), 0.0);
+  q = foamFastCell2(xc + ym, vec2(-f.x, -1.0 - f.y), q);
+  q = foamFastCell2(xc + yp, vec2(-f.x, 1.0 - f.y), q);
+  if (f.x * f.x < 1.21 - q) {
+    uint xm = xc - LATTICE_HX;
+    q = foamFastCell2(xm + yc, vec2(-1.0 - f.x, -f.y), q);
+    q = foamFastCell2(xm + ym, vec2(-1.0 - f.x, -1.0 - f.y), q);
+    q = foamFastCell2(xm + yp, vec2(-1.0 - f.x, 1.0 - f.y), q);
+  }
+  float gx = 1.0 - f.x;
+  if (gx * gx < 1.21 - q) {
+    uint xp = xc + LATTICE_HX;
+    q = foamFastCell2(xp + yc, vec2(1.0 - f.x, -f.y), q);
+    q = foamFastCell2(xp + ym, vec2(1.0 - f.x, -1.0 - f.y), q);
+    q = foamFastCell2(xp + yp, vec2(1.0 - f.x, 1.0 - f.y), q);
+  }
+  return q > 0.0 ? sqrt(q) * (1.0 / 1.1) : 0.0;
+}
+
+float foamFastPlane3(uint xc, uint ymz, uint ycz, uint ypz, vec2 fxy, float bz, float zz, float qin) {
+  float q = qin;
+  q = foamFastCell3(xc + ycz, vec3(-fxy.x, -fxy.y, bz), q);
+  q = foamFastCell3(xc + ymz, vec3(-fxy.x, -1.0 - fxy.y, bz), q);
+  q = foamFastCell3(xc + ypz, vec3(-fxy.x, 1.0 - fxy.y, bz), q);
+  if (fxy.x * fxy.x + zz < 1.21 - q) {
+    uint xm = xc - LATTICE_HX;
+    q = foamFastCell3(xm + ycz, vec3(-1.0 - fxy.x, -fxy.y, bz), q);
+    q = foamFastCell3(xm + ymz, vec3(-1.0 - fxy.x, -1.0 - fxy.y, bz), q);
+    q = foamFastCell3(xm + ypz, vec3(-1.0 - fxy.x, 1.0 - fxy.y, bz), q);
+  }
+  float gx = 1.0 - fxy.x;
+  if (gx * gx + zz < 1.21 - q) {
+    uint xp = xc + LATTICE_HX;
+    q = foamFastCell3(xp + ycz, vec3(1.0 - fxy.x, -fxy.y, bz), q);
+    q = foamFastCell3(xp + ymz, vec3(1.0 - fxy.x, -1.0 - fxy.y, bz), q);
+    q = foamFastCell3(xp + ypz, vec3(1.0 - fxy.x, 1.0 - fxy.y, bz), q);
+  }
+  return q;
+}
+
+float foamFast3(vec3 p) {
+  vec3 i = floor(p);
+  vec3 f = p - i;
+  uint xc = uint(int(i.x)) * LATTICE_HX;
+  uint yc = uint(int(i.y)) * LATTICE_HY;
+  uint zc = uint(int(i.z)) * LATTICE_HZ;
+  uint ym = yc - LATTICE_HY;
+  uint yp = yc + LATTICE_HY;
+  float q = foamFastPlane3(xc, ym + zc, yc + zc, yp + zc, f.xy, -f.z, 0.0, 0.0);
+  float zzm = f.z * f.z;
+  if (zzm < 1.21 - q) {
+    uint zm = zc - LATTICE_HZ;
+    q = foamFastPlane3(xc, ym + zm, yc + zm, yp + zm, f.xy, -1.0 - f.z, zzm, q);
+  }
+  float gz = 1.0 - f.z;
+  float zzp = gz * gz;
+  if (zzp < 1.21 - q) {
+    uint zp = zc + LATTICE_HZ;
+    q = foamFastPlane3(xc, ym + zp, yc + zp, yp + zp, f.xy, 1.0 - f.z, zzp, q);
+  }
+  return q > 0.0 ? sqrt(q) * (1.0 / 1.1) : 0.0;
+}
 `
