@@ -1,21 +1,21 @@
 // GLSL counterpart of simplex.ts. Requires COMMON_GLSL.
 
-export const SIMPLEX_GLSL = /* glsl */ `
-float contrib2(vec2 d, uint h) {
+export const SIMPLEX_TRIG_GLSL = /* glsl */ `
+float trigContrib2(vec2 d, uint h) {
   float t = 0.5 - dot(d, d);
   if (t <= 0.0) { return 0.0; }
   t *= t;
   return t * t * gradDot2(h, d);
 }
 
-float contrib3(vec3 d, uint h) {
+float trigContrib3(vec3 d, uint h) {
   float t = 0.5 - dot(d, d);
   if (t <= 0.0) { return 0.0; }
   t *= t;
   return t * t * gradDot3(h, d);
 }
 
-float simplex2(vec2 p) {
+float simplexTrig2(vec2 p) {
   const float F2 = 0.3660254037844386;
   const float G2 = 0.21132486540518713;
   float s = (p.x + p.y) * F2;
@@ -27,10 +27,10 @@ float simplex2(vec2 p) {
   int j1 = 1 - i1;
   vec2 d1 = d0 - vec2(float(i1), float(j1)) + G2;
   vec2 d2 = d0 - 1.0 + 2.0 * G2;
-  return contrib2(d0, hash2u(i, j)) + contrib2(d1, hash2u(i + i1, j + j1)) + contrib2(d2, hash2u(i + 1, j + 1));
+  return trigContrib2(d0, hash2u(i, j)) + trigContrib2(d1, hash2u(i + i1, j + j1)) + trigContrib2(d2, hash2u(i + 1, j + 1));
 }
 
-float simplex3(vec3 p) {
+float simplexTrig3(vec3 p) {
   const float F3 = 1.0 / 3.0;
   const float G3 = 1.0 / 6.0;
   float s = (p.x + p.y + p.z) * F3;
@@ -53,7 +53,7 @@ float simplex3(vec3 p) {
   vec3 d1 = d0 - vec3(float(i1), float(j1), float(k1)) + G3;
   vec3 d2 = d0 - vec3(float(i2), float(j2), float(k2)) + 2.0 * G3;
   vec3 d3 = d0 - 1.0 + 3.0 * G3;
-  return contrib3(d0, hash3u(i, j, k)) + contrib3(d1, hash3u(i + i1, j + j1, k + k1)) +
-    contrib3(d2, hash3u(i + i2, j + j2, k + k2)) + contrib3(d3, hash3u(i + 1, j + 1, k + 1));
+  return trigContrib3(d0, hash3u(i, j, k)) + trigContrib3(d1, hash3u(i + i1, j + j1, k + k1)) +
+    trigContrib3(d2, hash3u(i + i2, j + j2, k + k2)) + trigContrib3(d3, hash3u(i + 1, j + 1, k + 1));
 }
 `

@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import * as TSL from 'three/tsl'
 
 import {
   ALT_VARIANTS,
@@ -11,7 +12,47 @@ import {
   IMPLEMENTATIONS,
   implementationOf,
 } from './implementations'
-import { getNoise, NOISES } from './registry'
+import { getNoise, getVariant, NOISES } from './registry'
+import { buildGlslFragment } from './render/glsl'
+import { buildTslBody, TSL_IMPORTS } from './render/tsl'
+import { buildWgslShader } from './render/wgsl'
+
+import type { AltVariant } from './implementations'
+import type { LayerConfig } from './render/types'
+
+/**
+ * A LayerConfig whose variant is the registry one with the alt
+ * implementation's samplers and shader specs swapped in — exactly the patch
+ * the explorer applies to render a non-shipping implementation.
+ */
+const altLayer = (alt: AltVariant): LayerConfig => {
+  const noise = getNoise(alt.noiseId)
+  if (!noise) throw new Error(`no noise ${alt.noiseId}`)
+  const variant = getVariant(noise, alt.variantId)
+  return {
+    variant: {
+      ...variant,
+      sample: alt.sample,
+      sampleRaw: alt.sampleRaw,
+      glsl: alt.glsl,
+      wgsl: alt.wgsl,
+      tsl: alt.tsl,
+      sampleTileable: null,
+      sampleRawTileable: null,
+      glslTileable: null,
+      wgslTileable: null,
+      tslTileable: null,
+    },
+    scale: noise.scale,
+    octaves: 2,
+    rotate: false,
+    style: 'basic',
+    blend: 'normal',
+    opacity: 1,
+    speed: 0,
+    angle: 0,
+  }
+}
 
 // The inventory is a separate entry point and deliberately has no runtime link
 // to the registry, so nothing checks that the two agree except these tests.
@@ -227,6 +268,41 @@ describe('alt variants keep the non-shipping implementations runnable', () => {
       const variant = noise?.variants.find(v => v.id === alt.variantId)
       expect({ id: alt.id, mirrors: variant?.dim }).toEqual({ id: alt.id, mirrors: alt.dim })
       expect(alt.id).toBe(`${alt.variantId}@${alt.implementationId}`)
+    }
+  })
+
+  // The shader specs are what make an alt variant renderable and GPU-
+  // benchable. GLSL/WGSL can only be compiled by a driver, so the bun-side
+  // gate is: the composed program contains a definition for every candidate
+  // function the display expression calls, and the TSL body actually
+  // evaluates into a node graph (the same bar the registry variants clear in
+  // render/tsl.test.ts).
+  test('alt shader specs have consistent dims and compose into programs that define their calls', () => {
+    for (const alt of ALT_VARIANTS) {
+      expect({ id: alt.id, dims: [alt.glsl.dim, alt.wgsl.dim, alt.tsl.dim] }).toEqual({
+        id: alt.id,
+        dims: [alt.dim, alt.dim, alt.dim],
+      })
+      const cfg = { layers: [altLayer(alt)], tiled: false, size: 512 }
+      const call = (alt.glsl.expr.match(/([A-Za-z0-9]+)\(p\)/) ?? [])[1] as string
+      expect(call?.length ?? 0).toBeGreaterThan(0)
+      const glsl = buildGlslFragment(cfg)
+      expect(glsl).toContain(`float ${call}(`)
+      const wgsl = buildWgslShader(cfg)
+      expect(wgsl).toContain(`fn ${call}(`)
+    }
+  })
+
+  test('alt TSL bodies evaluate and build a node graph', () => {
+    const preamble = `const { ${TSL_IMPORTS.join(', ')} } = TSL\n`
+    for (const alt of ALT_VARIANTS) {
+      const cfg = { layers: [altLayer(alt)], tiled: false, size: 512 }
+      const body = buildTslBody(cfg)
+      const factory = new Function('TSL', `"use strict"\n${preamble}${body}\nreturn effect`) as (
+        tsl: typeof TSL,
+      ) => (uv: unknown, z: unknown) => unknown
+      const effect = factory(TSL)
+      expect(effect(TSL.vec2(0.3, 0.7), TSL.float(0.5))).toBeDefined()
     }
   })
 

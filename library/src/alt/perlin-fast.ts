@@ -66,9 +66,11 @@
 // bests agree within any single run); perlin2 ~1.1x. Re-measure before
 // quoting more precision than that. CPU ONLY. On a
 // GPU the trade is different — the avalanche this removes is integer work,
-// which GPUs price differently — and no GLSL/WGSL/TSL backends exist yet, so
-// this cannot ship: registry variants need all four languages. Promotion
-// would also change the field every consumer sees, since the draw differs.
+// which GPUs price differently. GLSL/WGSL/TSL counterparts live in
+// perlin-fast.{glsl,wgsl,tsl}.ts and ship through ALT_VARIANTS, so that
+// measurement is now possible — it has not been taken. Promotion would also
+// change the field every consumer sees, since the draw differs, and still
+// needs the tileable paths.
 //
 // Raw amplitude matches noises/perlin.ts: gradients of length sqrt(2) in both
 // dimensions, so the same display norms would apply.

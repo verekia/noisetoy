@@ -66,11 +66,26 @@
 // GPUs. The table gradients live alongside it in common.ts as `gradTable2` /
 // `gradTable3`, so switching a noise over is a small change.
 
+import { FAST_COMMON_GLSL } from './alt/fast-common.glsl'
+import { FAST_COMMON_TSL } from './alt/fast-common.tsl'
+import { FAST_COMMON_WGSL } from './alt/fast-common.wgsl'
 import { perlinFast2, perlinFast3 } from './alt/perlin-fast'
+import { PERLIN_FAST_GLSL } from './alt/perlin-fast.glsl'
+import { PERLIN_FAST_TSL } from './alt/perlin-fast.tsl'
+import { PERLIN_FAST_WGSL } from './alt/perlin-fast.wgsl'
 import { simplexFast2, simplexFast3 } from './alt/simplex-fast'
+import { SIMPLEX_FAST_GLSL } from './alt/simplex-fast.glsl'
+import { SIMPLEX_FAST_TSL } from './alt/simplex-fast.tsl'
+import { SIMPLEX_FAST_WGSL } from './alt/simplex-fast.wgsl'
 import { simplex2 as simplexTrig2, simplex3 as simplexTrig3 } from './alt/simplex-trig'
+import { SIMPLEX_TRIG_GLSL } from './alt/simplex-trig.glsl'
+import { SIMPLEX_TRIG_TSL } from './alt/simplex-trig.tsl'
+import { SIMPLEX_TRIG_WGSL } from './alt/simplex-trig.wgsl'
 import { worleyFast2, worleyFast3 } from './alt/worley-fast'
-import { clamp01, PERLIN2_NORM, PERLIN3_NORM, SIMPLEX2_NORM, SIMPLEX3_NORM } from './noises/normalization'
+import { WORLEY_FAST_GLSL } from './alt/worley-fast.glsl'
+import { WORLEY_FAST_TSL } from './alt/worley-fast.tsl'
+import { WORLEY_FAST_WGSL } from './alt/worley-fast.wgsl'
+import { clamp01, fmt, PERLIN2_NORM, PERLIN3_NORM, SIMPLEX2_NORM, SIMPLEX3_NORM } from './noises/normalization'
 
 export type ImplementationKind = 'canonical' | 'alternative' | 'conventional' | 'novel'
 
@@ -149,8 +164,8 @@ export type NoiseImplementation = {
    * 'baseline' means it was never a candidate to ship and exists only to be
    * measured against; 'candidate' means it currently BEATS the shipping
    * implementation on the CPU but has not been promoted, because promotion
-   * needs the GLSL/WGSL/TSL backends and a GPU measurement it does not yet
-   * have. Either way it provides no registry variants, so `variantIds` is
+   * needs the GPU measurement its GLSL/WGSL/TSL specs (see ALT_VARIANTS)
+   * make possible, plus the tileable paths, and has neither yet. Either way it provides no registry variants, so `variantIds` is
    * empty.
    */
   status?: 'superseded' | 'baseline' | 'candidate'
@@ -293,7 +308,7 @@ export const IMPLEMENTATIONS: Record<string, NoiseImplementation[]> = {
         "3D keeps the reference's 12 cube-edge gradient set, chosen by the same integer range split as the shipping gradTable3, reading the low 30 bits so the axis choice stays disjoint from the sign bits at 30/31.",
       ],
       rationale:
-        "The current challenger, and the measured FLOOR of the scalar form: a second tuning pass tried a hoisted 3D pre-mix, weighted-sum interpolation, an Estrin-reassociated fade, branchless 2D signs and a bias-trick floor, and every one measured flat or worse over 8-12 interleaved repeats — the FP skeleton (floors, fades, lerps) is ~156 ms of the ~190/~222 ms totals in the bench harness, so the remaining integer work sits latency-hidden behind it. Details in the source header. Measured with `bun run bench:impl`: perlin3 between 1.1x and 1.3x depending on the day's machine state, perlin2 ~1.1x, medians and bests agreeing within any single run. Gradient marginals, adjacent-corner joints along each axis and a checkerboard split all sit inside the 95% chi-square criticals, and the assembled field's mean, RMS, extrema and lattice-lag autocorrelation match the shipping perlin to three decimals — but the field is a DIFFERENT DRAW, so promotion would change the pattern every consumer sees. Not promoted because it has no GLSL/WGSL/TSL backends yet and the GPU is unmeasured, and a narrower avalanche is precisely the kind of trade a GPU prices differently.",
+        "The current challenger, and the measured FLOOR of the scalar form: a second tuning pass tried a hoisted 3D pre-mix, weighted-sum interpolation, an Estrin-reassociated fade, branchless 2D signs and a bias-trick floor, and every one measured flat or worse over 8-12 interleaved repeats — the FP skeleton (floors, fades, lerps) is ~156 ms of the ~190/~222 ms totals in the bench harness, so the remaining integer work sits latency-hidden behind it. Details in the source header. Measured with `bun run bench:impl`: perlin3 between 1.1x and 1.3x depending on the day's machine state, perlin2 ~1.1x, medians and bests agreeing within any single run. Gradient marginals, adjacent-corner joints along each axis and a checkerboard split all sit inside the 95% chi-square criticals, and the assembled field's mean, RMS, extrema and lattice-lag autocorrelation match the shipping perlin to three decimals — but the field is a DIFFERENT DRAW, so promotion would change the pattern every consumer sees. Not promoted yet: the GLSL/WGSL/TSL specs now exist (see ALT_VARIANTS), but the GPU measurement is still pending and a narrower avalanche is precisely the kind of trade a GPU prices differently; the tileable paths are also unwritten.",
       variantIds: [],
     },
   ],
@@ -392,7 +407,7 @@ export const IMPLEMENTATIONS: Record<string, NoiseImplementation[]> = {
         "2D gradients are the four diagonals — the same set the shipping gradTable2 de facto draws (its slots 4-7 repeat slots 0-3 with operands swapped); 3D keeps the reference's 12 cube-edge set via the same integer range split.",
       ],
       rationale:
-        'The current challenger, and a modest one, kept for the 2D win: 1.1-1.25x the shipping simplex2 run to run with `bun run bench:impl`, and a TIE in 3D (0.99-1.05x, best and median disagreeing across runs — treat as noise). The decomposition explains the ceiling: the FP skeleton (skew, ranking, kernels) is ~303 ms of the shipping ~365 ms in the bench harness, simplex hashes only 3-4 corners, and those hashes sit off the FP critical path — so unlike Perlin (8 corners) and Worley (9-27 cells), there is little integer work to remove. Field mean/rms/extrema match the shipping simplex to three decimals (different draw, same statistics). Not promoted: no GPU backends, GPU unmeasured, and the 3D tie should be broken or accepted first.',
+        'The current challenger, and a modest one, kept for the 2D win: 1.1-1.25x the shipping simplex2 run to run with `bun run bench:impl`, and a TIE in 3D (0.99-1.05x, best and median disagreeing across runs — treat as noise). The decomposition explains the ceiling: the FP skeleton (skew, ranking, kernels) is ~303 ms of the shipping ~365 ms in the bench harness, simplex hashes only 3-4 corners, and those hashes sit off the FP critical path — so unlike Perlin (8 corners) and Worley (9-27 cells), there is little integer work to remove. Field mean/rms/extrema match the shipping simplex to three decimals (different draw, same statistics). Not promoted: the GLSL/WGSL/TSL specs exist (see ALT_VARIANTS) but the GPU is unmeasured, and the 3D tie should be broken or accepted first.',
       variantIds: [],
     },
   ],
@@ -461,7 +476,7 @@ export const IMPLEMENTATIONS: Record<string, NoiseImplementation[]> = {
         "The neighbourhood search prunes: centre column/plane first, then a neighbouring column or plane only if its boundary distance still beats the current F1. Conservative, so the result is exactly the unpruned minimum (verified, zero mismatches over 600k probes). This is closer to the paper's own algorithm — Worley skips cubes that cannot contain a closer point — than the shipping exhaustive 9/27-cell loop is.",
       ],
       rationale:
-        'The current challenger. Measured with `bun run bench:impl`: ~2.0x the shipping worley2 and ~3.4x worley3 on the CPU, best and median agreeing (3D includes the ~13% cost of the hash fix; the 2D figure is from an isolated run, per the harness caveat in bench.ts) — the win grows with dimension because a pruned 3D plane is nine cells never hashed. The 3D search is written out longhand because routing each plane through a many-argument helper left the speedup at the mercy of a fragile JIT inlining decision, measured swinging between 430 and 550 ms for identical semantics. Field mean/rms/extrema match the shipping worley to three decimals (different draw, same distribution). Not promoted for the same reasons as the Perlin candidate: no GLSL/WGSL/TSL backends yet, and the pruning branches are exactly what a GPU pays divergence for, so the GPU needs its own measurement.',
+        'The current challenger. Measured with `bun run bench:impl`: ~2.0x the shipping worley2 and ~3.4x worley3 on the CPU, best and median agreeing (3D includes the ~13% cost of the hash fix; the 2D figure is from an isolated run, per the harness caveat in bench.ts) — the win grows with dimension because a pruned 3D plane is nine cells never hashed. The 3D search is written out longhand because routing each plane through a many-argument helper left the speedup at the mercy of a fragile JIT inlining decision, measured swinging between 430 and 550 ms for identical semantics. Field mean/rms/extrema match the shipping worley to three decimals (different draw, same distribution). Not promoted for the same reasons as the Perlin candidate: the GLSL/WGSL/TSL specs exist (see ALT_VARIANTS), but the pruning branches are exactly what a GPU pays divergence for, so the GPU measurement has to happen before this is believed anywhere but the CPU.',
       variantIds: [],
     },
   ],
@@ -700,22 +715,25 @@ export const IMPLEMENTATION_STATUS_BLURB: Record<NonNullable<NoiseImplementation
   superseded: 'Was the default and lost a measured comparison; kept so the comparison can be re-run.',
   baseline: 'Never a candidate to ship; exists only to be measured against.',
   candidate:
-    'Currently beats the shipping implementation on the CPU, but is not promoted: no GPU backends yet, GPU unmeasured.',
+    'Currently beats the shipping implementation on the CPU, but is not promoted: the GPU measurement its shader specs make possible is still pending.',
 }
 
 // ---------------------------------------------------------------------------
 // Runnable stand-ins for the non-shipping implementations.
 //
-// A registry variant is the full contract — four languages, tiling, cost
-// entry. A non-shipping implementation has none of that, but it still needs to
-// be RUNNABLE or the inventory's speed claims cannot be checked outside this
-// repo, and the explorer cannot show what an implementation looks like. An
-// AltVariant is the minimal runnable slice: the TS samplers, display-mapped
-// exactly like the registry variant it stands in for, so previews and
-// benchmarks are apples-to-apples with the shipping row.
+// A registry variant is the full contract: four languages, tileable paths, a
+// cost-model entry. An AltVariant is the runnable slice of that contract a
+// non-shipping implementation carries: the TS samplers plus GLSL/WGSL/TSL
+// shader specs, display-mapped exactly like the registry variant it stands in
+// for, so previews, exports and benchmarks are apples-to-apples with the
+// shipping row on every backend. What it deliberately lacks is the tileable
+// paths and a cost entry — growing those, and winning the GPU measurement the
+// shader specs now make possible, is what promotion means.
 //
-// TS-only on purpose. The moment one of these grows the other three languages
-// and a GPU measurement, it stops being an AltVariant and gets PROMOTED.
+// Shader function names carry a Fast/Trig suffix so a stack can compose a
+// candidate next to the shipping chunk of the same noise without collisions.
+
+import type { ShaderSpec } from './registry'
 
 export type AltSampleFn = (x: number, y: number, z: number) => number
 
@@ -732,6 +750,10 @@ export type AltVariant = {
   sampleRaw: AltSampleFn
   /** Display sample, clamped to [0, 1], same contract as the registry's sample. */
   sample: AltSampleFn
+  /** Shader specs, same shape and display mapping as the registry variant's. */
+  glsl: ShaderSpec
+  wgsl: ShaderSpec
+  tsl: ShaderSpec
 }
 
 // The display norms of the superseded trig Simplex. These are NOT the shipping
@@ -741,7 +763,22 @@ export type AltVariant = {
 const SIMPLEX_TRIG2_NORM = 90
 const SIMPLEX_TRIG3_NORM = 98
 
-const altVariant = (noiseId: string, implementationId: string, dim: 2 | 3, sampleRaw: AltSampleFn): AltVariant => ({
+const spec = (dim: 2 | 3, deps: string[], expr: string): ShaderSpec => ({ dim, deps, expr })
+
+/** value * (0.5 * norm) + 0.5, unclamped — matches signedExpr in the registry. */
+const signedText = (norm: number, call: string): string => `0.5 + 0.5 * ${fmt(norm)} * ${call}`
+
+const signedTsl = (norm: number, call: string): string => `${call}.mul(${0.5 * norm}).add(0.5)`
+
+type AltShaders = { glsl: ShaderSpec; wgsl: ShaderSpec; tsl: ShaderSpec }
+
+const altVariant = (
+  noiseId: string,
+  implementationId: string,
+  dim: 2 | 3,
+  sampleRaw: AltSampleFn,
+  shaders: AltShaders,
+): AltVariant => ({
   id: `${noiseId}-${dim}d@${implementationId}`,
   variantId: `${noiseId}-${dim}d`,
   noiseId,
@@ -749,23 +786,85 @@ const altVariant = (noiseId: string, implementationId: string, dim: 2 | 3, sampl
   dim,
   sampleRaw,
   sample: (x, y, z) => clamp01(sampleRaw(x, y, z)),
+  ...shaders,
 })
+
+/** The three language specs for one candidate call, sharing one display expression shape. */
+const fastShaders = (
+  dim: 2 | 3,
+  chunks: { glsl: string; wgsl: string; tsl: string },
+  call: string,
+  norm: number | null,
+): AltShaders => ({
+  glsl: spec(dim, [FAST_COMMON_GLSL, chunks.glsl], norm === null ? call : signedText(norm, call)),
+  wgsl: spec(dim, [FAST_COMMON_WGSL, chunks.wgsl], norm === null ? call : signedText(norm, call)),
+  tsl: spec(dim, [FAST_COMMON_TSL, chunks.tsl], norm === null ? call : signedTsl(norm, call)),
+})
+
+const PERLIN_FAST_CHUNKS = { glsl: PERLIN_FAST_GLSL, wgsl: PERLIN_FAST_WGSL, tsl: PERLIN_FAST_TSL }
+const SIMPLEX_FAST_CHUNKS = { glsl: SIMPLEX_FAST_GLSL, wgsl: SIMPLEX_FAST_WGSL, tsl: SIMPLEX_FAST_TSL }
+const WORLEY_FAST_CHUNKS = { glsl: WORLEY_FAST_GLSL, wgsl: WORLEY_FAST_WGSL, tsl: WORLEY_FAST_TSL }
 
 /**
  * Display mappings mirror the registry: Perlin and Simplex are signed noises
  * mapped 0.5 + 0.5 * norm * raw; Worley's F1 distance is displayed raw.
  */
 export const ALT_VARIANTS: AltVariant[] = [
-  altVariant('perlin', 'fib-hash', 2, (x, y) => 0.5 + 0.5 * PERLIN2_NORM * perlinFast2(x, y)),
-  altVariant('perlin', 'fib-hash', 3, (x, y, z) => 0.5 + 0.5 * PERLIN3_NORM * perlinFast3(x, y, z)),
-  altVariant('simplex', 'trig-gradients', 2, (x, y) => 0.5 + 0.5 * SIMPLEX_TRIG2_NORM * simplexTrig2(x, y)),
-  altVariant('simplex', 'trig-gradients', 3, (x, y, z) => 0.5 + 0.5 * SIMPLEX_TRIG3_NORM * simplexTrig3(x, y, z)),
+  altVariant(
+    'perlin',
+    'fib-hash',
+    2,
+    (x, y) => 0.5 + 0.5 * PERLIN2_NORM * perlinFast2(x, y),
+    fastShaders(2, PERLIN_FAST_CHUNKS, 'perlinFast2(p)', PERLIN2_NORM),
+  ),
+  altVariant(
+    'perlin',
+    'fib-hash',
+    3,
+    (x, y, z) => 0.5 + 0.5 * PERLIN3_NORM * perlinFast3(x, y, z),
+    fastShaders(3, PERLIN_FAST_CHUNKS, 'perlinFast3(p)', PERLIN3_NORM),
+  ),
+  // The trig chunks need only the common library (gradDot2/3, hash2u/hash3u).
+  altVariant('simplex', 'trig-gradients', 2, (x, y) => 0.5 + 0.5 * SIMPLEX_TRIG2_NORM * simplexTrig2(x, y), {
+    glsl: spec(2, [SIMPLEX_TRIG_GLSL], signedText(SIMPLEX_TRIG2_NORM, 'simplexTrig2(p)')),
+    wgsl: spec(2, [SIMPLEX_TRIG_WGSL], signedText(SIMPLEX_TRIG2_NORM, 'simplexTrig2(p)')),
+    tsl: spec(2, [SIMPLEX_TRIG_TSL], signedTsl(SIMPLEX_TRIG2_NORM, 'simplexTrig2(p)')),
+  }),
+  altVariant('simplex', 'trig-gradients', 3, (x, y, z) => 0.5 + 0.5 * SIMPLEX_TRIG3_NORM * simplexTrig3(x, y, z), {
+    glsl: spec(3, [SIMPLEX_TRIG_GLSL], signedText(SIMPLEX_TRIG3_NORM, 'simplexTrig3(p)')),
+    wgsl: spec(3, [SIMPLEX_TRIG_WGSL], signedText(SIMPLEX_TRIG3_NORM, 'simplexTrig3(p)')),
+    tsl: spec(3, [SIMPLEX_TRIG_TSL], signedTsl(SIMPLEX_TRIG3_NORM, 'simplexTrig3(p)')),
+  }),
   // Same gradient set and kernel as the shipping simplex, so the shipping
   // norms apply unchanged.
-  altVariant('simplex', 'fast-hash', 2, (x, y) => 0.5 + 0.5 * SIMPLEX2_NORM * simplexFast2(x, y)),
-  altVariant('simplex', 'fast-hash', 3, (x, y, z) => 0.5 + 0.5 * SIMPLEX3_NORM * simplexFast3(x, y, z)),
-  altVariant('worley', 'split-bits-pruned', 2, (x, y) => worleyFast2(x, y)),
-  altVariant('worley', 'split-bits-pruned', 3, (x, y, z) => worleyFast3(x, y, z)),
+  altVariant(
+    'simplex',
+    'fast-hash',
+    2,
+    (x, y) => 0.5 + 0.5 * SIMPLEX2_NORM * simplexFast2(x, y),
+    fastShaders(2, SIMPLEX_FAST_CHUNKS, 'simplexFast2(p)', SIMPLEX2_NORM),
+  ),
+  altVariant(
+    'simplex',
+    'fast-hash',
+    3,
+    (x, y, z) => 0.5 + 0.5 * SIMPLEX3_NORM * simplexFast3(x, y, z),
+    fastShaders(3, SIMPLEX_FAST_CHUNKS, 'simplexFast3(p)', SIMPLEX3_NORM),
+  ),
+  altVariant(
+    'worley',
+    'split-bits-pruned',
+    2,
+    (x, y) => worleyFast2(x, y),
+    fastShaders(2, WORLEY_FAST_CHUNKS, 'worleyFast2(p)', null),
+  ),
+  altVariant(
+    'worley',
+    'split-bits-pruned',
+    3,
+    (x, y, z) => worleyFast3(x, y, z),
+    fastShaders(3, WORLEY_FAST_CHUNKS, 'worleyFast3(p)', null),
+  ),
 ]
 
 export const altVariantsFor = (noiseId: string, implementationId: string): AltVariant[] =>

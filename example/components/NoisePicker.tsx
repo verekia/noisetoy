@@ -25,6 +25,13 @@ import type { ImplementationKind } from 'noisetoy/implementations'
 export type PickerDraft = {
   noiseId: string
   variantId: string
+  /**
+   * Non-shipping implementation to render this layer with (an inventory id
+   * whose entry has `status` set), or undefined for the shipping one. The
+   * registry has no variants for these, so a layer carrying one renders on
+   * the CPU (JS) backend and shader exports still emit the shipping code.
+   */
+  implId?: string
   octaves: number
   /** Rotate octaves (classic fBm construction) instead of offsetting them; breaks tiling. */
   rotate: boolean
@@ -102,11 +109,6 @@ const NoisePicker = ({
 }) => {
   const [draft, setDraft] = useState<PickerDraft>(initial)
   const [preview, setPreview] = useState<'layer' | 'isolated'>('layer')
-  // Which of the noise's implementations the panel is inspecting. Null means
-  // the shipping one. Non-shipping selections change the info card and the
-  // preview only — a saved layer always uses what `noisetoy` ships, because
-  // the registry has no variants for the others.
-  const [implId, setImplId] = useState<string | null>(null)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -123,7 +125,7 @@ const NoisePicker = ({
   // selection it falls back to the implementation owning the variant.
   const implementations = IMPLEMENTATIONS[noise.id] ?? []
   const implementation =
-    (implId ? implementations.find(i => i.id === implId) : undefined) ?? implementationOf(variant.id)
+    (draft.implId ? implementations.find(i => i.id === draft.implId) : undefined) ?? implementationOf(variant.id)
   // A non-shipping implementation previews through its TS stand-in when the
   // inventory provides one for this dimension.
   const altPreview = implementation?.status
@@ -152,11 +154,10 @@ const NoisePicker = ({
           ? [...stack.below, { ...draftLayer, blend: stack.blend, opacity: stack.opacity }, ...stack.above]
           : [draftLayer],
     })
-    // Swap the draft layer's sampling for the non-shipping implementation's
-    // stand-in. The CPU sampler reads the layer's variant per call, so the
-    // whole pipeline (octaves, styles, blending) applies to it unchanged; the
-    // GPU renderers never see this effect because the preview is forced to
-    // the JS backend below.
+    // Swap the draft layer's variant for the non-shipping implementation's
+    // stand-in: TS samplers for the CPU backend, shader specs for the GPU
+    // ones. The whole pipeline (octaves, styles, blending) applies to it
+    // unchanged on every backend; only the tileable paths are missing.
     if (altPreview) {
       const layer = effect.layers[asLayer && stack ? stack.below.length : 0]
       if (layer) {
@@ -164,8 +165,14 @@ const NoisePicker = ({
           ...layer.variant,
           sample: altPreview.sample,
           sampleRaw: altPreview.sampleRaw,
+          glsl: altPreview.glsl,
+          wgsl: altPreview.wgsl,
+          tsl: altPreview.tsl,
           sampleTileable: null,
           sampleRawTileable: null,
+          glslTileable: null,
+          wgslTileable: null,
+          tslTileable: null,
         }
       }
     }
@@ -186,10 +193,8 @@ const NoisePicker = ({
     altPreview,
   ])
 
-  const selectNoise = (n: NoiseDef) => {
-    setImplId(null)
-    setDraft(d => ({ ...d, noiseId: n.id, variantId: defaultVariant(n).id }))
-  }
+  const selectNoise = (n: NoiseDef) =>
+    setDraft(d => ({ ...d, noiseId: n.id, variantId: defaultVariant(n).id, implId: undefined }))
 
   return (
     <div
@@ -237,11 +242,12 @@ const NoisePicker = ({
             <div className="flex gap-4">
               <div className="w-56 shrink-0 space-y-2">
                 <div className="aspect-square">
-                  <NoiseCanvas effect={previewEffect} backend={altPreview ? 'js' : backend} />
+                  <NoiseCanvas effect={previewEffect} backend={backend} />
                 </div>
                 {altPreview && (
                   <p className="text-[10px] leading-relaxed text-zinc-500">
-                    CPU (JS) preview of a non-shipping implementation. Saved layers always use the shipping one.
+                    Non-shipping implementation — the layer keeps it when saved and renders it on every backend. No
+                    tileable paths.
                   </p>
                 )}
                 {stack !== null && (
@@ -338,7 +344,14 @@ const NoisePicker = ({
                     Implementation
                     <Segmented
                       value={implementation?.id ?? ''}
-                      onChange={id => setImplId(id)}
+                      onChange={id =>
+                        setDraft(d => ({
+                          ...d,
+                          // Shipping is the absence of an override, so it
+                          // stores as undefined rather than as an id.
+                          implId: implementations.find(i => i.id === id)?.status ? id : undefined,
+                        }))
+                      }
                       options={implementations.map(i => ({
                         value: i.id,
                         label: i.status ? IMPLEMENTATION_STATUS_LABEL[i.status] : 'Shipping',

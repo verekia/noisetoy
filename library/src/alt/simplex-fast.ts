@@ -35,8 +35,9 @@
 // ~303 ms of the shipping ~365 ms in the bench harness, simplex only hashes
 // 3-4 corners, and those hashes sit off the FP critical path. This candidate
 // is kept for the 2D win; treat the 3D column as noise until someone breaks
-// the tie. CPU only, no GPU backends, same promotion bar as the other
-// candidates.
+// the tie. GLSL/WGSL/TSL counterparts live in simplex-fast.{glsl,wgsl,tsl}.ts
+// and ship through ALT_VARIANTS; the GPU measurement they make possible has
+// not been taken. Same promotion bar as the other candidates.
 //
 // The field is a different draw from the shipping one — different hash, same
 // statistics (field mean/rms/extrema match to three decimals).

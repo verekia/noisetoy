@@ -10,6 +10,7 @@ import { createEffect } from 'noisetoy'
 import type { BenchResult } from '#/lib/bench'
 import type { Renderer, RenderOptions } from '#/lib/render/types'
 import type { EffectSpec, NoiseVariant } from 'noisetoy'
+import type { AltVariant } from 'noisetoy/implementations'
 
 const timeRenderer = async (renderer: Renderer, frames: number): Promise<number> => {
   renderer.render(0)
@@ -35,11 +36,13 @@ export const benchEffect = async (
   spec: EffectSpec,
   size: number,
   frames: number,
+  patch?: (effect: ReturnType<typeof createEffect>) => void,
 ): Promise<BenchResult> => {
   const canvas = document.createElement('canvas')
   canvas.width = size
   canvas.height = size
   const effect = createEffect(spec)
+  patch?.(effect)
   const renderer = await create(canvas, { effect, width: size, height: size })
   try {
     const ms = await timeRenderer(renderer, frames)
@@ -57,6 +60,40 @@ const benchGpu = (
   size: number,
   frames: number,
 ): Promise<BenchResult> => benchEffect(create, { layers: [{ noise: noiseId, variant: variant.id }] }, size, frames)
+
+/**
+ * Times a non-shipping implementation: the effect is built from the registry
+ * variant the AltVariant stands in for, then the layer's variant is swapped
+ * for the alt samplers and shader specs before the renderer compiles — the
+ * same patch the viewer applies.
+ */
+const benchGpuAlt = (create: Create, alt: AltVariant, size: number, frames: number): Promise<BenchResult> =>
+  benchEffect(create, { layers: [{ noise: alt.noiseId, variant: alt.variantId }] }, size, frames, effect => {
+    const layer = effect.layers[0]
+    if (!layer) return
+    layer.variant = {
+      ...layer.variant,
+      sample: alt.sample,
+      sampleRaw: alt.sampleRaw,
+      glsl: alt.glsl,
+      wgsl: alt.wgsl,
+      tsl: alt.tsl,
+      sampleTileable: null,
+      sampleRawTileable: null,
+      glslTileable: null,
+      wgslTileable: null,
+      tslTileable: null,
+    }
+  })
+
+export const benchWebglAlt = (alt: AltVariant, size: number, frames: number): Promise<BenchResult> =>
+  benchGpuAlt(createWebglRenderer, alt, size, frames)
+
+export const benchWebgpuAlt = (alt: AltVariant, size: number, frames: number): Promise<BenchResult> =>
+  benchGpuAlt(createWebgpuRenderer, alt, size, frames)
+
+export const benchThreeAlt = (alt: AltVariant, size: number, frames: number): Promise<BenchResult> =>
+  benchGpuAlt(createThreeRenderer, alt, size, frames)
 
 export const benchWebglEffect = (spec: EffectSpec, size: number, frames: number): Promise<BenchResult> =>
   benchEffect(createWebglRenderer, spec, size, frames)

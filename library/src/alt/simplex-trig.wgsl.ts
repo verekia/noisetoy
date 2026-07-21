@@ -1,21 +1,21 @@
 // WGSL counterpart of simplex.ts. Requires COMMON_WGSL.
 
-export const SIMPLEX_WGSL = /* wgsl */ `
-fn contrib2(d: vec2f, h: u32) -> f32 {
+export const SIMPLEX_TRIG_WGSL = /* wgsl */ `
+fn trigContrib2(d: vec2f, h: u32) -> f32 {
   var t = 0.5 - dot(d, d);
   if (t <= 0.0) { return 0.0; }
   t *= t;
   return t * t * gradDot2(h, d);
 }
 
-fn contrib3(d: vec3f, h: u32) -> f32 {
+fn trigContrib3(d: vec3f, h: u32) -> f32 {
   var t = 0.5 - dot(d, d);
   if (t <= 0.0) { return 0.0; }
   t *= t;
   return t * t * gradDot3(h, d);
 }
 
-fn simplex2(p: vec2f) -> f32 {
+fn simplexTrig2(p: vec2f) -> f32 {
   let F2 = 0.3660254037844386;
   let G2 = 0.21132486540518713;
   let s = (p.x + p.y) * F2;
@@ -28,10 +28,10 @@ fn simplex2(p: vec2f) -> f32 {
   let j1 = 1 - i1;
   let d1 = d0 - vec2f(f32(i1), f32(j1)) + G2;
   let d2 = d0 - 1.0 + 2.0 * G2;
-  return contrib2(d0, hash2u(i, j)) + contrib2(d1, hash2u(i + i1, j + j1)) + contrib2(d2, hash2u(i + 1, j + 1));
+  return trigContrib2(d0, hash2u(i, j)) + trigContrib2(d1, hash2u(i + i1, j + j1)) + trigContrib2(d2, hash2u(i + 1, j + 1));
 }
 
-fn simplex3(p: vec3f) -> f32 {
+fn simplexTrig3(p: vec3f) -> f32 {
   let F3 = 1.0 / 3.0;
   let G3 = 1.0 / 6.0;
   let s = (p.x + p.y + p.z) * F3;
@@ -54,7 +54,7 @@ fn simplex3(p: vec3f) -> f32 {
   let d1 = d0 - vec3f(f32(i1), f32(j1), f32(k1)) + G3;
   let d2 = d0 - vec3f(f32(i2), f32(j2), f32(k2)) + 2.0 * G3;
   let d3 = d0 - 1.0 + 3.0 * G3;
-  return contrib3(d0, hash3u(i, j, k)) + contrib3(d1, hash3u(i + i1, j + j1, k + k1)) +
-    contrib3(d2, hash3u(i + i2, j + j2, k + k2)) + contrib3(d3, hash3u(i + 1, j + 1, k + 1));
+  return trigContrib3(d0, hash3u(i, j, k)) + trigContrib3(d1, hash3u(i + i1, j + j1, k + k1)) +
+    trigContrib3(d2, hash3u(i + i2, j + j2, k + k2)) + trigContrib3(d3, hash3u(i + 1, j + 1, k + 1));
 }
 `

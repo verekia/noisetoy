@@ -49,9 +49,9 @@
 //
 // CPU ONLY, like the Perlin candidate, and doubly so: the pruning branches
 // are exactly what a GPU pays divergence for, so the GPU trade needs its own
-// measurement before any of this is believed there. No GLSL/WGSL/TSL
-// backends exist yet, so this cannot ship — registry variants need all four
-// languages.
+// measurement before any of this is believed there. GLSL/WGSL/TSL
+// counterparts live in worley-fast.{glsl,wgsl,tsl}.ts and ship through
+// ALT_VARIANTS, so that measurement is now possible — it has not been taken.
 //
 // Output matches noises/worley.ts: Euclidean F1, roughly [0, 1.3].
 

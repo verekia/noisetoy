@@ -1,14 +1,21 @@
 import { useEffect, useState } from 'react'
 
 import { benchJsVariant } from '#/lib/bench'
-import { benchThreeVariant, benchWebglVariant, benchWebgpuVariant } from '#/lib/bench-gpu'
+import {
+  benchThreeAlt,
+  benchThreeVariant,
+  benchWebglAlt,
+  benchWebglVariant,
+  benchWebgpuAlt,
+  benchWebgpuVariant,
+} from '#/lib/bench-gpu'
 import Head from 'next/head'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { getNoise, NOISES } from 'noisetoy'
 // Non-shipping implementations (candidates, superseded) bench through their
-// AltVariants: TS-only stand-ins, so they fill the JS column and sit at n/a on
-// the GPU columns until they grow shaders.
+// AltVariants — TS samplers for the JS column, GLSL/WGSL/TSL specs for the
+// GPU columns — so every implementation gets the full row.
 import { ALT_VARIANTS } from 'noisetoy/implementations'
 
 import type { BenchResult } from '#/lib/bench'
@@ -100,12 +107,10 @@ export default function Bench() {
               },
             ]
           : [
-              // A non-shipping implementation has TS samplers only: the GPU
-              // columns are honestly n/a, not merely unmeasured.
               { id: 'js', exec: () => benchJsVariant(row.alt as AltVariant, row.scale, JS_SIZE, JS_FRAMES) },
-              { id: 'webgl', exec: null },
-              { id: 'webgpu', exec: null },
-              { id: 'three', exec: null },
+              { id: 'webgl', exec: () => benchWebglAlt(row.alt as AltVariant, GPU_SIZE, GPU_FRAMES) },
+              { id: 'webgpu', exec: () => benchWebgpuAlt(row.alt as AltVariant, GPU_SIZE, GPU_FRAMES) },
+              { id: 'three', exec: () => benchThreeAlt(row.alt as AltVariant, GPU_SIZE, GPU_FRAMES) },
             ]
         for (const { id, exec } of backends) {
           const key = `${row.key}-${id}`
@@ -214,8 +219,8 @@ export default function Bench() {
               <p className="mt-1 text-sm text-zinc-400">
                 Throughput in Msamples/s (higher is better). JS runs {JS_SIZE}×{JS_SIZE}×{JS_FRAMES} frames on the CPU;
                 WebGL/WebGPU run {GPU_SIZE}×{GPU_SIZE}×{GPU_FRAMES} frames with full GPU sync. Rows marked with an
-                implementation id are non-shipping implementations from the inventory (CPU-only, so GPU columns are
-                n/a). CLI equivalent:{' '}
+                implementation id are non-shipping implementations from the inventory, benched through their AltVariant
+                samplers and shader specs. CLI equivalent:{' '}
                 <code className="rounded bg-zinc-900 px-1.5 py-0.5 text-xs">
                   bun run bench{noiseFilter ? ` ${noiseFilter}` : ''}
                 </code>
