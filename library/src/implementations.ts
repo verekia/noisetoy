@@ -88,6 +88,10 @@ import { flowFast3 } from './alt/flow-fast'
 import { FLOW_FAST_GLSL } from './alt/flow-fast.glsl'
 import { FLOW_FAST_TSL } from './alt/flow-fast.tsl'
 import { FLOW_FAST_WGSL } from './alt/flow-fast.wgsl'
+import { gaborFast2, gaborFast3 } from './alt/gabor-fast'
+import { GABOR_FAST_GLSL } from './alt/gabor-fast.glsl'
+import { GABOR_FAST_TSL } from './alt/gabor-fast.tsl'
+import { GABOR_FAST_WGSL } from './alt/gabor-fast.wgsl'
 import { perlinFast2, perlinFast3 } from './alt/perlin-fast'
 import { PERLIN_FAST_GLSL } from './alt/perlin-fast.glsl'
 import { PERLIN_FAST_TSL } from './alt/perlin-fast.tsl'
@@ -122,6 +126,8 @@ import {
   CHEBYSHEV3_NORM,
   clamp01,
   fmt,
+  GABOR2_NORM,
+  GABOR3_NORM,
   MANHATTAN2_NORM,
   MANHATTAN3_NORM,
   PERLIN2_NORM,
@@ -634,6 +640,27 @@ export const IMPLEMENTATIONS: Record<string, NoiseImplementation[]> = {
         "Keeps it a pure function of position, consistent with every other noise in the repo. The honest summary is that this implements the paper's kernel and its spectral parameterisation, not its sampling strategy or its filtering.",
       variantIds: ['gabor-2d', 'gabor-3d'],
     },
+    {
+      id: 'split-bits-gated',
+      name: 'Split-bit impulses, cutoff-gated kernels',
+      kind: 'alternative',
+      evidence: 'paper-only',
+      status: 'candidate',
+      archivedAt: 'src/alt/gabor-fast.ts',
+      reference: {
+        paper: 'Lagae, Lefebvre, Drettakis & Dutre, "Procedural Noise using Sparse Gabor Convolution" (SIGGRAPH 2009)',
+        url: 'https://graphics.cs.kuleuven.be/publications/LLDD09PNSGC/LLDD09PNSGC_code.zip',
+      },
+      follows: "Lagae, Lefebvre, Drettakis & Dutre, 'Procedural Noise using Sparse Gabor Convolution' (SIGGRAPH 2009)",
+      deviations: [
+        'One impulse per lattice cell instead of the Poisson point process, as in the shipping implementation.',
+        'Impulse positions quantized to 16 (2D) / 10 (3D) bits per axis, weight and phase to 8 bits, kernel orientation to 64 table directions (64 azimuths x 64 polar levels in 3D) — the paper draws all of these continuously.',
+        "Kernels beyond squared distance 2.25 are dropped before their exp and cos; exp(-pi * 2.25) ~ 8.5e-4 is the same amplitude the paper's 3x3 neighbourhood truncation already accepts at the edge.",
+      ],
+      rationale:
+        "Same sparse convolution, one impulse per cell, with the bookkeeping stripped to what the kernel math needs. Impulse positions come from ONE mix per cell split 16+16 / 10+10+10 bits (the worley-candidate scheme) instead of six / nine chained avalanches; weight and phase come from 8 bits each of one cheap remix, and the kernel orientation from a table of 64 unit directions (64 azimuths x 64 polar levels in 3D) instead of the cos/sin pair inside gradDot. Kernels beyond squared distance 2.25 are dropped BEFORE their exp and cos — exp(-pi * 2.25) ~ 8.5e-4 is the shipping algorithm's own 3x3 containment bound, applied uniformly instead of only at the neighbourhood edge; most of the 27 cells of a 3D sample sit beyond it, which is where most of the 3D win lives. The envelope exp and harmonic cos — the band-limited construction itself — are untouched. Field mean/rms match shipping to two decimals. Measured with `bun run bench:impl`: ~2.7x the shipping gabor2 and ~3.4x gabor3 on the CPU; browser JS reads ~3.1x and ~4.3x. GPU: 1.35x shipping in 2D and ~1.6x in 3D (WebGL+WebGPU; TSL 1.19x and 1.34x) — the gate's divergence never bites because whole warps skip the same far cells. Not promoted: no tileable paths yet, and the field is a different draw.",
+      variantIds: [],
+    },
   ],
   marble: [
     {
@@ -1007,6 +1034,7 @@ const CELLULAR_FAST_CHUNKS = { glsl: CELLULAR_FAST_GLSL, wgsl: CELLULAR_FAST_WGS
 const VORTEX_FAST_CHUNKS = { glsl: VORTEX_FAST_GLSL, wgsl: VORTEX_FAST_WGSL, tsl: VORTEX_FAST_TSL }
 const VALUE_FAST_CHUNKS = { glsl: VALUE_FAST_GLSL, wgsl: VALUE_FAST_WGSL, tsl: VALUE_FAST_TSL }
 const WAVE_FAST_CHUNKS = { glsl: WAVE_FAST_GLSL, wgsl: WAVE_FAST_WGSL, tsl: WAVE_FAST_TSL }
+const GABOR_FAST_CHUNKS = { glsl: GABOR_FAST_GLSL, wgsl: GABOR_FAST_WGSL, tsl: GABOR_FAST_TSL }
 const WORLEY_METRICS_FAST_CHUNKS = {
   glsl: WORLEY_METRICS_FAST_GLSL,
   wgsl: WORLEY_METRICS_FAST_WGSL,
@@ -1233,7 +1261,9 @@ export const ALT_VARIANTS: AltVariant[] = [
     fastShaders(3, WORLEY_METRICS_FAST_CHUNKS, 'chebyshevFast3(p)', CHEBYSHEV3_NORM, 'unsigned'),
   ),
   // Value and wave 2D measured as GPU ties, so they keep the shipping
-  // figures; wave 3D won only on WebGL (ratio 0.94 -> 1.2).
+  // figures; wave 3D won only on WebGL (ratio 0.94 -> 1.2). Gabor is a real
+  // GPU win: 2409/2363 -> 3385/3087 in 2D (0.74x -> 1.3) and 630/627 ->
+  // 1000/987 in 3D (0.63x -> 4.4), WebGL/WebGPU medians.
   altVariant(
     'value',
     'fib-hash',
@@ -1258,6 +1288,22 @@ export const ALT_VARIANTS: AltVariant[] = [
     1.2,
     (x, y, z) => 0.5 + 0.5 * waveFast3(x, y, z),
     fastShaders(3, WAVE_FAST_CHUNKS, 'waveFast3(p)', 1),
+  ),
+  altVariant(
+    'gabor',
+    'split-bits-gated',
+    2,
+    1.3,
+    (x, y) => 0.5 + 0.5 * GABOR2_NORM * gaborFast2(x, y),
+    fastShaders(2, GABOR_FAST_CHUNKS, 'gaborFast2(p)', GABOR2_NORM),
+  ),
+  altVariant(
+    'gabor',
+    'split-bits-gated',
+    3,
+    4.4,
+    (x, y, z) => 0.5 + 0.5 * GABOR3_NORM * gaborFast3(x, y, z),
+    fastShaders(3, GABOR_FAST_CHUNKS, 'gaborFast3(p)', GABOR3_NORM),
   ),
 ]
 

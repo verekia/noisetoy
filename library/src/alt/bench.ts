@@ -32,6 +32,7 @@
 
 import { crackle2, crackle3, foam2, foam3, mosaic2, mosaic3, stars2, stars3 } from '../noises/cellular'
 import { flow3 } from '../noises/flow'
+import { gabor2, gabor3 } from '../noises/gabor'
 import { perlin2, perlin3 } from '../noises/perlin'
 import { ripple2, ripple3 } from '../noises/ripple'
 import { simplex2 as simplexTable2, simplex3 as simplexTable3 } from '../noises/simplex'
@@ -53,6 +54,7 @@ import {
   starsFast3,
 } from './cellular-fast'
 import { flowFast3 } from './flow-fast'
+import { gaborFast2, gaborFast3 } from './gabor-fast'
 import { perlinFast2, perlinFast3 } from './perlin-fast'
 import { simplexFast2, simplexFast3 } from './simplex-fast'
 import { valueFast2, valueFast3 } from './value-fast'
@@ -199,6 +201,12 @@ compare(
   ['candidate (table dirs)', (x, y) => waveFast2(x, y)],
 )
 compare('Wave 3D', ['shipping  (per-corner trig)', wave3], ['candidate (table dirs)', waveFast3])
+compare(
+  'Gabor 2D',
+  ['shipping  (chained avalanches)', (x, y) => gabor2(x, y)],
+  ['candidate (split bits, gated)', (x, y) => gaborFast2(x, y)],
+)
+compare('Gabor 3D', ['shipping  (chained avalanches)', gabor3], ['candidate (split bits, gated)', gaborFast3])
 compare(
   'Simplex 2D vs candidate',
   ['shipping  (folded lowbias32)', (x, y) => simplexTable2(x, y)],
