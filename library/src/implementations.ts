@@ -96,6 +96,10 @@ import { simplexFast2, simplexFast3 } from './alt/simplex-fast'
 import { SIMPLEX_FAST_GLSL } from './alt/simplex-fast.glsl'
 import { SIMPLEX_FAST_TSL } from './alt/simplex-fast.tsl'
 import { SIMPLEX_FAST_WGSL } from './alt/simplex-fast.wgsl'
+import { valueFast2, valueFast3 } from './alt/value-fast'
+import { VALUE_FAST_GLSL } from './alt/value-fast.glsl'
+import { VALUE_FAST_TSL } from './alt/value-fast.tsl'
+import { VALUE_FAST_WGSL } from './alt/value-fast.wgsl'
 import { vortexFast2, vortexFast3 } from './alt/vortex-fast'
 import { VORTEX_FAST_GLSL } from './alt/vortex-fast.glsl'
 import { VORTEX_FAST_TSL } from './alt/vortex-fast.tsl'
@@ -281,6 +285,17 @@ export const IMPLEMENTATIONS: Record<string, NoiseImplementation[]> = {
       rationale:
         "The standard formulation: hash a value per lattice corner, interpolate with the quintic fade. Uses Perlin 2002's fade rather than the older cosine interpolation, which is the modern default everywhere. Provenance: Classic value noise (folklore; no single reference paper).",
       variantIds: ['value-2d', 'value-3d'],
+    },
+    {
+      id: 'fib-hash',
+      name: 'Folded lattice, one mix per corner',
+      kind: 'conventional',
+      evidence: 'none',
+      status: 'candidate',
+      archivedAt: 'src/alt/value-fast.ts',
+      rationale:
+        'The same folklore algorithm with the corner hash swapped: the lattice fold and single-mix hashes of the worley candidate (fib1 in 2D, lowbias32 in 3D) replace the two / three chained avalanches of hash2/hash3, and the corner value reads the top 16 / 24 bits — quantized to 2^-16 / 2^-24 of the unit range against the shipping 2^-32, both far below display resolution. Field mean/rms/extrema match shipping to three decimals. Measured with `bun run bench:impl`: ~1.35x the shipping value2 in the full suite and ~1.65x isolated (the harness caveat in bench.ts), ~1.4x value3. GPU is a tie (0.96-1.03 ratios on WebGL+WebGPU); browser JS reads up to ~1.3x in 2D and ~3.7x in 3D. Not promoted: no tileable paths yet, and the field is a different draw.',
+      variantIds: [],
     },
   ],
   white: [
@@ -975,6 +990,7 @@ const SIMPLEX_FAST_CHUNKS = { glsl: SIMPLEX_FAST_GLSL, wgsl: SIMPLEX_FAST_WGSL, 
 const WORLEY_FAST_CHUNKS = { glsl: WORLEY_FAST_GLSL, wgsl: WORLEY_FAST_WGSL, tsl: WORLEY_FAST_TSL }
 const CELLULAR_FAST_CHUNKS = { glsl: CELLULAR_FAST_GLSL, wgsl: CELLULAR_FAST_WGSL, tsl: CELLULAR_FAST_TSL }
 const VORTEX_FAST_CHUNKS = { glsl: VORTEX_FAST_GLSL, wgsl: VORTEX_FAST_WGSL, tsl: VORTEX_FAST_TSL }
+const VALUE_FAST_CHUNKS = { glsl: VALUE_FAST_GLSL, wgsl: VALUE_FAST_WGSL, tsl: VALUE_FAST_TSL }
 const WORLEY_METRICS_FAST_CHUNKS = {
   glsl: WORLEY_METRICS_FAST_GLSL,
   wgsl: WORLEY_METRICS_FAST_WGSL,
@@ -1200,6 +1216,17 @@ export const ALT_VARIANTS: AltVariant[] = [
     (x, y, z) => CHEBYSHEV3_NORM * chebyshevFast3(x, y, z),
     fastShaders(3, WORLEY_METRICS_FAST_CHUNKS, 'chebyshevFast3(p)', CHEBYSHEV3_NORM, 'unsigned'),
   ),
+  // Value measured as a GPU tie in both dimensions (0.96-1.03 ratios), so
+  // it keeps the shipping figures.
+  altVariant(
+    'value',
+    'fib-hash',
+    2,
+    0.39,
+    (x, y) => valueFast2(x, y),
+    fastShaders(2, VALUE_FAST_CHUNKS, 'valueFast2(p)', null),
+  ),
+  altVariant('value', 'fib-hash', 3, 0.5, valueFast3, fastShaders(3, VALUE_FAST_CHUNKS, 'valueFast3(p)', null)),
 ]
 
 export const altVariantsFor = (noiseId: string, implementationId: string): AltVariant[] =>
