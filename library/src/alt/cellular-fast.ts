@@ -431,3 +431,711 @@ export const mosaicFast3 = (x: number, y: number, z: number): number => {
   }
   return cellValue(sb)
 }
+
+// CRACKLE. F2 - F1 over the same substrate. Pruning tests against F2: a
+// skipped column can contain neither the nearest nor the second-nearest
+// point, so the pair — and the difference — is exactly the unpruned one.
+
+export const crackleFast2 = (x: number, y: number): number => {
+  const ix = Math.floor(x)
+  const iy = Math.floor(y)
+  const fx = x - ix
+  const fy = y - iy
+  const xc = Math.imul(ix, LATTICE_HX)
+  const yc = Math.imul(iy, LATTICE_HY)
+  const ym = (yc - LATTICE_HY) | 0
+  const yp = (yc + LATTICE_HY) | 0
+  const bxc = -fx
+  const bym = -1 - fy
+  const byc = -fy
+  const byp = 1 - fy
+  let f1 = 1e9
+  let f2 = 1e9
+  {
+    const s = (xc + yc) | 0
+    let h = Math.imul(s ^ (s >>> 16), FIB)
+    h ^= h >>> 16
+    const vx = bxc + (h >>> 16) * INV16
+    const vy = byc + (h & 0xffff) * INV16
+    const d = vx * vx + vy * vy
+    if (d < f1) {
+      f2 = f1
+      f1 = d
+    } else if (d < f2) {
+      f2 = d
+    }
+  }
+  {
+    const s = (xc + ym) | 0
+    let h = Math.imul(s ^ (s >>> 16), FIB)
+    h ^= h >>> 16
+    const vx = bxc + (h >>> 16) * INV16
+    const vy = bym + (h & 0xffff) * INV16
+    const d = vx * vx + vy * vy
+    if (d < f1) {
+      f2 = f1
+      f1 = d
+    } else if (d < f2) {
+      f2 = d
+    }
+  }
+  {
+    const s = (xc + yp) | 0
+    let h = Math.imul(s ^ (s >>> 16), FIB)
+    h ^= h >>> 16
+    const vx = bxc + (h >>> 16) * INV16
+    const vy = byp + (h & 0xffff) * INV16
+    const d = vx * vx + vy * vy
+    if (d < f1) {
+      f2 = f1
+      f1 = d
+    } else if (d < f2) {
+      f2 = d
+    }
+  }
+  if (fx * fx < f2) {
+    const xm = (xc - LATTICE_HX) | 0
+    const bxm = -1 - fx
+    {
+      const s = (xm + yc) | 0
+      let h = Math.imul(s ^ (s >>> 16), FIB)
+      h ^= h >>> 16
+      const vx = bxm + (h >>> 16) * INV16
+      const vy = byc + (h & 0xffff) * INV16
+      const d = vx * vx + vy * vy
+      if (d < f1) {
+        f2 = f1
+        f1 = d
+      } else if (d < f2) {
+        f2 = d
+      }
+    }
+    {
+      const s = (xm + ym) | 0
+      let h = Math.imul(s ^ (s >>> 16), FIB)
+      h ^= h >>> 16
+      const vx = bxm + (h >>> 16) * INV16
+      const vy = bym + (h & 0xffff) * INV16
+      const d = vx * vx + vy * vy
+      if (d < f1) {
+        f2 = f1
+        f1 = d
+      } else if (d < f2) {
+        f2 = d
+      }
+    }
+    {
+      const s = (xm + yp) | 0
+      let h = Math.imul(s ^ (s >>> 16), FIB)
+      h ^= h >>> 16
+      const vx = bxm + (h >>> 16) * INV16
+      const vy = byp + (h & 0xffff) * INV16
+      const d = vx * vx + vy * vy
+      if (d < f1) {
+        f2 = f1
+        f1 = d
+      } else if (d < f2) {
+        f2 = d
+      }
+    }
+  }
+  const gx = 1 - fx
+  if (gx * gx < f2) {
+    const xp = (xc + LATTICE_HX) | 0
+    const bxp = 1 - fx
+    {
+      const s = (xp + yc) | 0
+      let h = Math.imul(s ^ (s >>> 16), FIB)
+      h ^= h >>> 16
+      const vx = bxp + (h >>> 16) * INV16
+      const vy = byc + (h & 0xffff) * INV16
+      const d = vx * vx + vy * vy
+      if (d < f1) {
+        f2 = f1
+        f1 = d
+      } else if (d < f2) {
+        f2 = d
+      }
+    }
+    {
+      const s = (xp + ym) | 0
+      let h = Math.imul(s ^ (s >>> 16), FIB)
+      h ^= h >>> 16
+      const vx = bxp + (h >>> 16) * INV16
+      const vy = bym + (h & 0xffff) * INV16
+      const d = vx * vx + vy * vy
+      if (d < f1) {
+        f2 = f1
+        f1 = d
+      } else if (d < f2) {
+        f2 = d
+      }
+    }
+    {
+      const s = (xp + yp) | 0
+      let h = Math.imul(s ^ (s >>> 16), FIB)
+      h ^= h >>> 16
+      const vx = bxp + (h >>> 16) * INV16
+      const vy = byp + (h & 0xffff) * INV16
+      const d = vx * vx + vy * vy
+      if (d < f1) {
+        f2 = f1
+        f1 = d
+      } else if (d < f2) {
+        f2 = d
+      }
+    }
+  }
+  return Math.sqrt(f2) - Math.sqrt(f1)
+}
+
+export const crackleFast3 = (x: number, y: number, z: number): number => {
+  const ix = Math.floor(x)
+  const iy = Math.floor(y)
+  const iz = Math.floor(z)
+  const fx = x - ix
+  const fy = y - iy
+  const fz = z - iz
+  const xc = Math.imul(ix, LATTICE_HX)
+  const yc = Math.imul(iy, LATTICE_HY)
+  const zc = Math.imul(iz, LATTICE_HZ)
+  const xm = (xc - LATTICE_HX) | 0
+  const xp = (xc + LATTICE_HX) | 0
+  const ym = (yc - LATTICE_HY) | 0
+  const yp = (yc + LATTICE_HY) | 0
+  const bxm = -1 - fx
+  const bxc = -fx
+  const bxp = 1 - fx
+  const bym = -1 - fy
+  const byc = -fy
+  const byp = 1 - fy
+  const fx2 = fx * fx
+  const gx = 1 - fx
+  const gx2 = gx * gx
+  let ymz = 0
+  let ycz = 0
+  let ypz = 0
+  let bz = 0
+  let f1 = 1e9
+  let f2 = 1e9
+  ymz = (ym + zc) | 0
+  ycz = (yc + zc) | 0
+  ypz = (yp + zc) | 0
+  bz = -fz
+  {
+    const s = (xc + ycz) | 0
+    let h = s ^ (s >>> 16)
+    h = Math.imul(h, 0x7feb352d)
+    h ^= h >>> 15
+    h = Math.imul(h, 0x846ca68b)
+    h ^= h >>> 16
+    const vx = bxc + (h >>> 22) * INV10
+    const vy = byc + ((h >>> 12) & 1023) * INV10
+    const vz = bz + ((h >>> 2) & 1023) * INV10
+    const d = vx * vx + vy * vy + vz * vz
+    if (d < f1) {
+      f2 = f1
+      f1 = d
+    } else if (d < f2) {
+      f2 = d
+    }
+  }
+  {
+    const s = (xc + ymz) | 0
+    let h = s ^ (s >>> 16)
+    h = Math.imul(h, 0x7feb352d)
+    h ^= h >>> 15
+    h = Math.imul(h, 0x846ca68b)
+    h ^= h >>> 16
+    const vx = bxc + (h >>> 22) * INV10
+    const vy = bym + ((h >>> 12) & 1023) * INV10
+    const vz = bz + ((h >>> 2) & 1023) * INV10
+    const d = vx * vx + vy * vy + vz * vz
+    if (d < f1) {
+      f2 = f1
+      f1 = d
+    } else if (d < f2) {
+      f2 = d
+    }
+  }
+  {
+    const s = (xc + ypz) | 0
+    let h = s ^ (s >>> 16)
+    h = Math.imul(h, 0x7feb352d)
+    h ^= h >>> 15
+    h = Math.imul(h, 0x846ca68b)
+    h ^= h >>> 16
+    const vx = bxc + (h >>> 22) * INV10
+    const vy = byp + ((h >>> 12) & 1023) * INV10
+    const vz = bz + ((h >>> 2) & 1023) * INV10
+    const d = vx * vx + vy * vy + vz * vz
+    if (d < f1) {
+      f2 = f1
+      f1 = d
+    } else if (d < f2) {
+      f2 = d
+    }
+  }
+  if (fx2 < f2) {
+    {
+      const s = (xm + ycz) | 0
+      let h = s ^ (s >>> 16)
+      h = Math.imul(h, 0x7feb352d)
+      h ^= h >>> 15
+      h = Math.imul(h, 0x846ca68b)
+      h ^= h >>> 16
+      const vx = bxm + (h >>> 22) * INV10
+      const vy = byc + ((h >>> 12) & 1023) * INV10
+      const vz = bz + ((h >>> 2) & 1023) * INV10
+      const d = vx * vx + vy * vy + vz * vz
+      if (d < f1) {
+        f2 = f1
+        f1 = d
+      } else if (d < f2) {
+        f2 = d
+      }
+    }
+    {
+      const s = (xm + ymz) | 0
+      let h = s ^ (s >>> 16)
+      h = Math.imul(h, 0x7feb352d)
+      h ^= h >>> 15
+      h = Math.imul(h, 0x846ca68b)
+      h ^= h >>> 16
+      const vx = bxm + (h >>> 22) * INV10
+      const vy = bym + ((h >>> 12) & 1023) * INV10
+      const vz = bz + ((h >>> 2) & 1023) * INV10
+      const d = vx * vx + vy * vy + vz * vz
+      if (d < f1) {
+        f2 = f1
+        f1 = d
+      } else if (d < f2) {
+        f2 = d
+      }
+    }
+    {
+      const s = (xm + ypz) | 0
+      let h = s ^ (s >>> 16)
+      h = Math.imul(h, 0x7feb352d)
+      h ^= h >>> 15
+      h = Math.imul(h, 0x846ca68b)
+      h ^= h >>> 16
+      const vx = bxm + (h >>> 22) * INV10
+      const vy = byp + ((h >>> 12) & 1023) * INV10
+      const vz = bz + ((h >>> 2) & 1023) * INV10
+      const d = vx * vx + vy * vy + vz * vz
+      if (d < f1) {
+        f2 = f1
+        f1 = d
+      } else if (d < f2) {
+        f2 = d
+      }
+    }
+  }
+  if (gx2 < f2) {
+    {
+      const s = (xp + ycz) | 0
+      let h = s ^ (s >>> 16)
+      h = Math.imul(h, 0x7feb352d)
+      h ^= h >>> 15
+      h = Math.imul(h, 0x846ca68b)
+      h ^= h >>> 16
+      const vx = bxp + (h >>> 22) * INV10
+      const vy = byc + ((h >>> 12) & 1023) * INV10
+      const vz = bz + ((h >>> 2) & 1023) * INV10
+      const d = vx * vx + vy * vy + vz * vz
+      if (d < f1) {
+        f2 = f1
+        f1 = d
+      } else if (d < f2) {
+        f2 = d
+      }
+    }
+    {
+      const s = (xp + ymz) | 0
+      let h = s ^ (s >>> 16)
+      h = Math.imul(h, 0x7feb352d)
+      h ^= h >>> 15
+      h = Math.imul(h, 0x846ca68b)
+      h ^= h >>> 16
+      const vx = bxp + (h >>> 22) * INV10
+      const vy = bym + ((h >>> 12) & 1023) * INV10
+      const vz = bz + ((h >>> 2) & 1023) * INV10
+      const d = vx * vx + vy * vy + vz * vz
+      if (d < f1) {
+        f2 = f1
+        f1 = d
+      } else if (d < f2) {
+        f2 = d
+      }
+    }
+    {
+      const s = (xp + ypz) | 0
+      let h = s ^ (s >>> 16)
+      h = Math.imul(h, 0x7feb352d)
+      h ^= h >>> 15
+      h = Math.imul(h, 0x846ca68b)
+      h ^= h >>> 16
+      const vx = bxp + (h >>> 22) * INV10
+      const vy = byp + ((h >>> 12) & 1023) * INV10
+      const vz = bz + ((h >>> 2) & 1023) * INV10
+      const d = vx * vx + vy * vy + vz * vz
+      if (d < f1) {
+        f2 = f1
+        f1 = d
+      } else if (d < f2) {
+        f2 = d
+      }
+    }
+  }
+  const zzm = fz * fz
+  if (zzm < f2) {
+    const zm = (zc - LATTICE_HZ) | 0
+    ymz = (ym + zm) | 0
+    ycz = (yc + zm) | 0
+    ypz = (yp + zm) | 0
+    bz = -1 - fz
+    {
+      const s = (xc + ycz) | 0
+      let h = s ^ (s >>> 16)
+      h = Math.imul(h, 0x7feb352d)
+      h ^= h >>> 15
+      h = Math.imul(h, 0x846ca68b)
+      h ^= h >>> 16
+      const vx = bxc + (h >>> 22) * INV10
+      const vy = byc + ((h >>> 12) & 1023) * INV10
+      const vz = bz + ((h >>> 2) & 1023) * INV10
+      const d = vx * vx + vy * vy + vz * vz
+      if (d < f1) {
+        f2 = f1
+        f1 = d
+      } else if (d < f2) {
+        f2 = d
+      }
+    }
+    {
+      const s = (xc + ymz) | 0
+      let h = s ^ (s >>> 16)
+      h = Math.imul(h, 0x7feb352d)
+      h ^= h >>> 15
+      h = Math.imul(h, 0x846ca68b)
+      h ^= h >>> 16
+      const vx = bxc + (h >>> 22) * INV10
+      const vy = bym + ((h >>> 12) & 1023) * INV10
+      const vz = bz + ((h >>> 2) & 1023) * INV10
+      const d = vx * vx + vy * vy + vz * vz
+      if (d < f1) {
+        f2 = f1
+        f1 = d
+      } else if (d < f2) {
+        f2 = d
+      }
+    }
+    {
+      const s = (xc + ypz) | 0
+      let h = s ^ (s >>> 16)
+      h = Math.imul(h, 0x7feb352d)
+      h ^= h >>> 15
+      h = Math.imul(h, 0x846ca68b)
+      h ^= h >>> 16
+      const vx = bxc + (h >>> 22) * INV10
+      const vy = byp + ((h >>> 12) & 1023) * INV10
+      const vz = bz + ((h >>> 2) & 1023) * INV10
+      const d = vx * vx + vy * vy + vz * vz
+      if (d < f1) {
+        f2 = f1
+        f1 = d
+      } else if (d < f2) {
+        f2 = d
+      }
+    }
+    if (fx2 + zzm < f2) {
+      {
+        const s = (xm + ycz) | 0
+        let h = s ^ (s >>> 16)
+        h = Math.imul(h, 0x7feb352d)
+        h ^= h >>> 15
+        h = Math.imul(h, 0x846ca68b)
+        h ^= h >>> 16
+        const vx = bxm + (h >>> 22) * INV10
+        const vy = byc + ((h >>> 12) & 1023) * INV10
+        const vz = bz + ((h >>> 2) & 1023) * INV10
+        const d = vx * vx + vy * vy + vz * vz
+        if (d < f1) {
+          f2 = f1
+          f1 = d
+        } else if (d < f2) {
+          f2 = d
+        }
+      }
+      {
+        const s = (xm + ymz) | 0
+        let h = s ^ (s >>> 16)
+        h = Math.imul(h, 0x7feb352d)
+        h ^= h >>> 15
+        h = Math.imul(h, 0x846ca68b)
+        h ^= h >>> 16
+        const vx = bxm + (h >>> 22) * INV10
+        const vy = bym + ((h >>> 12) & 1023) * INV10
+        const vz = bz + ((h >>> 2) & 1023) * INV10
+        const d = vx * vx + vy * vy + vz * vz
+        if (d < f1) {
+          f2 = f1
+          f1 = d
+        } else if (d < f2) {
+          f2 = d
+        }
+      }
+      {
+        const s = (xm + ypz) | 0
+        let h = s ^ (s >>> 16)
+        h = Math.imul(h, 0x7feb352d)
+        h ^= h >>> 15
+        h = Math.imul(h, 0x846ca68b)
+        h ^= h >>> 16
+        const vx = bxm + (h >>> 22) * INV10
+        const vy = byp + ((h >>> 12) & 1023) * INV10
+        const vz = bz + ((h >>> 2) & 1023) * INV10
+        const d = vx * vx + vy * vy + vz * vz
+        if (d < f1) {
+          f2 = f1
+          f1 = d
+        } else if (d < f2) {
+          f2 = d
+        }
+      }
+    }
+    if (gx2 + zzm < f2) {
+      {
+        const s = (xp + ycz) | 0
+        let h = s ^ (s >>> 16)
+        h = Math.imul(h, 0x7feb352d)
+        h ^= h >>> 15
+        h = Math.imul(h, 0x846ca68b)
+        h ^= h >>> 16
+        const vx = bxp + (h >>> 22) * INV10
+        const vy = byc + ((h >>> 12) & 1023) * INV10
+        const vz = bz + ((h >>> 2) & 1023) * INV10
+        const d = vx * vx + vy * vy + vz * vz
+        if (d < f1) {
+          f2 = f1
+          f1 = d
+        } else if (d < f2) {
+          f2 = d
+        }
+      }
+      {
+        const s = (xp + ymz) | 0
+        let h = s ^ (s >>> 16)
+        h = Math.imul(h, 0x7feb352d)
+        h ^= h >>> 15
+        h = Math.imul(h, 0x846ca68b)
+        h ^= h >>> 16
+        const vx = bxp + (h >>> 22) * INV10
+        const vy = bym + ((h >>> 12) & 1023) * INV10
+        const vz = bz + ((h >>> 2) & 1023) * INV10
+        const d = vx * vx + vy * vy + vz * vz
+        if (d < f1) {
+          f2 = f1
+          f1 = d
+        } else if (d < f2) {
+          f2 = d
+        }
+      }
+      {
+        const s = (xp + ypz) | 0
+        let h = s ^ (s >>> 16)
+        h = Math.imul(h, 0x7feb352d)
+        h ^= h >>> 15
+        h = Math.imul(h, 0x846ca68b)
+        h ^= h >>> 16
+        const vx = bxp + (h >>> 22) * INV10
+        const vy = byp + ((h >>> 12) & 1023) * INV10
+        const vz = bz + ((h >>> 2) & 1023) * INV10
+        const d = vx * vx + vy * vy + vz * vz
+        if (d < f1) {
+          f2 = f1
+          f1 = d
+        } else if (d < f2) {
+          f2 = d
+        }
+      }
+    }
+  }
+  const gz = 1 - fz
+  const zzp = gz * gz
+  if (zzp < f2) {
+    const zp = (zc + LATTICE_HZ) | 0
+    ymz = (ym + zp) | 0
+    ycz = (yc + zp) | 0
+    ypz = (yp + zp) | 0
+    bz = 1 - fz
+    {
+      const s = (xc + ycz) | 0
+      let h = s ^ (s >>> 16)
+      h = Math.imul(h, 0x7feb352d)
+      h ^= h >>> 15
+      h = Math.imul(h, 0x846ca68b)
+      h ^= h >>> 16
+      const vx = bxc + (h >>> 22) * INV10
+      const vy = byc + ((h >>> 12) & 1023) * INV10
+      const vz = bz + ((h >>> 2) & 1023) * INV10
+      const d = vx * vx + vy * vy + vz * vz
+      if (d < f1) {
+        f2 = f1
+        f1 = d
+      } else if (d < f2) {
+        f2 = d
+      }
+    }
+    {
+      const s = (xc + ymz) | 0
+      let h = s ^ (s >>> 16)
+      h = Math.imul(h, 0x7feb352d)
+      h ^= h >>> 15
+      h = Math.imul(h, 0x846ca68b)
+      h ^= h >>> 16
+      const vx = bxc + (h >>> 22) * INV10
+      const vy = bym + ((h >>> 12) & 1023) * INV10
+      const vz = bz + ((h >>> 2) & 1023) * INV10
+      const d = vx * vx + vy * vy + vz * vz
+      if (d < f1) {
+        f2 = f1
+        f1 = d
+      } else if (d < f2) {
+        f2 = d
+      }
+    }
+    {
+      const s = (xc + ypz) | 0
+      let h = s ^ (s >>> 16)
+      h = Math.imul(h, 0x7feb352d)
+      h ^= h >>> 15
+      h = Math.imul(h, 0x846ca68b)
+      h ^= h >>> 16
+      const vx = bxc + (h >>> 22) * INV10
+      const vy = byp + ((h >>> 12) & 1023) * INV10
+      const vz = bz + ((h >>> 2) & 1023) * INV10
+      const d = vx * vx + vy * vy + vz * vz
+      if (d < f1) {
+        f2 = f1
+        f1 = d
+      } else if (d < f2) {
+        f2 = d
+      }
+    }
+    if (fx2 + zzp < f2) {
+      {
+        const s = (xm + ycz) | 0
+        let h = s ^ (s >>> 16)
+        h = Math.imul(h, 0x7feb352d)
+        h ^= h >>> 15
+        h = Math.imul(h, 0x846ca68b)
+        h ^= h >>> 16
+        const vx = bxm + (h >>> 22) * INV10
+        const vy = byc + ((h >>> 12) & 1023) * INV10
+        const vz = bz + ((h >>> 2) & 1023) * INV10
+        const d = vx * vx + vy * vy + vz * vz
+        if (d < f1) {
+          f2 = f1
+          f1 = d
+        } else if (d < f2) {
+          f2 = d
+        }
+      }
+      {
+        const s = (xm + ymz) | 0
+        let h = s ^ (s >>> 16)
+        h = Math.imul(h, 0x7feb352d)
+        h ^= h >>> 15
+        h = Math.imul(h, 0x846ca68b)
+        h ^= h >>> 16
+        const vx = bxm + (h >>> 22) * INV10
+        const vy = bym + ((h >>> 12) & 1023) * INV10
+        const vz = bz + ((h >>> 2) & 1023) * INV10
+        const d = vx * vx + vy * vy + vz * vz
+        if (d < f1) {
+          f2 = f1
+          f1 = d
+        } else if (d < f2) {
+          f2 = d
+        }
+      }
+      {
+        const s = (xm + ypz) | 0
+        let h = s ^ (s >>> 16)
+        h = Math.imul(h, 0x7feb352d)
+        h ^= h >>> 15
+        h = Math.imul(h, 0x846ca68b)
+        h ^= h >>> 16
+        const vx = bxm + (h >>> 22) * INV10
+        const vy = byp + ((h >>> 12) & 1023) * INV10
+        const vz = bz + ((h >>> 2) & 1023) * INV10
+        const d = vx * vx + vy * vy + vz * vz
+        if (d < f1) {
+          f2 = f1
+          f1 = d
+        } else if (d < f2) {
+          f2 = d
+        }
+      }
+    }
+    if (gx2 + zzp < f2) {
+      {
+        const s = (xp + ycz) | 0
+        let h = s ^ (s >>> 16)
+        h = Math.imul(h, 0x7feb352d)
+        h ^= h >>> 15
+        h = Math.imul(h, 0x846ca68b)
+        h ^= h >>> 16
+        const vx = bxp + (h >>> 22) * INV10
+        const vy = byc + ((h >>> 12) & 1023) * INV10
+        const vz = bz + ((h >>> 2) & 1023) * INV10
+        const d = vx * vx + vy * vy + vz * vz
+        if (d < f1) {
+          f2 = f1
+          f1 = d
+        } else if (d < f2) {
+          f2 = d
+        }
+      }
+      {
+        const s = (xp + ymz) | 0
+        let h = s ^ (s >>> 16)
+        h = Math.imul(h, 0x7feb352d)
+        h ^= h >>> 15
+        h = Math.imul(h, 0x846ca68b)
+        h ^= h >>> 16
+        const vx = bxp + (h >>> 22) * INV10
+        const vy = bym + ((h >>> 12) & 1023) * INV10
+        const vz = bz + ((h >>> 2) & 1023) * INV10
+        const d = vx * vx + vy * vy + vz * vz
+        if (d < f1) {
+          f2 = f1
+          f1 = d
+        } else if (d < f2) {
+          f2 = d
+        }
+      }
+      {
+        const s = (xp + ypz) | 0
+        let h = s ^ (s >>> 16)
+        h = Math.imul(h, 0x7feb352d)
+        h ^= h >>> 15
+        h = Math.imul(h, 0x846ca68b)
+        h ^= h >>> 16
+        const vx = bxp + (h >>> 22) * INV10
+        const vy = byp + ((h >>> 12) & 1023) * INV10
+        const vz = bz + ((h >>> 2) & 1023) * INV10
+        const d = vx * vx + vy * vy + vz * vz
+        if (d < f1) {
+          f2 = f1
+          f1 = d
+        } else if (d < f2) {
+          f2 = d
+        }
+      }
+    }
+  }
+  return Math.sqrt(f2) - Math.sqrt(f1)
+}

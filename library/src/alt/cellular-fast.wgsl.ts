@@ -96,4 +96,92 @@ fn mosaicFast3(p: vec3f) -> f32 {
   }
   return to01(lowbias32(sb));
 }
+fn crkFastCell2(s: u32, b: vec2f, ff: vec2f) -> vec2f {
+  var h = fibMix(s);
+  h ^= h >> 16u;
+  let v = b + vec2f(f32(h >> 16u), f32(h & 0xffffu)) * (1.0 / 65536.0);
+  let d = dot(v, v);
+  if (d < ff.x) { return vec2f(d, ff.x); }
+  if (d < ff.y) { return vec2f(ff.x, d); }
+  return ff;
+}
+
+fn crkFastCell3(s: u32, b: vec3f, ff: vec2f) -> vec2f {
+  let h = lowbias32(s);
+  let v = b + vec3f(f32(h >> 22u), f32((h >> 12u) & 1023u), f32((h >> 2u) & 1023u)) * (1.0 / 1024.0);
+  let d = dot(v, v);
+  if (d < ff.x) { return vec2f(d, ff.x); }
+  if (d < ff.y) { return vec2f(ff.x, d); }
+  return ff;
+}
+
+fn crackleFast2(p: vec2f) -> f32 {
+  let i = floor(p);
+  let f = p - i;
+  let xc = bitcast<u32>(i32(i.x)) * LATTICE_HX;
+  let yc = bitcast<u32>(i32(i.y)) * LATTICE_HY;
+  let ym = yc - LATTICE_HY;
+  let yp = yc + LATTICE_HY;
+  var ff = crkFastCell2(xc + yc, vec2f(-f.x, -f.y), vec2f(1e9, 1e9));
+  ff = crkFastCell2(xc + ym, vec2f(-f.x, -1.0 - f.y), ff);
+  ff = crkFastCell2(xc + yp, vec2f(-f.x, 1.0 - f.y), ff);
+  if (f.x * f.x < ff.y) {
+    let xm = xc - LATTICE_HX;
+    ff = crkFastCell2(xm + yc, vec2f(-1.0 - f.x, -f.y), ff);
+    ff = crkFastCell2(xm + ym, vec2f(-1.0 - f.x, -1.0 - f.y), ff);
+    ff = crkFastCell2(xm + yp, vec2f(-1.0 - f.x, 1.0 - f.y), ff);
+  }
+  let gx = 1.0 - f.x;
+  if (gx * gx < ff.y) {
+    let xp = xc + LATTICE_HX;
+    ff = crkFastCell2(xp + yc, vec2f(1.0 - f.x, -f.y), ff);
+    ff = crkFastCell2(xp + ym, vec2f(1.0 - f.x, -1.0 - f.y), ff);
+    ff = crkFastCell2(xp + yp, vec2f(1.0 - f.x, 1.0 - f.y), ff);
+  }
+  return sqrt(ff.y) - sqrt(ff.x);
+}
+
+fn crkFastPlane3(xc: u32, ymz: u32, ycz: u32, ypz: u32, fxy: vec2f, bz: f32, zz: f32, ffin: vec2f) -> vec2f {
+  var ff = ffin;
+  ff = crkFastCell3(xc + ycz, vec3f(-fxy.x, -fxy.y, bz), ff);
+  ff = crkFastCell3(xc + ymz, vec3f(-fxy.x, -1.0 - fxy.y, bz), ff);
+  ff = crkFastCell3(xc + ypz, vec3f(-fxy.x, 1.0 - fxy.y, bz), ff);
+  if (fxy.x * fxy.x + zz < ff.y) {
+    let xm = xc - LATTICE_HX;
+    ff = crkFastCell3(xm + ycz, vec3f(-1.0 - fxy.x, -fxy.y, bz), ff);
+    ff = crkFastCell3(xm + ymz, vec3f(-1.0 - fxy.x, -1.0 - fxy.y, bz), ff);
+    ff = crkFastCell3(xm + ypz, vec3f(-1.0 - fxy.x, 1.0 - fxy.y, bz), ff);
+  }
+  let gx = 1.0 - fxy.x;
+  if (gx * gx + zz < ff.y) {
+    let xp = xc + LATTICE_HX;
+    ff = crkFastCell3(xp + ycz, vec3f(1.0 - fxy.x, -fxy.y, bz), ff);
+    ff = crkFastCell3(xp + ymz, vec3f(1.0 - fxy.x, -1.0 - fxy.y, bz), ff);
+    ff = crkFastCell3(xp + ypz, vec3f(1.0 - fxy.x, 1.0 - fxy.y, bz), ff);
+  }
+  return ff;
+}
+
+fn crackleFast3(p: vec3f) -> f32 {
+  let i = floor(p);
+  let f = p - i;
+  let xc = bitcast<u32>(i32(i.x)) * LATTICE_HX;
+  let yc = bitcast<u32>(i32(i.y)) * LATTICE_HY;
+  let zc = bitcast<u32>(i32(i.z)) * LATTICE_HZ;
+  let ym = yc - LATTICE_HY;
+  let yp = yc + LATTICE_HY;
+  var ff = crkFastPlane3(xc, ym + zc, yc + zc, yp + zc, f.xy, -f.z, 0.0, vec2f(1e9, 1e9));
+  let zzm = f.z * f.z;
+  if (zzm < ff.y) {
+    let zm = zc - LATTICE_HZ;
+    ff = crkFastPlane3(xc, ym + zm, yc + zm, yp + zm, f.xy, -1.0 - f.z, zzm, ff);
+  }
+  let gz = 1.0 - f.z;
+  let zzp = gz * gz;
+  if (zzp < ff.y) {
+    let zp = zc + LATTICE_HZ;
+    ff = crkFastPlane3(xc, ym + zp, yc + zp, yp + zp, f.xy, 1.0 - f.z, zzp, ff);
+  }
+  return sqrt(ff.y) - sqrt(ff.x);
+}
 `

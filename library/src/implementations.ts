@@ -66,7 +66,7 @@
 // GPUs. The table gradients live alongside it in common.ts as `gradTable2` /
 // `gradTable3`, so switching a noise over is a small change.
 
-import { mosaicFast2, mosaicFast3 } from './alt/cellular-fast'
+import { crackleFast2, crackleFast3, mosaicFast2, mosaicFast3 } from './alt/cellular-fast'
 import { CELLULAR_FAST_GLSL } from './alt/cellular-fast.glsl'
 import { CELLULAR_FAST_TSL } from './alt/cellular-fast.tsl'
 import { CELLULAR_FAST_WGSL } from './alt/cellular-fast.wgsl'
@@ -95,6 +95,7 @@ import { WORLEY_METRICS_FAST_TSL } from './alt/worley-metrics-fast.tsl'
 import { WORLEY_METRICS_FAST_WGSL } from './alt/worley-metrics-fast.wgsl'
 import {
   CHEBYSHEV2_NORM,
+  CRACKLE_NORM,
   CHEBYSHEV3_NORM,
   clamp01,
   fmt,
@@ -680,6 +681,25 @@ export const IMPLEMENTATIONS: Record<string, NoiseImplementation[]> = {
       deviations: [ONE_POINT_PER_CELL],
       variantIds: ['crackle-2d', 'crackle-3d'],
     },
+    {
+      id: 'split-bits-pruned',
+      name: 'Split-bit offsets, F2-pruned search',
+      kind: 'canonical',
+      evidence: 'paper-only',
+      status: 'candidate',
+      archivedAt: 'src/alt/cellular-fast.ts',
+      reference: {
+        paper: "Steven Worley, 'A Cellular Texture Basis Function' (SIGGRAPH 1996)",
+      },
+      follows: 'Steven Worley (1996), which proposes F2 - F1 as a combination of the basis functions',
+      deviations: [
+        ONE_POINT_PER_CELL,
+        'The worley split-bits-pruned substrate tracking F1 AND F2, pruning against F2: a skipped column can contain neither the nearest nor the second-nearest point, so the pair — and the difference — is exactly the unpruned one (zero mismatches over 400k probes).',
+      ],
+      rationale:
+        'Measured with `bun run bench:impl`: ~1.3-1.45x the shipping crackle2 and 2.1x crackle3 on the CPU, and a GPU win in 3D too — 1.65x (WebGL+WebGPU medians; 2D ~1.03x). Field mean/rms match shipping. Not promoted: no tileable paths yet.',
+      variantIds: [],
+    },
   ],
   truchet: [
     {
@@ -977,6 +997,24 @@ export const ALT_VARIANTS: AltVariant[] = [
   // Metric-candidate costs: shipping VARIANT_COST x measured GPU throughput
   // ratio (WebGL+WebGPU medians). Manhattan: 0.94 (2D) / 0.65 (3D).
   // Chebyshev: 0.92 (2D) / 0.52 (3D).
+  // Crackle costs: shipping VARIANT_COST x measured GPU ratio, 0.97 (2D)
+  // and 0.61 (3D) — WebGL+WebGPU medians.
+  altVariant(
+    'crackle',
+    'split-bits-pruned',
+    2,
+    0.58,
+    (x, y) => CRACKLE_NORM * crackleFast2(x, y),
+    fastShaders(2, CELLULAR_FAST_CHUNKS, 'crackleFast2(p)', CRACKLE_NORM, 'unsigned'),
+  ),
+  altVariant(
+    'crackle',
+    'split-bits-pruned',
+    3,
+    1.45,
+    (x, y, z) => CRACKLE_NORM * crackleFast3(x, y, z),
+    fastShaders(3, CELLULAR_FAST_CHUNKS, 'crackleFast3(p)', CRACKLE_NORM, 'unsigned'),
+  ),
   // Mosaic cost: shipping VARIANT_COST x measured GPU ratio, 0.96 (2D) and
   // 0.53 (3D) — WebGL+WebGPU medians.
   altVariant(
