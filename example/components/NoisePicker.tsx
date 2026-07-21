@@ -8,10 +8,14 @@ import { createEffect, defaultVariant, getNoise, getVariant, NOISES, variantCost
 // reference material for benchmarking, and consumers of the library never ship
 // it. The explorer is exactly the consumer that should.
 import {
+  altVariantsFor,
   EVIDENCE_LABEL,
   IMPLEMENTATION_KIND_BLURB,
   IMPLEMENTATION_KIND_LABEL,
+  IMPLEMENTATION_STATUS_BLURB,
+  IMPLEMENTATION_STATUS_LABEL,
   implementationOf,
+  IMPLEMENTATIONS,
 } from 'noisetoy/implementations'
 
 import type { Backend, BlendMode, FractalStyle, LayerSpec, NoiseDef } from 'noisetoy'
@@ -21,6 +25,13 @@ import type { ImplementationKind } from 'noisetoy/implementations'
 export type PickerDraft = {
   noiseId: string
   variantId: string
+  /**
+   * Non-shipping implementation to render this layer with (an inventory id
+   * whose entry has `status` set), or undefined for the shipping one. The
+   * registry has no variants for these, so a layer carrying one renders on
+   * the CPU (JS) backend and shader exports still emit the shipping code.
+   */
+  implId?: string
   octaves: number
   /** Rotate octaves (classic fBm construction) instead of offsetting them; breaks tiling. */
   rotate: boolean
@@ -109,9 +120,17 @@ const NoisePicker = ({
 
   const noise = getNoise(draft.noiseId) ?? (NOISES[0] as NoiseDef)
   const variant = getVariant(noise, draft.variantId)
-  // Per variant, not per noise: once a noise carries more than one
-  // implementation, the selected variant is what says which one you are looking at.
-  const implementation = implementationOf(variant.id)
+  // Every implementation of the selected noise, shipping first (the inventory
+  // lists them that way). The card shows whichever one is selected; with no
+  // selection it falls back to the implementation owning the variant.
+  const implementations = IMPLEMENTATIONS[noise.id] ?? []
+  const implementation =
+    (draft.implId ? implementations.find(i => i.id === draft.implId) : undefined) ?? implementationOf(variant.id)
+  // A non-shipping implementation previews through its TS stand-in when the
+  // inventory provides one for this dimension.
+  const altPreview = implementation?.status
+    ? (altVariantsFor(noise.id, implementation.id).find(v => v.dim === variant.dim) ?? null)
+    : null
 
   const draftLayer: LayerSpec = {
     noise: draft.noiseId,
@@ -128,31 +147,54 @@ const NoisePicker = ({
   // object identity the parent rebuilds every render.
   const stackKey = stack ? JSON.stringify(stack) : ''
 
-  const previewEffect = useMemo(
-    () =>
-      createEffect({
-        layers:
-          asLayer && stack
-            ? [...stack.below, { ...draftLayer, blend: stack.blend, opacity: stack.opacity }, ...stack.above]
-            : [draftLayer],
-      }),
+  const previewEffect = useMemo(() => {
+    const effect = createEffect({
+      layers:
+        asLayer && stack
+          ? [...stack.below, { ...draftLayer, blend: stack.blend, opacity: stack.opacity }, ...stack.above]
+          : [draftLayer],
+    })
+    // Swap the draft layer's variant for the non-shipping implementation's
+    // stand-in: TS samplers for the CPU backend, shader specs for the GPU
+    // ones. The whole pipeline (octaves, styles, blending) applies to it
+    // unchanged on every backend; only the tileable paths are missing.
+    if (altPreview) {
+      const layer = effect.layers[asLayer && stack ? stack.below.length : 0]
+      if (layer) {
+        layer.variant = {
+          ...layer.variant,
+          sample: altPreview.sample,
+          sampleRaw: altPreview.sampleRaw,
+          glsl: altPreview.glsl,
+          wgsl: altPreview.wgsl,
+          tsl: altPreview.tsl,
+          sampleTileable: null,
+          sampleRawTileable: null,
+          glslTileable: null,
+          wgslTileable: null,
+          tslTileable: null,
+        }
+      }
+    }
+    return effect
     // draftLayer and stack are rebuilt each render, so key on their contents.
     // oxlint-disable-next-line exhaustive-deps
-    [
-      draft.noiseId,
-      draft.variantId,
-      draft.octaves,
-      draft.rotate,
-      draft.style,
-      draft.scaleMul,
-      draft.speed,
-      draft.angle,
-      asLayer,
-      stackKey,
-    ],
-  )
+  }, [
+    draft.noiseId,
+    draft.variantId,
+    draft.octaves,
+    draft.rotate,
+    draft.style,
+    draft.scaleMul,
+    draft.speed,
+    draft.angle,
+    asLayer,
+    stackKey,
+    altPreview,
+  ])
 
-  const selectNoise = (n: NoiseDef) => setDraft(d => ({ ...d, noiseId: n.id, variantId: defaultVariant(n).id }))
+  const selectNoise = (n: NoiseDef) =>
+    setDraft(d => ({ ...d, noiseId: n.id, variantId: defaultVariant(n).id, implId: undefined }))
 
   return (
     <div
@@ -202,6 +244,12 @@ const NoisePicker = ({
                 <div className="aspect-square">
                   <NoiseCanvas effect={previewEffect} backend={backend} />
                 </div>
+                {altPreview && (
+                  <p className="text-[10px] leading-relaxed text-zinc-500">
+                    Non-shipping implementation — the layer keeps it when saved and renders it on every backend. No
+                    tileable paths.
+                  </p>
+                )}
                 {stack !== null && (
                   <div className="flex">
                     <Segmented
@@ -228,6 +276,14 @@ const NoisePicker = ({
                       >
                         {IMPLEMENTATION_KIND_LABEL[implementation.kind]}
                       </span>
+                      {implementation.status && (
+                        <span
+                          title={IMPLEMENTATION_STATUS_BLURB[implementation.status]}
+                          className="rounded-sm bg-zinc-800 px-1.5 py-0.5 text-[10px] font-medium text-zinc-300 ring-1 ring-zinc-700 ring-inset"
+                        >
+                          {IMPLEMENTATION_STATUS_LABEL[implementation.status]}
+                        </span>
+                      )}
                       <span className="text-xs text-zinc-300">{implementation.name}</span>
                     </div>
                     {/* Never show the claim without what backs it: a bare
@@ -266,11 +322,15 @@ const NoisePicker = ({
                     )}
                   </div>
                 )}
+                {/* Non-shipping implementations carry their own measured cost
+                    (AltVariant.cost), so the badge follows the selection. */}
                 <p className="mt-1.5 text-xs text-zinc-500">
                   Cost{' '}
                   <CostBadge
-                    units={variantCost(variant.id, draft.octaves)}
-                    title={`Relative to Perlin 3D at one octave = 1. ${draft.octaves} octave${draft.octaves > 1 ? 's' : ''} of ${variant.label}.`}
+                    units={
+                      altPreview ? altPreview.cost * Math.max(1, draft.octaves) : variantCost(variant.id, draft.octaves)
+                    }
+                    title={`Relative to Perlin 3D at one octave = 1. ${draft.octaves} octave${draft.octaves > 1 ? 's' : ''} of ${variant.label}${altPreview ? ` (${altPreview.implementationId})` : ''}.`}
                   />
                   {draft.octaves > 1 && <span className="text-zinc-600"> ({draft.octaves} octaves)</span>}
                 </p>
@@ -288,6 +348,27 @@ const NoisePicker = ({
                       options={noise.variants.map(v => ({
                         value: v.id,
                         label: v.dim === 3 ? '3D (animated)' : '2D (static)',
+                      }))}
+                    />
+                  </div>
+                )}
+                {implementations.length > 1 && (
+                  <div className="flex items-center justify-between gap-2 text-xs text-zinc-500">
+                    Implementation
+                    <Segmented
+                      value={implementation?.id ?? ''}
+                      onChange={id =>
+                        setDraft(d => ({
+                          ...d,
+                          // Shipping is the absence of an override, so it
+                          // stores as undefined rather than as an id.
+                          implId: implementations.find(i => i.id === id)?.status ? id : undefined,
+                        }))
+                      }
+                      options={implementations.map(i => ({
+                        value: i.id,
+                        label: i.status ? IMPLEMENTATION_STATUS_LABEL[i.status] : 'Shipping',
+                        title: i.name,
                       }))}
                     />
                   </div>

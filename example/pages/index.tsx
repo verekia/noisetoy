@@ -6,10 +6,15 @@ import NoisePicker from '#/components/NoisePicker'
 import Segmented from '#/components/Segmented'
 import Head from 'next/head'
 import Link from 'next/link'
-import { BLEND_MODES, createEffect, defaultVariant, getNoise, getVariant, NOISES, TIER_LABEL } from 'noisetoy'
+import { BLEND_MODES, costTier, createEffect, defaultVariant, getNoise, getVariant, NOISES, TIER_LABEL } from 'noisetoy'
+// Non-shipping implementations (candidates, superseded): the sidebar offers
+// them per layer, and a layer carrying one renders through the inventory's
+// AltVariant (TS samplers + GLSL/WGSL/TSL specs) on every backend.
+import { altVariantsFor, IMPLEMENTATION_STATUS_LABEL, IMPLEMENTATIONS } from 'noisetoy/implementations'
 
 import type { PickerDraft, PickerStack } from '#/components/NoisePicker'
 import type { Backend, BlendMode, FractalStyle, LayerSpec, NoiseDef, NoiseVariant, ViewMode } from 'noisetoy'
+import type { AltVariant } from 'noisetoy/implementations'
 
 const STYLES: FractalStyle[] = ['basic', 'billow', 'ridged']
 
@@ -61,6 +66,14 @@ const resolveNoise = (l: PickerDraft): NoiseDef => getNoise(l.noiseId) ?? firstN
 
 const resolveVariant = (l: PickerDraft): NoiseVariant => getVariant(resolveNoise(l), l.variantId)
 
+/** The AltVariant a layer's non-shipping implementation provides for its dim, if any. */
+const resolveAlt = (l: PickerDraft): AltVariant | null => {
+  if (!l.implId) return null
+  const impl = (IMPLEMENTATIONS[l.noiseId] ?? []).find(i => i.id === l.implId)
+  if (!impl?.status) return null
+  return altVariantsFor(l.noiseId, impl.id).find(v => v.dim === resolveVariant(l).dim) ?? null
+}
+
 export default function Home() {
   const [layers, setLayers] = useState<UILayer[]>([
     {
@@ -105,13 +118,16 @@ export default function Home() {
 
   const selected = layers.find(l => l.id === selectedId) ?? (layers[0] as UILayer)
 
+  /** Layers rendering a non-shipping implementation; they have no tileable paths. */
+  const altCount = layers.filter(l => !l.hidden && resolveAlt(l)).length
+
   const effect = useMemo(() => {
     const visible = layers.filter(l => !l.hidden)
     // A stack with everything hidden still needs a valid spec, so it keeps one
     // layer at zero opacity: the accumulator starts at 0, so that renders black.
     const active = visible.length > 0 ? visible : [{ ...(layers[0] as UILayer), opacity: 0 }]
-    return createEffect({
-      tiled,
+    const built = createEffect({
+      tiled: tiled && altCount === 0,
       steps,
       // The 3D views displace a vertex grid, which cannot resolve the crisp
       // 2D band edges: cliffs falling between grid columns render as sawtooth.
@@ -136,15 +152,53 @@ export default function Home() {
         angle: l.angle,
       })),
     })
-  }, [layers, tiled, view, steps])
+    // Swap each alt layer's variant for the non-shipping implementation's
+    // stand-in: TS samplers for the CPU backend, shader specs for the GPU
+    // ones. Copy buttons compose from these layers too, so shader exports
+    // emit the selected implementation's code.
+    active.forEach((l, idx) => {
+      const alt = resolveAlt(l)
+      const layer = built.layers[idx]
+      if (!alt || !layer) return
+      layer.variant = {
+        ...layer.variant,
+        sample: alt.sample,
+        sampleRaw: alt.sampleRaw,
+        glsl: alt.glsl,
+        wgsl: alt.wgsl,
+        tsl: alt.tsl,
+        sampleTileable: null,
+        sampleRawTileable: null,
+        glslTileable: null,
+        wgslTileable: null,
+        tslTileable: null,
+      }
+    })
+    return built
+  }, [layers, tiled, view, steps, altCount])
 
-  const cost = effect.cost()
+  // The library's estimate is keyed to shipping variants; layers rendering a
+  // non-shipping implementation substitute its own measured cost
+  // (AltVariant.cost), keeping the skipped-layer logic from the estimate.
+  const cost = useMemo(() => {
+    const base = effect.cost()
+    const visible = layers.filter(l => !l.hidden)
+    const active = visible.length > 0 ? visible : [layers[0] as UILayer]
+    const units = base.perLayer.reduce((sum, layerUnits, i) => {
+      const layer = active[i]
+      if (layerUnits === 0 || !layer) return sum + layerUnits
+      const alt = resolveAlt(layer)
+      return sum + (alt ? alt.cost * Math.max(1, layer.octaves) : layerUnits)
+    }, 0)
+    const rounded = Math.round(units * 100) / 100
+    return { units: rounded, tier: costTier(rounded) }
+  }, [effect, layers])
 
   const allTileable = effect.tileable
 
   useEffect(() => {
-    if (tiled && !allTileable) setTiled(false)
-  }, [tiled, allTileable])
+    if (tiled && (!allTileable || altCount > 0)) setTiled(false)
+  }, [tiled, allTileable, altCount])
 
   /** The 3D view is rendered by the Three.js backend, so the two stay in sync. */
   const selectView = (v: ViewMode) => {
@@ -517,6 +571,30 @@ export default function Home() {
                           />
                         </div>
                       )}
+                      {(IMPLEMENTATIONS[l.noiseId] ?? []).length > 1 && (
+                        <div className="flex items-center justify-between gap-2 text-xs text-zinc-500">
+                          Impl.
+                          <Segmented
+                            value={
+                              l.implId ?? ((IMPLEMENTATIONS[l.noiseId] ?? []).find(im => !im.status)?.id as string)
+                            }
+                            onChange={id =>
+                              updateLayer(l.id, {
+                                // Shipping is the absence of an override, so
+                                // it stores as undefined rather than as an id.
+                                implId: (IMPLEMENTATIONS[l.noiseId] ?? []).find(im => im.id === id)?.status
+                                  ? id
+                                  : undefined,
+                              })
+                            }
+                            options={(IMPLEMENTATIONS[l.noiseId] ?? []).map(im => ({
+                              value: im.id,
+                              label: im.status ? IMPLEMENTATION_STATUS_LABEL[im.status] : 'Shipping',
+                              title: im.name,
+                            }))}
+                          />
+                        </div>
+                      )}
                       <div className="flex items-center justify-between gap-2 text-xs text-zinc-500">
                         Style
                         <Segmented
@@ -751,7 +829,7 @@ export default function Home() {
               ]}
             />
             {/* A sphere always reads the solid field, where tiling has no meaning. */}
-            {view === 'sphere' ? null : allTileable ? (
+            {view === 'sphere' ? null : allTileable && altCount === 0 ? (
               <Segmented
                 value={tiled}
                 onChange={setTiled}

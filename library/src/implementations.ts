@@ -6,6 +6,11 @@
 // is a separate entry point and nothing under src/index.ts may import it. A test
 // enforces that. See PROMOTION below for how the two stay in sync.
 //
+// Besides the metadata, this entry carries the non-shipping implementations
+// THEMSELVES, as runnable display-mapped samplers (ALT_VARIANTS at the bottom).
+// That is what lets the explorer preview and benchmark every implementation in
+// the inventory without any of them riding along with the default entry.
+//
 // WHY THIS FILE EXISTS. A noise is an idea; an implementation is one way of
 // computing it, and two implementations of the same idea can differ severalfold
 // in cost while producing an equivalent-looking field. To hunt for faster
@@ -40,7 +45,10 @@
 // faster one is found it is promoted into src/noises/**, the previous champion
 // moves to src/alt/**, and both stay listed here with the loser marked
 // `superseded`. The inventory is therefore the history of the search; the
-// default entry is only ever its current winner.
+// default entry is only ever its current winner. A challenger that measures
+// faster on the CPU but cannot yet ship — registry variants need all four
+// language backends, and a CPU win does not settle the GPU — waits in
+// src/alt/** marked `candidate` until it either completes or loses.
 //
 // THE SHARED-PRIMITIVE CAVEAT. The largest single implementation decision in
 // this repo was `gradDot2` / `gradDot3` in noises/common.ts, which turns a hash
@@ -57,6 +65,23 @@
 // measurements are CPU-only, and psrdnoise's case for trigonometry was about
 // GPUs. The table gradients live alongside it in common.ts as `gradTable2` /
 // `gradTable3`, so switching a noise over is a small change.
+
+import { FAST_COMMON_GLSL } from './alt/fast-common.glsl'
+import { FAST_COMMON_TSL } from './alt/fast-common.tsl'
+import { FAST_COMMON_WGSL } from './alt/fast-common.wgsl'
+import { perlinFast2, perlinFast3 } from './alt/perlin-fast'
+import { PERLIN_FAST_GLSL } from './alt/perlin-fast.glsl'
+import { PERLIN_FAST_TSL } from './alt/perlin-fast.tsl'
+import { PERLIN_FAST_WGSL } from './alt/perlin-fast.wgsl'
+import { simplexFast2, simplexFast3 } from './alt/simplex-fast'
+import { SIMPLEX_FAST_GLSL } from './alt/simplex-fast.glsl'
+import { SIMPLEX_FAST_TSL } from './alt/simplex-fast.tsl'
+import { SIMPLEX_FAST_WGSL } from './alt/simplex-fast.wgsl'
+import { worleyFast2, worleyFast3 } from './alt/worley-fast'
+import { WORLEY_FAST_GLSL } from './alt/worley-fast.glsl'
+import { WORLEY_FAST_TSL } from './alt/worley-fast.tsl'
+import { WORLEY_FAST_WGSL } from './alt/worley-fast.wgsl'
+import { clamp01, fmt, PERLIN2_NORM, PERLIN3_NORM, SIMPLEX2_NORM, SIMPLEX3_NORM } from './noises/normalization'
 
 export type ImplementationKind = 'canonical' | 'alternative' | 'conventional' | 'novel'
 
@@ -133,10 +158,13 @@ export type NoiseImplementation = {
    * Absent when this is the implementation that ships. Otherwise why it does
    * not: 'superseded' means it was the default and lost a measurement;
    * 'baseline' means it was never a candidate to ship and exists only to be
-   * measured against. Either way it provides no registry variants, so
-   * `variantIds` is empty.
+   * measured against; 'candidate' means it currently BEATS the shipping
+   * implementation on the CPU but has not been promoted, because promotion
+   * needs the GPU measurement its GLSL/WGSL/TSL specs (see ALT_VARIANTS)
+   * make possible, plus the tileable paths, and has neither yet. Either way it provides no registry variants, so `variantIds` is
+   * empty.
    */
-  status?: 'superseded' | 'baseline'
+  status?: 'superseded' | 'baseline' | 'candidate'
   /** Where the source of a non-shipping implementation lives. */
   archivedAt?: string
   /** Variant ids this implementation provides. Empty unless it ships. */
@@ -253,6 +281,32 @@ export const IMPLEMENTATIONS: Record<string, NoiseImplementation[]> = {
         "The gradient SET is the reference one — Perlin's 12 cube-edge midpoint vectors — but the mapping of hash slot to vector is not his, and neither is the hash. Measured against Perlin's OWN reference implementation it is a dead heat, 1.007x on the CPU: this is not faster than Perlin and must not be described as such. What it has over the reference is the absence of a 256-cell period and the ability to run in a shader. GPU unmeasured.",
       variantIds: ['perlin-2d', 'perlin-3d'],
     },
+    {
+      id: 'fib-hash',
+      name: 'Top-bit gradients, Fibonacci hash',
+      kind: 'alternative',
+      evidence: 'reference-exists-uncompared',
+      status: 'candidate',
+      archivedAt: 'src/alt/perlin-fast.ts',
+      reference: {
+        paper: "Ken Perlin, 'Improved Noise' (SIGGRAPH 2002)",
+        implementation:
+          'ImprovedNoise.java, by Perlin. Cited as the specification and deliberately not copied; the measured comparison is against the SHIPPING implementation above, not the reference.',
+        licence: 'NOT freely licensed: the file states "COPYRIGHT 2002 KEN PERLIN" and grants nothing.',
+        url: 'https://cs.nyu.edu/~perlin/noise/',
+      },
+      follows: "Ken Perlin, 'Improved Noise' (2002)",
+      deviations: [
+        HASH_NOT_PERMUTATION,
+        'Corner hashes are cheaper than the shipping full lowbias32 and DIFFER BY DIMENSION, because the required mixing differs by dimension. 2D: one xor-shift and one multiply by 2^32/phi (Knuth multiplicative hashing), selection bits read from the TOP of the product — valid on the two-axis fold (joints at +x/+y/+xy inside the 95% chi-square criticals). 3D: lowbias32 minus its final xor-shift, two ops and the u32 coercions cheaper than hashU32 — the single-multiply mix fails corner pairs at +yz/+xyz offsets (chi-square 425 and 202 against a 143-df critical of 172), a defect the first version of this file shipped until the simplex pass caught it. The fix cost nothing measurable.',
+        'In 2D the xor-shift is hoisted out of the corners (applied to the two x lattice products, corners then combine by xor); the same hoist in 3D failed adjacent-corner chi-square (216 against a 143-df critical of 172).',
+        'The 2D corner dots are factored: with the four diagonal gradients every dot is +-(fx + fy) or +-(fx - fy) up to a per-corner integer shift, so both bases are computed once per sample and a corner is a select, an add and a sign flip. The gradient set matches the shipping gradTable2, which draws the same four diagonals (its slots 4-7 repeat slots 0-3 with the operands swapped).',
+        "3D keeps the reference's 12 cube-edge gradient set, chosen by the same integer range split as the shipping gradTable3, reading the low 30 bits so the axis choice stays disjoint from the sign bits at 30/31.",
+      ],
+      rationale:
+        "The current challenger, and the measured FLOOR of the scalar form: a second tuning pass tried a hoisted 3D pre-mix, weighted-sum interpolation, an Estrin-reassociated fade, branchless 2D signs and a bias-trick floor, and every one measured flat or worse over 8-12 interleaved repeats — the FP skeleton (floors, fades, lerps) is ~156 ms of the ~190/~222 ms totals in the bench harness, so the remaining integer work sits latency-hidden behind it. Details in the source header. Measured with `bun run bench:impl`: perlin3 between 1.1x and 1.3x depending on the day's machine state, perlin2 ~1.1x, medians and bests agreeing within any single run. Gradient marginals, adjacent-corner joints along each axis and a checkerboard split all sit inside the 95% chi-square criticals, and the assembled field's mean, RMS, extrema and lattice-lag autocorrelation match the shipping perlin to three decimals — but the field is a DIFFERENT DRAW, so promotion would change the pattern every consumer sees. Not promoted yet: the GLSL/WGSL/TSL specs now exist (see ALT_VARIANTS), and the GPU measurement, since taken via the hardened /bench harness, came back a TIE with shipping in both dimensions (0.98-1.00x on WebGL and WebGPU) — the narrower avalanche neither wins nor loses there, so the CPU numbers are the whole case. The tileable paths are also unwritten.",
+      variantIds: [],
+    },
   ],
   flow: [
     {
@@ -298,32 +352,33 @@ export const IMPLEMENTATIONS: Record<string, NoiseImplementation[]> = {
         "The reference's final scale factors (70 in 2D, 32 in 3D) are not applied; normalization is deferred to the display layer and recalibrated empirically, mostly because of the kernel-radius fork above.",
       ],
       rationale:
-        "Gradients are Gustavson's own 12 cube-edge vectors, shared with Perlin through gradTable3 in common.ts. This is 2.4x faster in both 2D and 3D on the CPU than the trigonometric construction kept at alt/simplex-trig.ts (`bun run bench:impl`), a modest win because simplex evaluates only 3 or 4 corners, so the skew and corner-ranking arithmetic is a larger share of what remains.\n\nMeasured against Gustavson's actual reference (in a baseline not kept in the repo): speed was a DEAD HEAT, 0.99x in 3D and 1.00x in 2D. That is the opposite of the Perlin result, where the permutation table beat the folded hash by ~8%, and the reason is structural — simplex chains its lookups as perm[ii + perm[jj + perm[kk]]], so the loads are dependent and serialise, while the folded hash computes each corner independently. Amplitude, with the reference's own scale factor applied to ours for comparison: 2D is 1.21x the reference (gradient set alone, same kernel), 3D is 0.38x (the kernel fork below).",
+        "Gradients are Gustavson's own 12 cube-edge vectors, shared with Perlin through gradTable3 in common.ts. Measured 2.4x faster in both 2D and 3D on the CPU than the trigonometric construction this repo originally shipped (removed after losing consistently on every backend; the figure is recorded here rather than re-runnable), a modest win because simplex evaluates only 3 or 4 corners, so the skew and corner-ranking arithmetic is a larger share of what remains.\n\nMeasured against Gustavson's actual reference (in a baseline not kept in the repo): speed was a DEAD HEAT, 0.99x in 3D and 1.00x in 2D. That is the opposite of the Perlin result, where the permutation table beat the folded hash by ~8%, and the reason is structural — simplex chains its lookups as perm[ii + perm[jj + perm[kk]]], so the loads are dependent and serialise, while the folded hash computes each corner independently. Amplitude, with the reference's own scale factor applied to ours for comparison: 2D is 1.21x the reference (gradient set alone, same kernel), 3D is 0.38x (the kernel fork below).",
       variantIds: ['simplex-2d', 'simplex-3d'],
     },
     {
-      id: 'trig-gradients',
-      name: 'Trig unit gradients',
+      id: 'fast-hash',
+      name: 'Top-bit gradients, branchless ranking',
       kind: 'alternative',
-      evidence: 'paper-only',
-      status: 'superseded',
-      archivedAt: 'src/alt/simplex-trig.ts',
+      evidence: 'reference-exists-uncompared',
+      status: 'candidate',
+      archivedAt: 'src/alt/simplex-fast.ts',
       reference: {
         paper: 'Stefan Gustavson, "Simplex noise demystified" (2005), after Ken Perlin (2001)',
-        implementation: 'SimplexNoise.java, by Gustavson',
-        licence: 'Placed in the public domain by the author',
-        url: 'https://cgvr.cs.uni-bremen.de/teaching/cg_literatur/simplexnoise.pdf',
+        implementation:
+          'SimplexNoise.java, by Gustavson. The measured comparison is against the SHIPPING implementation above, not the reference.',
+        licence: 'Public domain (dedicated in the code file).',
+        url: 'https://github.com/SRombauts/SimplexNoise/blob/master/references/SimplexNoise.java',
       },
       follows: "Ken Perlin's simplex noise (2001) in Stefan Gustavson's 'Simplex noise demystified' (2005) formulation",
       deviations: [
-        `${TRIG_GRADIENTS} Gustavson's reference indexes the 12 cube-edge vectors (2D reuses the same table with z dropped).`,
-        HASH_NOT_PERMUTATION,
-        "The 3D kernel radius is 0.5 where Gustavson's reference uses 0.6. Two lineages exist: the historical (0.6 - r^2)^4, and the corrected (0.5 - r^2)^3 of Gustavson & McEwan 2022, who show 0.6 makes the region of influence too large and leaves the field discontinuous at simplex boundaries. This code pairs 0.5 with exponent 4, which belongs to neither: continuous like the corrected form, but lower amplitude than either, since the exponent was not reduced to compensate. 2D is unaffected — the reference uses 0.5 there too.",
-        "The reference's final scale factors (70 in 2D, 32 in 3D) are not applied; normalization is deferred to the display layer and was recalibrated empirically to 90 and 98. That recalibration is partly the unit gradients and partly the kernel-radius fork above, which is exactly why the numbers are so far from the reference ones.",
-        'The skew/unskew constants F2/G2/F3/G3, the corner-ranking ladder and the t^4 exponent are the reference ones.',
+        "Inherits the shipping implementation's deviations (kernel radius 0.5 with exponent 4 in 3D, folded lattice hash, deferred normalization) — this candidate changes how corners are hashed and ranked, not the algorithm's geometry.",
+        'Corner hashes differ by dimension, as in the Perlin candidate: 2D uses one xor-shift and one multiply by 2^32/phi with selection bits read from the top of the product (valid on the two-axis fold); 3D uses lowbias32 minus its final xor-shift, because the single-multiply mix fails corner pairs at +yz/+xyz offsets — offsets a simplex traversal blends — at chi-square 425/202 against a 143-df critical of 172. THIS PASS IS WHAT FOUND THAT DEFECT, which the Perlin and Worley candidates had shipped with.',
+        'The 3D corner-ranking ladder is replaced by branchless boolean algebra over a = x>=y, b = y>=z, c = x>=z (i1 = a&(b|c), j1 = !a&b, k1 = !b&(!a|!c); i2 = a|(b&c), j2 = !a|b, k2 = !b|(!a&!c)), verified equal to the reference ladder on 200k random triples plus every tie pattern.',
+        'Middle-corner hash sums are single selects: corner 1 adds exactly one lattice constant to the base sum, corner 2 subtracts exactly one from the far corner sum.',
+        "2D gradients are the four diagonals — the same set the shipping gradTable2 de facto draws (its slots 4-7 repeat slots 0-3 with operands swapped); 3D keeps the reference's 12 cube-edge set via the same integer range split.",
       ],
       rationale:
-        "The repo's original Simplex, kept so the comparison can be re-run. Same gradient trade Perlin made, and it lost the same way: 2.4x on the CPU. The GPU comparison has not been run, and psrdnoise's argument for trigonometric gradients was about GPUs specifically.",
+        'The current challenger, and a modest one, kept for the 2D win: 1.1-1.25x the shipping simplex2 run to run with `bun run bench:impl`, and a TIE in 3D (0.99-1.05x, best and median disagreeing across runs — treat as noise). The decomposition explains the ceiling: the FP skeleton (skew, ranking, kernels) is ~303 ms of the shipping ~365 ms in the bench harness, simplex hashes only 3-4 corners, and those hashes sit off the FP critical path — so unlike Perlin (8 corners) and Worley (9-27 cells), there is little integer work to remove. Field mean/rms/extrema match the shipping simplex to three decimals (different draw, same statistics). Not promoted: the GPU measurement came back a tie as well (0.97-0.99x on WebGL and WebGPU), so the 2D CPU win is the entire case, and the 3D tie should be broken or accepted first.',
       variantIds: [],
     },
   ],
@@ -372,6 +427,28 @@ export const IMPLEMENTATIONS: Record<string, NoiseImplementation[]> = {
       rationale:
         "One point per cell is the ubiquitous real-time simplification — it is what essentially every shader implementation of cellular noise does, because a fixed loop count vectorises and a Poisson count does not.\n\nA complication worth knowing before treating either as gospel: WORLEY'S OWN CODE DISAGREES WITH WORLEY'S OWN PAPER. The paper describes mean density about 3-4 with the count clamped to 1..9, and offers 541i + 79j + 31k as an admittedly poor example hash. The released cellular.c uses mean 2.5, an unclamped 0..5 drawn from a 256-entry Poisson table indexed by the high byte of the seed, and the hash 702395077i + 915488749j + 2120969693k with an LCG. What the world reproduces is the code, so 'the Worley reference' has to name which one you mean.",
       variantIds: ['worley-2d', 'worley-3d'],
+    },
+    {
+      id: 'split-bits-pruned',
+      name: 'Split-bit offsets, pruned search',
+      kind: 'alternative',
+      evidence: 'paper-only',
+      status: 'candidate',
+      archivedAt: 'src/alt/worley-fast.ts',
+      reference: {
+        paper:
+          'Steven Worley, "A Cellular Texture Basis Function" (SIGGRAPH 1996). No code was published with the paper — it is prose and references only.',
+        url: 'https://cedric.cnam.fr/~cubaud/PROCEDURAL/worley.pdf',
+      },
+      follows: "Steven Worley, 'A Cellular Texture Basis Function' (SIGGRAPH 1996)",
+      deviations: [
+        ONE_POINT_PER_CELL,
+        "ALL of a cell's offset axes are split out of ONE 32-bit hash (16+16 bits in 2D, 10+10+10 in 3D) — against the shipping three (2D) or five (3D) chained lowbias32 avalanches per cell — so feature-point positions are quantized to 2^-16 / 2^-10 of a cell. The mix differs by dimension: 2D uses one xor-shift, one multiply by 2^32/phi and a closing xor-shift (its position-bin battery passes at +x/+y/+xy); 3D uses the full lowbias32 shape, because the cheap mix fails +yz adjacency on the three-axis fold (chi-square 531-682 against a 255-df critical of 293) — a defect the first version of this file shipped until the simplex pass caught it. The upgrade cost ~13% of the 3D win.",
+        "The neighbourhood search prunes: centre column/plane first, then a neighbouring column or plane only if its boundary distance still beats the current F1. Conservative, so the result is exactly the unpruned minimum (verified, zero mismatches over 600k probes). This is closer to the paper's own algorithm — Worley skips cubes that cannot contain a closer point — than the shipping exhaustive 9/27-cell loop is.",
+      ],
+      rationale:
+        'The current challenger. Measured with `bun run bench:impl`: ~2.0x the shipping worley2 and ~3.4x worley3 on the CPU, best and median agreeing (3D includes the ~13% cost of the hash fix; the 2D figure is from an isolated run, per the harness caveat in bench.ts) — the win grows with dimension because a pruned 3D plane is nine cells never hashed. The 3D search is written out longhand because routing each plane through a many-argument helper left the speedup at the mercy of a fragile JIT inlining decision, measured swinging between 430 and 550 ms for identical semantics. Field mean/rms/extrema match the shipping worley to three decimals (different draw, same distribution). The GPU measurement, since taken via the hardened /bench harness, settled the divergence worry in favour of pruning: 1.16x the shipping worley2 and 2.0x worley3 on the GPU too (WebGL and WebGPU medians). This candidate now wins on every backend; what promotion still needs is the tileable paths.',
+      variantIds: [],
     },
   ],
   'worley-manhattan': [
@@ -598,3 +675,176 @@ export const implementationOf = (variantId: string): NoiseImplementation | undef
 /** The implementation a caller gets from `noisetoy` when they do not ask for one. */
 export const defaultImplementationOf = (noiseId: string): NoiseImplementation | undefined =>
   IMPLEMENTATIONS[noiseId]?.find(i => !i.status)
+
+export const IMPLEMENTATION_STATUS_LABEL: Record<NonNullable<NoiseImplementation['status']>, string> = {
+  superseded: 'Superseded',
+  baseline: 'Baseline',
+  candidate: 'Candidate',
+}
+
+export const IMPLEMENTATION_STATUS_BLURB: Record<NonNullable<NoiseImplementation['status']>, string> = {
+  superseded: 'Was the default and lost a measured comparison; kept so the comparison can be re-run.',
+  baseline: 'Never a candidate to ship; exists only to be measured against.',
+  candidate:
+    'Beats the shipping implementation on at least one backend but is not yet promoted; its rationale records where the comparison stands.',
+}
+
+// ---------------------------------------------------------------------------
+// Runnable stand-ins for the non-shipping implementations.
+//
+// A registry variant is the full contract: four languages, tileable paths, a
+// cost-model entry. An AltVariant is the runnable slice of that contract a
+// non-shipping implementation carries: the TS samplers plus GLSL/WGSL/TSL
+// shader specs, display-mapped exactly like the registry variant it stands in
+// for, so previews, exports and benchmarks are apples-to-apples with the
+// shipping row on every backend. What it deliberately lacks is the tileable
+// paths and a cost entry — growing those, and winning the GPU measurement the
+// shader specs now make possible, is what promotion means.
+//
+// Shader function names carry a Fast/Trig suffix so a stack can compose a
+// candidate next to the shipping chunk of the same noise without collisions.
+
+import type { ShaderSpec } from './registry'
+
+export type AltSampleFn = (x: number, y: number, z: number) => number
+
+export type AltVariant = {
+  /** Globally unique: `${variantId}@${implementationId}`. */
+  id: string
+  /** The registry variant this stands in for, e.g. 'perlin-2d'. */
+  variantId: string
+  noiseId: string
+  /** The inventory implementation (always one with `status` set) providing it. */
+  implementationId: string
+  dim: 2 | 3
+  /** Pre-clamp display value, same mapping as the registry variant's sampleRaw. */
+  sampleRaw: AltSampleFn
+  /** Display sample, clamped to [0, 1], same contract as the registry's sample. */
+  sample: AltSampleFn
+  /** Shader specs, same shape and display mapping as the registry variant's. */
+  glsl: ShaderSpec
+  wgsl: ShaderSpec
+  tsl: ShaderSpec
+  /**
+   * Cost of one evaluation in the shared unit (Perlin 3D = 1, see cost.ts) —
+   * a transferred estimate in the cost model's own sense: the registry
+   * variant's VARIANT_COST scaled by the measured GPU throughput ratio
+   * between the two implementations (WebGL and WebGPU medians from the
+   * hardened /bench harness, reference machine). Kept here rather than in
+   * the core table so the core stays free of implementation knowledge.
+   */
+  cost: number
+}
+
+const spec = (dim: 2 | 3, deps: string[], expr: string): ShaderSpec => ({ dim, deps, expr })
+
+/** value * (0.5 * norm) + 0.5, unclamped — matches signedExpr in the registry. */
+const signedText = (norm: number, call: string): string => `0.5 + 0.5 * ${fmt(norm)} * ${call}`
+
+const signedTsl = (norm: number, call: string): string => `${call}.mul(${0.5 * norm}).add(0.5)`
+
+type AltShaders = { glsl: ShaderSpec; wgsl: ShaderSpec; tsl: ShaderSpec }
+
+const altVariant = (
+  noiseId: string,
+  implementationId: string,
+  dim: 2 | 3,
+  cost: number,
+  sampleRaw: AltSampleFn,
+  shaders: AltShaders,
+): AltVariant => ({
+  id: `${noiseId}-${dim}d@${implementationId}`,
+  variantId: `${noiseId}-${dim}d`,
+  noiseId,
+  implementationId,
+  dim,
+  cost,
+  sampleRaw,
+  sample: (x, y, z) => clamp01(sampleRaw(x, y, z)),
+  ...shaders,
+})
+
+/** The three language specs for one candidate call, sharing one display expression shape. */
+const fastShaders = (
+  dim: 2 | 3,
+  chunks: { glsl: string; wgsl: string; tsl: string },
+  call: string,
+  norm: number | null,
+): AltShaders => ({
+  glsl: spec(dim, [FAST_COMMON_GLSL, chunks.glsl], norm === null ? call : signedText(norm, call)),
+  wgsl: spec(dim, [FAST_COMMON_WGSL, chunks.wgsl], norm === null ? call : signedText(norm, call)),
+  tsl: spec(dim, [FAST_COMMON_TSL, chunks.tsl], norm === null ? call : signedTsl(norm, call)),
+})
+
+const PERLIN_FAST_CHUNKS = { glsl: PERLIN_FAST_GLSL, wgsl: PERLIN_FAST_WGSL, tsl: PERLIN_FAST_TSL }
+const SIMPLEX_FAST_CHUNKS = { glsl: SIMPLEX_FAST_GLSL, wgsl: SIMPLEX_FAST_WGSL, tsl: SIMPLEX_FAST_TSL }
+const WORLEY_FAST_CHUNKS = { glsl: WORLEY_FAST_GLSL, wgsl: WORLEY_FAST_WGSL, tsl: WORLEY_FAST_TSL }
+
+/**
+ * Display mappings mirror the registry: Perlin and Simplex are signed noises
+ * mapped 0.5 + 0.5 * norm * raw; Worley's F1 distance is displayed raw.
+ *
+ * Costs, per the AltVariant doc, are the shipping VARIANT_COST scaled by the
+ * measured GPU throughput ratio. The measurements (Msamples/s, WebGL /
+ * WebGPU, 512x512, median of 5 calibrated batches): Perlin and Simplex
+ * candidates are GPU TIES with shipping (ratios 0.98-1.00), so they keep the
+ * shipping figures (0.23/0.42 and 0.29/0.39 after the ~2% tie). The pruned
+ * Worley WINS on the GPU: 5274/3617 against shipping 4546/3101 in 2D (0.86x
+ * the cost -> 0.51) and 3422/3216 against 1712/1723 in 3D (0.52x -> 1.2) —
+ * the branch-divergence worry never materialized.
+ */
+export const ALT_VARIANTS: AltVariant[] = [
+  altVariant(
+    'perlin',
+    'fib-hash',
+    2,
+    0.23,
+    (x, y) => 0.5 + 0.5 * PERLIN2_NORM * perlinFast2(x, y),
+    fastShaders(2, PERLIN_FAST_CHUNKS, 'perlinFast2(p)', PERLIN2_NORM),
+  ),
+  altVariant(
+    'perlin',
+    'fib-hash',
+    3,
+    0.42,
+    (x, y, z) => 0.5 + 0.5 * PERLIN3_NORM * perlinFast3(x, y, z),
+    fastShaders(3, PERLIN_FAST_CHUNKS, 'perlinFast3(p)', PERLIN3_NORM),
+  ),
+  // Same gradient set and kernel as the shipping simplex, so the shipping
+  // norms apply unchanged.
+  altVariant(
+    'simplex',
+    'fast-hash',
+    2,
+    0.29,
+    (x, y) => 0.5 + 0.5 * SIMPLEX2_NORM * simplexFast2(x, y),
+    fastShaders(2, SIMPLEX_FAST_CHUNKS, 'simplexFast2(p)', SIMPLEX2_NORM),
+  ),
+  altVariant(
+    'simplex',
+    'fast-hash',
+    3,
+    0.39,
+    (x, y, z) => 0.5 + 0.5 * SIMPLEX3_NORM * simplexFast3(x, y, z),
+    fastShaders(3, SIMPLEX_FAST_CHUNKS, 'simplexFast3(p)', SIMPLEX3_NORM),
+  ),
+  altVariant(
+    'worley',
+    'split-bits-pruned',
+    2,
+    0.51,
+    (x, y) => worleyFast2(x, y),
+    fastShaders(2, WORLEY_FAST_CHUNKS, 'worleyFast2(p)', null),
+  ),
+  altVariant(
+    'worley',
+    'split-bits-pruned',
+    3,
+    1.2,
+    (x, y, z) => worleyFast3(x, y, z),
+    fastShaders(3, WORLEY_FAST_CHUNKS, 'worleyFast3(p)', null),
+  ),
+]
+
+export const altVariantsFor = (noiseId: string, implementationId: string): AltVariant[] =>
+  ALT_VARIANTS.filter(v => v.noiseId === noiseId && v.implementationId === implementationId)

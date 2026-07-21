@@ -1,7 +1,10 @@
 import { describe, expect, test } from 'bun:test'
+import * as TSL from 'three/tsl'
 
 import {
+  ALT_VARIANTS,
   allImplementations,
+  altVariantsFor,
   defaultImplementationOf,
   EVIDENCE_LABEL,
   evidenceSupportsKind,
@@ -9,7 +12,47 @@ import {
   IMPLEMENTATIONS,
   implementationOf,
 } from './implementations'
-import { NOISES } from './registry'
+import { getNoise, getVariant, NOISES } from './registry'
+import { buildGlslFragment } from './render/glsl'
+import { buildTslBody, TSL_IMPORTS } from './render/tsl'
+import { buildWgslShader } from './render/wgsl'
+
+import type { AltVariant } from './implementations'
+import type { LayerConfig } from './render/types'
+
+/**
+ * A LayerConfig whose variant is the registry one with the alt
+ * implementation's samplers and shader specs swapped in — exactly the patch
+ * the explorer applies to render a non-shipping implementation.
+ */
+const altLayer = (alt: AltVariant): LayerConfig => {
+  const noise = getNoise(alt.noiseId)
+  if (!noise) throw new Error(`no noise ${alt.noiseId}`)
+  const variant = getVariant(noise, alt.variantId)
+  return {
+    variant: {
+      ...variant,
+      sample: alt.sample,
+      sampleRaw: alt.sampleRaw,
+      glsl: alt.glsl,
+      wgsl: alt.wgsl,
+      tsl: alt.tsl,
+      sampleTileable: null,
+      sampleRawTileable: null,
+      glslTileable: null,
+      wgslTileable: null,
+      tslTileable: null,
+    },
+    scale: noise.scale,
+    octaves: 2,
+    rotate: false,
+    style: 'basic',
+    blend: 'normal',
+    opacity: 1,
+    speed: 0,
+    angle: 0,
+  }
+}
 
 // The inventory is a separate entry point and deliberately has no runtime link
 // to the registry, so nothing checks that the two agree except these tests.
@@ -194,4 +237,98 @@ test('every archivedAt path actually exists', async () => {
     const abs = `${import.meta.dir}/../${rel}`
     expect({ noiseId, rel, exists: await Bun.file(abs).exists() }).toEqual({ noiseId, rel, exists: true })
   }
+})
+
+// A speed claim that cannot be re-run outside this repo is an anecdote. Every
+// non-shipping implementation kept in src/alt must stay runnable through
+// ALT_VARIANTS, one stand-in per dimension its noise ships, or the explorer's
+// benchmark silently stops covering it.
+describe('alt variants keep the non-shipping implementations runnable', () => {
+  test('every non-shipping implementation in src/alt provides a stand-in per shipping dimension', () => {
+    for (const { noiseId, implementation } of allImplementations()) {
+      if (!implementation.status || !implementation.archivedAt?.startsWith('src/alt/')) continue
+      const noise = getNoise(noiseId)
+      for (const variant of noise?.variants ?? []) {
+        const alt = altVariantsFor(noiseId, implementation.id).find(v => v.dim === variant.dim)
+        expect({ noiseId, impl: implementation.id, dim: variant.dim, runnable: Boolean(alt) }).toEqual({
+          noiseId,
+          impl: implementation.id,
+          dim: variant.dim,
+          runnable: true,
+        })
+      }
+    }
+  })
+
+  test('every alt variant points at a documented non-shipping implementation and a real registry variant', () => {
+    for (const alt of ALT_VARIANTS) {
+      const impl = (IMPLEMENTATIONS[alt.noiseId] ?? []).find(i => i.id === alt.implementationId)
+      expect({ id: alt.id, documented: Boolean(impl?.status) }).toEqual({ id: alt.id, documented: true })
+      const noise = getNoise(alt.noiseId)
+      const variant = noise?.variants.find(v => v.id === alt.variantId)
+      expect({ id: alt.id, mirrors: variant?.dim }).toEqual({ id: alt.id, mirrors: alt.dim })
+      expect(alt.id).toBe(`${alt.variantId}@${alt.implementationId}`)
+    }
+  })
+
+  // The shader specs are what make an alt variant renderable and GPU-
+  // benchable. GLSL/WGSL can only be compiled by a driver, so the bun-side
+  // gate is: the composed program contains a definition for every candidate
+  // function the display expression calls, and the TSL body actually
+  // evaluates into a node graph (the same bar the registry variants clear in
+  // render/tsl.test.ts).
+  test('alt shader specs have consistent dims and compose into programs that define their calls', () => {
+    for (const alt of ALT_VARIANTS) {
+      expect({ id: alt.id, dims: [alt.glsl.dim, alt.wgsl.dim, alt.tsl.dim] }).toEqual({
+        id: alt.id,
+        dims: [alt.dim, alt.dim, alt.dim],
+      })
+      const cfg = { layers: [altLayer(alt)], tiled: false, size: 512 }
+      const call = (alt.glsl.expr.match(/([A-Za-z0-9]+)\(p\)/) ?? [])[1] as string
+      expect(call?.length ?? 0).toBeGreaterThan(0)
+      const glsl = buildGlslFragment(cfg)
+      expect(glsl).toContain(`float ${call}(`)
+      const wgsl = buildWgslShader(cfg)
+      expect(wgsl).toContain(`fn ${call}(`)
+    }
+  })
+
+  test('alt TSL bodies evaluate and build a node graph', () => {
+    const preamble = `const { ${TSL_IMPORTS.join(', ')} } = TSL\n`
+    for (const alt of ALT_VARIANTS) {
+      const cfg = { layers: [altLayer(alt)], tiled: false, size: 512 }
+      const body = buildTslBody(cfg)
+      const factory = new Function('TSL', `"use strict"\n${preamble}${body}\nreturn effect`) as (
+        tsl: typeof TSL,
+      ) => (uv: unknown, z: unknown) => unknown
+      const effect = factory(TSL)
+      expect(effect(TSL.vec2(0.3, 0.7), TSL.float(0.5))).toBeDefined()
+    }
+  })
+
+  // The cost is what the explorer substitutes into estimates when a layer
+  // renders a non-shipping implementation; a zero or absurd figure would
+  // silently corrupt every stack estimate that includes one.
+  test('alt variants carry a sane cost in the shared unit', () => {
+    for (const alt of ALT_VARIANTS) {
+      expect({ id: alt.id, sane: Number.isFinite(alt.cost) && alt.cost > 0 && alt.cost < 20 }).toEqual({
+        id: alt.id,
+        sane: true,
+      })
+    }
+  })
+
+  test('alt samples are deterministic and clamped to [0, 1]', () => {
+    for (const alt of ALT_VARIANTS) {
+      for (let i = 0; i < 500; i++) {
+        const x = (i % 37) * 0.61 - 9
+        const y = (i % 23) * 0.43 - 5
+        const z = (i % 17) * 0.29
+        const v = alt.sample(x, y, z)
+        expect(v).toBeGreaterThanOrEqual(0)
+        expect(v).toBeLessThanOrEqual(1)
+        expect(alt.sample(x, y, z)).toBe(v)
+      }
+    }
+  })
 })
