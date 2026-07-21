@@ -607,7 +607,14 @@ export default function Home() {
                             }
                             options={(IMPLEMENTATIONS[l.noiseId] ?? []).map(im => ({
                               value: im.id,
-                              label: im.status ? IMPLEMENTATION_STATUS_LABEL[im.status] : 'Shipping',
+                              // Two candidates both labelled "Candidate" are
+                              // indistinguishable, so ids take over as soon
+                              // as a noise carries more than one.
+                              label: !im.status
+                                ? 'Shipping'
+                                : (IMPLEMENTATIONS[l.noiseId] ?? []).filter(x => x.status).length > 1
+                                  ? im.id
+                                  : IMPLEMENTATION_STATUS_LABEL[im.status],
                               title: im.name,
                             }))}
                           />

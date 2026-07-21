@@ -93,6 +93,10 @@ import { GABOR_FAST_GLSL } from './alt/gabor-fast.glsl'
 import { GABOR_FAST_TSL } from './alt/gabor-fast.tsl'
 import { GABOR_FAST_WGSL } from './alt/gabor-fast.wgsl'
 import { perlinFast2, perlinFast3 } from './alt/perlin-fast'
+import { perlinFastTileable2, perlinFastTileable3 } from './alt/perlin-fast-tileable'
+import { PERLIN_FAST_TILEABLE_GLSL } from './alt/perlin-fast-tileable.glsl'
+import { PERLIN_FAST_TILEABLE_TSL } from './alt/perlin-fast-tileable.tsl'
+import { PERLIN_FAST_TILEABLE_WGSL } from './alt/perlin-fast-tileable.wgsl'
 import { PERLIN_FAST_GLSL } from './alt/perlin-fast.glsl'
 import { PERLIN_FAST_TSL } from './alt/perlin-fast.tsl'
 import { PERLIN_FAST_WGSL } from './alt/perlin-fast.wgsl'
@@ -371,6 +375,30 @@ export const IMPLEMENTATIONS: Record<string, NoiseImplementation[]> = {
       ],
       rationale:
         "The current challenger, and the measured FLOOR of the scalar form: a second tuning pass tried a hoisted 3D pre-mix, weighted-sum interpolation, an Estrin-reassociated fade, branchless 2D signs and a bias-trick floor, and every one measured flat or worse over 8-12 interleaved repeats — the FP skeleton (floors, fades, lerps) is ~156 ms of the ~190/~222 ms totals in the bench harness, so the remaining integer work sits latency-hidden behind it. Details in the source header. Measured with `bun run bench:impl`: perlin3 between 1.1x and 1.3x depending on the day's machine state, perlin2 ~1.1x, medians and bests agreeing within any single run. Gradient marginals, adjacent-corner joints along each axis and a checkerboard split all sit inside the 95% chi-square criticals, and the assembled field's mean, RMS, extrema and lattice-lag autocorrelation match the shipping perlin to three decimals — but the field is a DIFFERENT DRAW, so promotion would change the pattern every consumer sees. Not promoted yet: the GLSL/WGSL/TSL specs now exist (see ALT_VARIANTS), and the GPU measurement, since taken via the hardened /bench harness, came back a TIE with shipping in both dimensions (0.98-1.00x on WebGL and WebGPU) — the narrower avalanche neither wins nor loses there, so the CPU numbers are the whole case. The tileable paths are also unwritten.",
+      variantIds: [],
+    },
+    {
+      id: 'fib-hash-tileable',
+      name: 'Fibonacci hash, wrapped lattice',
+      kind: 'alternative',
+      evidence: 'reference-exists-uncompared',
+      status: 'candidate',
+      archivedAt: 'src/alt/perlin-fast-tileable.ts',
+      reference: {
+        paper: "Ken Perlin, 'Improved Noise' (SIGGRAPH 2002)",
+        implementation:
+          'ImprovedNoise.java, by Perlin. Cited as the specification and deliberately not copied; the measured comparison is against the fib-hash candidate above.',
+        licence: 'NOT freely licensed: the file states "COPYRIGHT 2002 KEN PERLIN" and grants nothing.',
+        url: 'https://cs.nyu.edu/~perlin/noise/',
+      },
+      follows: "Ken Perlin, 'Improved Noise' (2002)",
+      deviations: [
+        HASH_NOT_PERMUTATION,
+        'Same dimension-split mixes, hoists and gradient reads as the fib-hash implementation — see that entry for the statistics; this one exists to price tileability against it.',
+        'The lattice wraps every 8 cells (the perlin registry tile) in x and y BEFORE the fold, so the field tiles seamlessly at the explorer tile size. The period is BAKED: 8 is a power of two, so the wrap is one two\'s-complement AND per plane instead of the imod the shipping tileable paths pay, but the "(i + 1) * K" neighbour shortcut still dies at the seam, costing a real multiply per wrapped far plane. The reference tiles at 256 cells in every axis by construction; this tiles at 8 in x and y only, z unwrapped.',
+      ],
+      rationale:
+        "Exists to price tileability as an implementation choice, side by side with fib-hash in the picker and on /bench — the recurring 'not promoted: no tileable paths yet' needed a measured cost, not a guess. The answer: nothing measurable. Every comparison against fib-hash came back inside the noise — Bun CPU 0.97-1.05x with best and median disagreeing on the SIGN in both dimensions (the 'wrap cost' compares in `bun run bench:impl`; isolated duels agree), GPU 0.97-1.08x across WebGL/WebGPU/TSL over two runs of the hardened /bench harness, and browser JS a few percent down in 3D and jitter-dominated in 2D (the shipping row itself swung 52-68 Msamples/s between runs). Costs therefore carry over from fib-hash unchanged. The field matches fib-hash EXACTLY inside the principal tile (0 <= x, y < 8) and is that tile repeated everywhere else — the seam test holds the wrap to 10 decimals. Trade recorded honestly: the period is baked at the registry tile where the shipping tileable paths take it as a parameter, and the AND-for-imod saving is only available because 8 is a power of two.",
       variantIds: [],
     },
   ],
@@ -1028,6 +1056,11 @@ const fastShaders = (
 }
 
 const PERLIN_FAST_CHUNKS = { glsl: PERLIN_FAST_GLSL, wgsl: PERLIN_FAST_WGSL, tsl: PERLIN_FAST_TSL }
+const PERLIN_FAST_TILEABLE_CHUNKS = {
+  glsl: PERLIN_FAST_TILEABLE_GLSL,
+  wgsl: PERLIN_FAST_TILEABLE_WGSL,
+  tsl: PERLIN_FAST_TILEABLE_TSL,
+}
 const SIMPLEX_FAST_CHUNKS = { glsl: SIMPLEX_FAST_GLSL, wgsl: SIMPLEX_FAST_WGSL, tsl: SIMPLEX_FAST_TSL }
 const WORLEY_FAST_CHUNKS = { glsl: WORLEY_FAST_GLSL, wgsl: WORLEY_FAST_WGSL, tsl: WORLEY_FAST_TSL }
 const CELLULAR_FAST_CHUNKS = { glsl: CELLULAR_FAST_GLSL, wgsl: CELLULAR_FAST_WGSL, tsl: CELLULAR_FAST_TSL }
@@ -1070,6 +1103,22 @@ export const ALT_VARIANTS: AltVariant[] = [
     0.42,
     (x, y, z) => 0.5 + 0.5 * PERLIN3_NORM * perlinFast3(x, y, z),
     fastShaders(3, PERLIN_FAST_CHUNKS, 'perlinFast3(p)', PERLIN3_NORM),
+  ),
+  altVariant(
+    'perlin',
+    'fib-hash-tileable',
+    2,
+    0.23,
+    (x, y) => 0.5 + 0.5 * PERLIN2_NORM * perlinFastTileable2(x, y),
+    fastShaders(2, PERLIN_FAST_TILEABLE_CHUNKS, 'perlinFastT2(p)', PERLIN2_NORM),
+  ),
+  altVariant(
+    'perlin',
+    'fib-hash-tileable',
+    3,
+    0.42,
+    (x, y, z) => 0.5 + 0.5 * PERLIN3_NORM * perlinFastTileable3(x, y, z),
+    fastShaders(3, PERLIN_FAST_TILEABLE_CHUNKS, 'perlinFastT3(p)', PERLIN3_NORM),
   ),
   // Flow's display mapping reuses PERLIN2_NORM like the shipping flow (unit
   // gradients in both). GPU measured a slight candidate win (WebGL 4688 vs

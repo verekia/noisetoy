@@ -56,6 +56,7 @@ import {
 import { flowFast3 } from './flow-fast'
 import { gaborFast2, gaborFast3 } from './gabor-fast'
 import { perlinFast2, perlinFast3 } from './perlin-fast'
+import { perlinFastTileable2, perlinFastTileable3 } from './perlin-fast-tileable'
 import { simplexFast2, simplexFast3 } from './simplex-fast'
 import { valueFast2, valueFast3 } from './value-fast'
 import { vortexFast2, vortexFast3 } from './vortex-fast'
@@ -126,6 +127,16 @@ compare(
   ['candidate (Fibonacci hash)', (x, y) => perlinFast2(x, y)],
 )
 compare('Perlin 3D', ['shipping  (folded lowbias32)', perlin3], ['candidate (Fibonacci hash)', perlinFast3])
+compare(
+  'Perlin 2D wrap cost',
+  ['candidate (fib-hash)', (x, y) => perlinFast2(x, y)],
+  ['candidate (fib-hash-tileable)', (x, y) => perlinFastTileable2(x, y)],
+)
+compare(
+  'Perlin 3D wrap cost',
+  ['candidate (fib-hash)', perlinFast3],
+  ['candidate (fib-hash-tileable)', perlinFastTileable3],
+)
 compare(
   'Worley 2D',
   ['shipping  (chained avalanches)', (x, y) => worley2(x, y)],

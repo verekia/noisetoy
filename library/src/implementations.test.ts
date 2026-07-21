@@ -318,6 +318,25 @@ describe('alt variants keep the non-shipping implementations runnable', () => {
     }
   })
 
+  // fib-hash-tileable exists to be priced against fib-hash; its one extra
+  // claim is the seam, so hold it to the shipping wrap bar: exact repetition
+  // at the baked 8-cell period (the perlin registry tile) in x and y.
+  test('perlin fib-hash-tileable repeats at the baked 8-cell period', () => {
+    const variants = altVariantsFor('perlin', 'fib-hash-tileable')
+    expect(variants.length).toBe(2)
+    for (const alt of variants) {
+      for (let i = 0; i < 800; i++) {
+        const x = (i % 29) * 0.317
+        const y = (i % 31) * 0.293
+        const z = alt.dim === 3 ? (i % 23) * 0.211 : 0
+        const v = alt.sampleRaw(x, y, z)
+        expect(alt.sampleRaw(x + 8, y, z)).toBeCloseTo(v, 10)
+        expect(alt.sampleRaw(x, y + 8, z)).toBeCloseTo(v, 10)
+        expect(alt.sampleRaw(x - 8, y - 8, z)).toBeCloseTo(v, 10)
+      }
+    }
+  })
+
   test('alt samples are deterministic and clamped to [0, 1]', () => {
     for (const alt of ALT_VARIANTS) {
       for (let i = 0; i < 500; i++) {

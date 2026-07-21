@@ -367,7 +367,13 @@ const NoisePicker = ({
                       }
                       options={implementations.map(i => ({
                         value: i.id,
-                        label: i.status ? IMPLEMENTATION_STATUS_LABEL[i.status] : 'Shipping',
+                        // Ids take over once a noise carries more than one
+                        // candidate — see the same rule in index.tsx.
+                        label: !i.status
+                          ? 'Shipping'
+                          : implementations.filter(x => x.status).length > 1
+                            ? i.id
+                            : IMPLEMENTATION_STATUS_LABEL[i.status],
                         title: i.name,
                       }))}
                     />

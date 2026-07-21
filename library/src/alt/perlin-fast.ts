@@ -110,7 +110,7 @@ import { fade, LATTICE_HX, LATTICE_HY, LATTICE_HZ, lerp } from '../noises/common
 const FIB = 0x9e3779b1
 
 /** Diagonal dot: bit 30 picks the (fx + fy) or (fx - fy) base, bit 31 the sign. */
-const pick = (h: number, sv: number, dv: number): number => {
+export const pick = (h: number, sv: number, dv: number): number => {
   const v = (h & 0x40000000) === 0 ? sv : dv
   return h < 0 ? -v : v
 }
@@ -152,7 +152,7 @@ export const perlinFast2 = (x: number, y: number): number => {
  * 7-offset battery passes (worst joint 158), and the fix costs nothing
  * measurable — the extra integer work hides behind the FP chain.
  */
-const grad3 = (s: number, x: number, y: number, z: number): number => {
+export const grad3 = (s: number, x: number, y: number, z: number): number => {
   let h = s ^ (s >>> 16)
   h = Math.imul(h, 0x7feb352d)
   h ^= h >>> 15
