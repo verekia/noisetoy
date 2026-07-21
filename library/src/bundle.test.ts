@@ -54,7 +54,12 @@ afterAll(async () => {
  * it is a separate const, so it tree-shakes away even in a consumer that does
  * use the inventory. These four are prose or ids that exist nowhere else.
  */
-const INVENTORY_MARKERS = ['psrdnoise', 'spaceship hulls', 'one-point-per-cell', 'kernel-weighted-values']
+const INVENTORY_MARKERS = [
+  'branchless boolean algebra',
+  'spaceship hulls',
+  'one-point-per-cell',
+  'kernel-weighted-values',
+]
 
 /** A consumer doing the most ordinary thing: one noise, sampled and compiled. */
 const TYPICAL_CONSUMER = `
@@ -145,7 +150,7 @@ test('the reachability walk actually traverses the graph', async () => {
   expect(reached.some(f => f.endsWith('/noises/perlin.ts'))).toBe(true)
   // ...and it does reach src/alt from the benchmark, which is where it belongs.
   const fromBench = await reachableFrom(`${import.meta.dir}/alt/bench.ts`)
-  expect(fromBench.some(f => f.includes('/src/alt/simplex-trig.ts'))).toBe(true)
+  expect(fromBench.some(f => f.includes('/src/alt/perlin-fast.ts'))).toBe(true)
 })
 
 // Not a correctness property, but a number worth keeping in front of us while

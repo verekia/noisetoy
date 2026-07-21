@@ -77,10 +77,6 @@ import { simplexFast2, simplexFast3 } from './alt/simplex-fast'
 import { SIMPLEX_FAST_GLSL } from './alt/simplex-fast.glsl'
 import { SIMPLEX_FAST_TSL } from './alt/simplex-fast.tsl'
 import { SIMPLEX_FAST_WGSL } from './alt/simplex-fast.wgsl'
-import { simplex2 as simplexTrig2, simplex3 as simplexTrig3 } from './alt/simplex-trig'
-import { SIMPLEX_TRIG_GLSL } from './alt/simplex-trig.glsl'
-import { SIMPLEX_TRIG_TSL } from './alt/simplex-trig.tsl'
-import { SIMPLEX_TRIG_WGSL } from './alt/simplex-trig.wgsl'
 import { worleyFast2, worleyFast3 } from './alt/worley-fast'
 import { WORLEY_FAST_GLSL } from './alt/worley-fast.glsl'
 import { WORLEY_FAST_TSL } from './alt/worley-fast.tsl'
@@ -356,33 +352,8 @@ export const IMPLEMENTATIONS: Record<string, NoiseImplementation[]> = {
         "The reference's final scale factors (70 in 2D, 32 in 3D) are not applied; normalization is deferred to the display layer and recalibrated empirically, mostly because of the kernel-radius fork above.",
       ],
       rationale:
-        "Gradients are Gustavson's own 12 cube-edge vectors, shared with Perlin through gradTable3 in common.ts. This is 2.4x faster in both 2D and 3D on the CPU than the trigonometric construction kept at alt/simplex-trig.ts (`bun run bench:impl`), a modest win because simplex evaluates only 3 or 4 corners, so the skew and corner-ranking arithmetic is a larger share of what remains.\n\nMeasured against Gustavson's actual reference (in a baseline not kept in the repo): speed was a DEAD HEAT, 0.99x in 3D and 1.00x in 2D. That is the opposite of the Perlin result, where the permutation table beat the folded hash by ~8%, and the reason is structural — simplex chains its lookups as perm[ii + perm[jj + perm[kk]]], so the loads are dependent and serialise, while the folded hash computes each corner independently. Amplitude, with the reference's own scale factor applied to ours for comparison: 2D is 1.21x the reference (gradient set alone, same kernel), 3D is 0.38x (the kernel fork below).",
+        "Gradients are Gustavson's own 12 cube-edge vectors, shared with Perlin through gradTable3 in common.ts. Measured 2.4x faster in both 2D and 3D on the CPU than the trigonometric construction this repo originally shipped (removed after losing consistently on every backend; the figure is recorded here rather than re-runnable), a modest win because simplex evaluates only 3 or 4 corners, so the skew and corner-ranking arithmetic is a larger share of what remains.\n\nMeasured against Gustavson's actual reference (in a baseline not kept in the repo): speed was a DEAD HEAT, 0.99x in 3D and 1.00x in 2D. That is the opposite of the Perlin result, where the permutation table beat the folded hash by ~8%, and the reason is structural — simplex chains its lookups as perm[ii + perm[jj + perm[kk]]], so the loads are dependent and serialise, while the folded hash computes each corner independently. Amplitude, with the reference's own scale factor applied to ours for comparison: 2D is 1.21x the reference (gradient set alone, same kernel), 3D is 0.38x (the kernel fork below).",
       variantIds: ['simplex-2d', 'simplex-3d'],
-    },
-    {
-      id: 'trig-gradients',
-      name: 'Trig unit gradients',
-      kind: 'alternative',
-      evidence: 'paper-only',
-      status: 'superseded',
-      archivedAt: 'src/alt/simplex-trig.ts',
-      reference: {
-        paper: 'Stefan Gustavson, "Simplex noise demystified" (2005), after Ken Perlin (2001)',
-        implementation: 'SimplexNoise.java, by Gustavson',
-        licence: 'Placed in the public domain by the author',
-        url: 'https://cgvr.cs.uni-bremen.de/teaching/cg_literatur/simplexnoise.pdf',
-      },
-      follows: "Ken Perlin's simplex noise (2001) in Stefan Gustavson's 'Simplex noise demystified' (2005) formulation",
-      deviations: [
-        `${TRIG_GRADIENTS} Gustavson's reference indexes the 12 cube-edge vectors (2D reuses the same table with z dropped).`,
-        HASH_NOT_PERMUTATION,
-        "The 3D kernel radius is 0.5 where Gustavson's reference uses 0.6. Two lineages exist: the historical (0.6 - r^2)^4, and the corrected (0.5 - r^2)^3 of Gustavson & McEwan 2022, who show 0.6 makes the region of influence too large and leaves the field discontinuous at simplex boundaries. This code pairs 0.5 with exponent 4, which belongs to neither: continuous like the corrected form, but lower amplitude than either, since the exponent was not reduced to compensate. 2D is unaffected — the reference uses 0.5 there too.",
-        "The reference's final scale factors (70 in 2D, 32 in 3D) are not applied; normalization is deferred to the display layer and was recalibrated empirically to 90 and 98. That recalibration is partly the unit gradients and partly the kernel-radius fork above, which is exactly why the numbers are so far from the reference ones.",
-        'The skew/unskew constants F2/G2/F3/G3, the corner-ranking ladder and the t^4 exponent are the reference ones.',
-      ],
-      rationale:
-        "The repo's original Simplex, kept so the comparison can be re-run. Same gradient trade Perlin made, and it lost the same way: 2.4x on the CPU. The GPU comparison has not been run, and psrdnoise's argument for trigonometric gradients was about GPUs specifically.",
-      variantIds: [],
     },
     {
       id: 'fast-hash',
@@ -756,13 +727,6 @@ export type AltVariant = {
   tsl: ShaderSpec
 }
 
-// The display norms of the superseded trig Simplex. These are NOT the shipping
-// SIMPLEX*_NORMs: the unit gradients and the kernel-radius fork put its
-// amplitude elsewhere, and it was calibrated empirically to these values when
-// it was the default (see its inventory entry above).
-const SIMPLEX_TRIG2_NORM = 90
-const SIMPLEX_TRIG3_NORM = 98
-
 const spec = (dim: 2 | 3, deps: string[], expr: string): ShaderSpec => ({ dim, deps, expr })
 
 /** value * (0.5 * norm) + 0.5, unclamped — matches signedExpr in the registry. */
@@ -824,17 +788,6 @@ export const ALT_VARIANTS: AltVariant[] = [
     (x, y, z) => 0.5 + 0.5 * PERLIN3_NORM * perlinFast3(x, y, z),
     fastShaders(3, PERLIN_FAST_CHUNKS, 'perlinFast3(p)', PERLIN3_NORM),
   ),
-  // The trig chunks need only the common library (gradDot2/3, hash2u/hash3u).
-  altVariant('simplex', 'trig-gradients', 2, (x, y) => 0.5 + 0.5 * SIMPLEX_TRIG2_NORM * simplexTrig2(x, y), {
-    glsl: spec(2, [SIMPLEX_TRIG_GLSL], signedText(SIMPLEX_TRIG2_NORM, 'simplexTrig2(p)')),
-    wgsl: spec(2, [SIMPLEX_TRIG_WGSL], signedText(SIMPLEX_TRIG2_NORM, 'simplexTrig2(p)')),
-    tsl: spec(2, [SIMPLEX_TRIG_TSL], signedTsl(SIMPLEX_TRIG2_NORM, 'simplexTrig2(p)')),
-  }),
-  altVariant('simplex', 'trig-gradients', 3, (x, y, z) => 0.5 + 0.5 * SIMPLEX_TRIG3_NORM * simplexTrig3(x, y, z), {
-    glsl: spec(3, [SIMPLEX_TRIG_GLSL], signedText(SIMPLEX_TRIG3_NORM, 'simplexTrig3(p)')),
-    wgsl: spec(3, [SIMPLEX_TRIG_WGSL], signedText(SIMPLEX_TRIG3_NORM, 'simplexTrig3(p)')),
-    tsl: spec(3, [SIMPLEX_TRIG_TSL], signedTsl(SIMPLEX_TRIG3_NORM, 'simplexTrig3(p)')),
-  }),
   // Same gradient set and kernel as the shipping simplex, so the shipping
   // norms apply unchanged.
   altVariant(

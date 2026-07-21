@@ -5,11 +5,13 @@
 //
 // Gradients are Gustavson's own 12 cube-edge vectors via the shared gradTable
 // helpers, and the corner hashes are folded rather than chained — the same two
-// choices Perlin makes, for the same reasons. Measured 2.6x
-// faster in 2D and 2.4x in 3D against the trigonometric implementation kept at
-// alt/simplex-trig.ts (`bun run bench:impl`). The win is smaller than Perlin's
-// because simplex evaluates only 3 or 4 corners, so the skew and corner-ranking
-// arithmetic — untouched here — is a larger share of what is left.
+// choices Perlin makes, for the same reasons. Measured 2.6x faster in 2D and
+// 2.4x in 3D against the trigonometric implementation this repo originally
+// shipped (removed after losing consistently on every backend; the figures
+// are recorded in implementations.ts rather than re-runnable). The win is
+// smaller than Perlin's because simplex evaluates only 3 or 4 corners, so the
+// skew and corner-ranking arithmetic — untouched here — is a larger share of
+// what is left.
 //
 // Corner hashes reuse the base products: every corner offset is 0 or 1 on each
 // axis, so it selects between `i * K` and `i * K + K` rather than multiplying

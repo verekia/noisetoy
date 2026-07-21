@@ -1,6 +1,8 @@
 // Head-to-head benchmark of each shipping implementation against the
-// non-shipping one kept in src/alt: the trig-gradient Simplex it replaced, and
-// the fast-hash Perlin and pruned-search Worley candidates that challenge it.
+// non-shipping candidates kept in src/alt: the fast-hash Perlin and Simplex
+// and the pruned-search Worley that challenge it. (The trig-gradient Simplex
+// this file originally existed for was removed after losing consistently on
+// every backend; its 2.4x figure is recorded in implementations.ts.)
 //
 // The reference implementations of Perlin and Simplex were removed from the
 // repo: both were built on Perlin's 256-entry permutation table, and while it
@@ -33,7 +35,6 @@ import { simplex2 as simplexTable2, simplex3 as simplexTable3 } from '../noises/
 import { worley2, worley3 } from '../noises/worley'
 import { perlinFast2, perlinFast3 } from './perlin-fast'
 import { simplexFast2, simplexFast3 } from './simplex-fast'
-import { simplex2 as simplexTrig2, simplex3 as simplexTrig3 } from './simplex-trig'
 import { worleyFast2, worleyFast3 } from './worley-fast'
 
 type Fn3 = (x: number, y: number, z: number) => number
@@ -93,12 +94,6 @@ const compare = (label: string, before: [string, Fn3], after: [string, Fn3]) => 
 }
 
 console.log(`Implementation comparison — ${SAMPLES.toLocaleString()} samples per run, bun ${Bun.version}`)
-compare(
-  'Simplex 2D',
-  ['superseded (trig gradients)', (x, y) => simplexTrig2(x, y)],
-  ['shipping   (table gradients)', (x, y) => simplexTable2(x, y)],
-)
-compare('Simplex 3D', ['superseded (trig gradients)', simplexTrig3], ['shipping   (table gradients)', simplexTable3])
 compare(
   'Perlin 2D',
   ['shipping  (folded lowbias32)', (x, y) => perlin2(x, y)],
