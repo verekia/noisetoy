@@ -104,6 +104,10 @@ import { vortexFast2, vortexFast3 } from './alt/vortex-fast'
 import { VORTEX_FAST_GLSL } from './alt/vortex-fast.glsl'
 import { VORTEX_FAST_TSL } from './alt/vortex-fast.tsl'
 import { VORTEX_FAST_WGSL } from './alt/vortex-fast.wgsl'
+import { waveFast2, waveFast3 } from './alt/wave-fast'
+import { WAVE_FAST_GLSL } from './alt/wave-fast.glsl'
+import { WAVE_FAST_TSL } from './alt/wave-fast.tsl'
+import { WAVE_FAST_WGSL } from './alt/wave-fast.wgsl'
 import { worleyFast2, worleyFast3 } from './alt/worley-fast'
 import { WORLEY_FAST_GLSL } from './alt/worley-fast.glsl'
 import { WORLEY_FAST_TSL } from './alt/worley-fast.tsl'
@@ -766,6 +770,17 @@ export const IMPLEMENTATIONS: Record<string, NoiseImplementation[]> = {
         'Each lattice corner emits a hashed plane wave and the corner waves are blended with the quintic fade. Related in spirit to Gabor and phasor noise, but reached by lattice blending rather than kernel summation, which is why it costs a fraction of the real Gabor.',
       variantIds: ['wave-2d', 'wave-3d'],
     },
+    {
+      id: 'fast-dirs',
+      name: 'Table directions, one mix per corner',
+      kind: 'novel',
+      evidence: 'none',
+      status: 'candidate',
+      archivedAt: 'src/alt/wave-fast.ts',
+      rationale:
+        'The wave cosine is irreducible — it IS the signal — but shipping spends two or three chained avalanches plus a cos and a sin per corner building the direction before it. The candidate spends ONE mix per corner (fib1 in 2D, lowbias32 in 3D) and takes the direction from a table of 64 unit directions at 5.625-degree steps — vortex got away with 16, but wave DISPLAYS the direction as the local stripe orientation, so it gets the finer table. Phase quantizes to 256 steps; the 3D polar component keeps the shipping construction with kz from 10 bits. Field mean/rms/extrema match shipping to two decimals. Measured with `bun run bench:impl`: ~2.5x the shipping wave2 and ~2.0x wave3 on the CPU; browser JS reads ~3.1x and ~2.4x. GPU: a tie in 2D; in 3D WebGL runs 1.15x shipping with WebGPU and TSL at parity. Not promoted: no tileable paths yet, and the field is a different draw.',
+      variantIds: [],
+    },
   ],
   ripple: [
     {
@@ -991,6 +1006,7 @@ const WORLEY_FAST_CHUNKS = { glsl: WORLEY_FAST_GLSL, wgsl: WORLEY_FAST_WGSL, tsl
 const CELLULAR_FAST_CHUNKS = { glsl: CELLULAR_FAST_GLSL, wgsl: CELLULAR_FAST_WGSL, tsl: CELLULAR_FAST_TSL }
 const VORTEX_FAST_CHUNKS = { glsl: VORTEX_FAST_GLSL, wgsl: VORTEX_FAST_WGSL, tsl: VORTEX_FAST_TSL }
 const VALUE_FAST_CHUNKS = { glsl: VALUE_FAST_GLSL, wgsl: VALUE_FAST_WGSL, tsl: VALUE_FAST_TSL }
+const WAVE_FAST_CHUNKS = { glsl: WAVE_FAST_GLSL, wgsl: WAVE_FAST_WGSL, tsl: WAVE_FAST_TSL }
 const WORLEY_METRICS_FAST_CHUNKS = {
   glsl: WORLEY_METRICS_FAST_GLSL,
   wgsl: WORLEY_METRICS_FAST_WGSL,
@@ -1216,8 +1232,8 @@ export const ALT_VARIANTS: AltVariant[] = [
     (x, y, z) => CHEBYSHEV3_NORM * chebyshevFast3(x, y, z),
     fastShaders(3, WORLEY_METRICS_FAST_CHUNKS, 'chebyshevFast3(p)', CHEBYSHEV3_NORM, 'unsigned'),
   ),
-  // Value measured as a GPU tie in both dimensions (0.96-1.03 ratios), so
-  // it keeps the shipping figures.
+  // Value and wave 2D measured as GPU ties, so they keep the shipping
+  // figures; wave 3D won only on WebGL (ratio 0.94 -> 1.2).
   altVariant(
     'value',
     'fib-hash',
@@ -1227,6 +1243,22 @@ export const ALT_VARIANTS: AltVariant[] = [
     fastShaders(2, VALUE_FAST_CHUNKS, 'valueFast2(p)', null),
   ),
   altVariant('value', 'fib-hash', 3, 0.5, valueFast3, fastShaders(3, VALUE_FAST_CHUNKS, 'valueFast3(p)', null)),
+  altVariant(
+    'wave',
+    'fast-dirs',
+    2,
+    0.54,
+    (x, y) => 0.5 + 0.5 * waveFast2(x, y),
+    fastShaders(2, WAVE_FAST_CHUNKS, 'waveFast2(p)', 1),
+  ),
+  altVariant(
+    'wave',
+    'fast-dirs',
+    3,
+    1.2,
+    (x, y, z) => 0.5 + 0.5 * waveFast3(x, y, z),
+    fastShaders(3, WAVE_FAST_CHUNKS, 'waveFast3(p)', 1),
+  ),
 ]
 
 export const altVariantsFor = (noiseId: string, implementationId: string): AltVariant[] =>

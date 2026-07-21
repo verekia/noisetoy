@@ -37,6 +37,7 @@ import { ripple2, ripple3 } from '../noises/ripple'
 import { simplex2 as simplexTable2, simplex3 as simplexTable3 } from '../noises/simplex'
 import { value2, value3 } from '../noises/value'
 import { vortex2, vortex3 } from '../noises/vortex'
+import { wave2, wave3 } from '../noises/wave'
 import { worley2, worley3 } from '../noises/worley'
 import { chebyshev2, chebyshev3, manhattan2, manhattan3 } from '../noises/worley-metrics'
 import {
@@ -56,6 +57,7 @@ import { perlinFast2, perlinFast3 } from './perlin-fast'
 import { simplexFast2, simplexFast3 } from './simplex-fast'
 import { valueFast2, valueFast3 } from './value-fast'
 import { vortexFast2, vortexFast3 } from './vortex-fast'
+import { waveFast2, waveFast3 } from './wave-fast'
 import { worleyFast2, worleyFast3 } from './worley-fast'
 import { chebyshevFast2, chebyshevFast3, manhattanFast2, manhattanFast3 } from './worley-metrics-fast'
 
@@ -191,6 +193,12 @@ compare(
   ['candidate (folded lattice)', (x, y) => valueFast2(x, y)],
 )
 compare('Value 3D', ['shipping  (chained avalanches)', value3], ['candidate (folded lattice)', valueFast3])
+compare(
+  'Wave 2D',
+  ['shipping  (per-corner trig)', (x, y) => wave2(x, y)],
+  ['candidate (table dirs)', (x, y) => waveFast2(x, y)],
+)
+compare('Wave 3D', ['shipping  (per-corner trig)', wave3], ['candidate (table dirs)', waveFast3])
 compare(
   'Simplex 2D vs candidate',
   ['shipping  (folded lowbias32)', (x, y) => simplexTable2(x, y)],
