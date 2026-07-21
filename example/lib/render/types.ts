@@ -9,6 +9,13 @@ export type RenderOptions = {
   height: number
   /** Only the Three.js renderer honours the 3D modes. */
   view?: ViewMode
+  /**
+   * Scales the 3D views' displacement height, 0-1. Band mode passes ~0.25:
+   * an isolated band is a full-height wall, and a vertex grid crenellates
+   * sampling it at full displacement — scaling the relief down to a stepped
+   * cliff's height makes it resolvable, while colors keep the full mask.
+   */
+  displacementScale?: number
 }
 
 export type { Renderer }

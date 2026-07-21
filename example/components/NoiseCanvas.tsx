@@ -18,11 +18,14 @@ const NoiseCanvas = ({
   effect,
   backend,
   view = '2d',
+  displacementScale = 1,
 }: {
   /** Must be referentially stable between renders (memoized). */
   effect: Effect
   backend: Backend
   view?: ViewMode
+  /** Scales the 3D views' relief height; see RenderOptions. */
+  displacementScale?: number
 }) => {
   const wrapperRef = useRef<HTMLDivElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -53,7 +56,7 @@ const NoiseCanvas = ({
     canvas.width = initial.width
     canvas.height = initial.height
 
-    const options = { effect, width: initial.width, height: initial.height, view }
+    const options = { effect, width: initial.width, height: initial.height, view, displacementScale }
     const start = async () => {
       const created =
         backend === 'js'
@@ -101,7 +104,7 @@ const NoiseCanvas = ({
       rendererRef.current?.dispose()
       rendererRef.current = null
     }
-  }, [effect, backend, view, fill])
+  }, [effect, backend, view, fill, displacementScale])
 
   return (
     <div

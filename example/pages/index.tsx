@@ -890,7 +890,7 @@ export default function Home() {
               <span className="px-1 text-xs text-zinc-500">Not tileable</span>
             )}
           </div>
-          <NoiseCanvas effect={effect} backend={backend} view={view} />
+          <NoiseCanvas effect={effect} backend={backend} view={view} displacementScale={band ? 0.25 : 1} />
         </main>
       </div>
       {picking !== null && (

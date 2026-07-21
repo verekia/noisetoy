@@ -41,7 +41,7 @@ const fitDistance = (radius: number, aspect: number, margin: number): number => 
 
 export const createThreeRenderer = async (
   canvas: HTMLCanvasElement,
-  { effect, width, height, view = '2d' }: RenderOptions,
+  { effect, width, height, view = '2d', displacementScale = 1 }: RenderOptions,
 ): Promise<Renderer> => {
   if (!('gpu' in navigator)) throw new Error('The Three.js backend requires WebGPU')
   const THREE = await import('three/webgpu')
@@ -78,11 +78,16 @@ export const createThreeRenderer = async (
   let geometry: InstanceType<typeof THREE.PlaneGeometry> | InstanceType<typeof THREE.SphereGeometry>
   let controls: OrbitControls | null = null
 
+  // Camera framing keeps the full DISPLACEMENT so the view does not jump
+  // when a display mode rescales the relief.
+  const disp = DISPLACEMENT * Math.min(1, Math.max(0, displacementScale))
+
   if (view === 'plane') {
-    material.positionNode = TSL.positionLocal.add(TSL.vec3(0, 0, height01.mul(DISPLACEMENT)))
+    material.positionNode = TSL.positionLocal.add(TSL.vec3(0, 0, height01.mul(disp)))
 
     const n = effectNormalNode(effect, {
       time: timeUniform,
+      amount: disp,
       epsilon: 1 / PLANE_SEGMENTS,
       position: solid ? planePosition : undefined,
     })
@@ -108,7 +113,7 @@ export const createThreeRenderer = async (
     // Same world-space amplitude as the plane: both meshes are 2 units across
     // and now share feature widths, so sharing DISPLACEMENT gives them the
     // same relief steepness.
-    material.positionNode = TSL.positionLocal.add(TSL.normalLocal.mul(height01.mul(DISPLACEMENT)))
+    material.positionNode = TSL.positionLocal.add(TSL.normalLocal.mul(height01.mul(disp)))
     // The geometric normal keeps the sphere reading as a sphere; the height
     // drives albedo, and the displaced silhouette supplies the relief.
     const light = TSL.normalize(TSL.vec3(-0.45, 0.35, 0.8))
