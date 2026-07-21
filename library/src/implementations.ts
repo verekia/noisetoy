@@ -96,6 +96,10 @@ import { simplexFast2, simplexFast3 } from './alt/simplex-fast'
 import { SIMPLEX_FAST_GLSL } from './alt/simplex-fast.glsl'
 import { SIMPLEX_FAST_TSL } from './alt/simplex-fast.tsl'
 import { SIMPLEX_FAST_WGSL } from './alt/simplex-fast.wgsl'
+import { vortexFast2, vortexFast3 } from './alt/vortex-fast'
+import { VORTEX_FAST_GLSL } from './alt/vortex-fast.glsl'
+import { VORTEX_FAST_TSL } from './alt/vortex-fast.tsl'
+import { VORTEX_FAST_WGSL } from './alt/vortex-fast.wgsl'
 import { worleyFast2, worleyFast3 } from './alt/worley-fast'
 import { WORLEY_FAST_GLSL } from './alt/worley-fast.glsl'
 import { WORLEY_FAST_TSL } from './alt/worley-fast.tsl'
@@ -824,6 +828,17 @@ export const IMPLEMENTATIONS: Record<string, NoiseImplementation[]> = {
         'Hashed unit vectors at the lattice corners are blended with the quintic fade and the ANGLE of the result is displayed as cos(2*theta), so the singularities where the blend cancels become pinwheels. Reading the angle of a blended random vector field appears to be original.',
       variantIds: ['vortex-2d', 'vortex-3d'],
     },
+    {
+      id: 'fast-dirs',
+      name: 'Sixteen table directions, algebraic angle',
+      kind: 'novel',
+      evidence: 'none',
+      status: 'candidate',
+      archivedAt: 'src/alt/vortex-fast.ts',
+      rationale:
+        'Every transcendental removed. Corner vectors come from sixteen unit directions at 22.5-degree steps (quadrant rotations of four base vectors, top 4 bits of the fast corner mix) instead of cos/sin of a continuous angle — eight directions measured visibly blockier, sixteen restored the shipping character. The display cos(2 * atan2(sy, sx)) collapses to the identity (sx^2 - sy^2) / (sx^2 + sy^2). In 3D the sphere-projected corner length becomes a hashed length in [0, 1), dropping the per-corner sqrt. Shipping spends 8 lowbias32 rounds, 8 trig calls, an atan2 and a cos per 2D sample; the candidate spends 4 one-multiply mixes and a divide. Measured with `bun run bench:impl`: ~5.5x the shipping vortex2 and ~2.8x vortex3 on the CPU — the largest single speedup in the repo. Field mean/rms/extrema match shipping (rms 0.707 both, the cos(2 theta) invariant). GPU is a tie (0.97-0.99 ratios on WebGL+WebGPU — trig is cheap there; browser JS shows 5.5x/2.3x). Not promoted: no tileable paths yet, and the field is a different draw.',
+      variantIds: [],
+    },
   ],
 }
 
@@ -959,6 +974,7 @@ const PERLIN_FAST_CHUNKS = { glsl: PERLIN_FAST_GLSL, wgsl: PERLIN_FAST_WGSL, tsl
 const SIMPLEX_FAST_CHUNKS = { glsl: SIMPLEX_FAST_GLSL, wgsl: SIMPLEX_FAST_WGSL, tsl: SIMPLEX_FAST_TSL }
 const WORLEY_FAST_CHUNKS = { glsl: WORLEY_FAST_GLSL, wgsl: WORLEY_FAST_WGSL, tsl: WORLEY_FAST_TSL }
 const CELLULAR_FAST_CHUNKS = { glsl: CELLULAR_FAST_GLSL, wgsl: CELLULAR_FAST_WGSL, tsl: CELLULAR_FAST_TSL }
+const VORTEX_FAST_CHUNKS = { glsl: VORTEX_FAST_GLSL, wgsl: VORTEX_FAST_WGSL, tsl: VORTEX_FAST_TSL }
 const WORLEY_METRICS_FAST_CHUNKS = {
   glsl: WORLEY_METRICS_FAST_GLSL,
   wgsl: WORLEY_METRICS_FAST_WGSL,
@@ -1043,6 +1059,25 @@ export const ALT_VARIANTS: AltVariant[] = [
   // Metric-candidate costs: shipping VARIANT_COST x measured GPU throughput
   // ratio (WebGL+WebGPU medians). Manhattan: 0.94 (2D) / 0.65 (3D).
   // Chebyshev: 0.92 (2D) / 0.52 (3D).
+  // Vortex costs: GPU measured a tie (ratios 0.97-0.99, WebGL+WebGPU), as
+  // expected where trig is cheap, so the shipping figures carry over.
+  // Display is the registry's 0.5 + 0.5 * v (norm 1).
+  altVariant(
+    'vortex',
+    'fast-dirs',
+    2,
+    0.45,
+    (x, y) => 0.5 + 0.5 * vortexFast2(x, y),
+    fastShaders(2, VORTEX_FAST_CHUNKS, 'vortexFast2(p)', 1),
+  ),
+  altVariant(
+    'vortex',
+    'fast-dirs',
+    3,
+    1.0,
+    (x, y, z) => 0.5 + 0.5 * vortexFast3(x, y, z),
+    fastShaders(3, VORTEX_FAST_CHUNKS, 'vortexFast3(p)', 1),
+  ),
   // Ripple costs: shipping VARIANT_COST x measured GPU ratio, 0.91 (2D) and
   // 0.79 (3D) — WebGL+WebGPU medians.
   altVariant(
