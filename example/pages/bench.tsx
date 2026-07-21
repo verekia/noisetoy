@@ -155,8 +155,9 @@ export default function Bench() {
           return sortDesc ? vb - va : va - vb
         })
 
-  // Relative performance within a column: >= 1/3 of the column's fastest is
-  // green, >= 1/10 is yellow, slower is orange.
+  // Relative performance within a column, as "how much slower than the
+  // column's fastest": under 1.5x slower is green, under 2x yellow, under 3x
+  // orange, beyond that red.
   const columnMax: Record<Backend, number> = { js: 0, webgl: 0, webgpu: 0, three: 0 }
   for (const row of allRows) {
     for (const backend of ['js', 'webgl', 'webgpu', 'three'] as Backend[]) {
@@ -166,7 +167,13 @@ export default function Bench() {
   }
 
   const perfClass = (value: number, max: number): string =>
-    max <= 0 || value >= max / 3 ? 'text-emerald-400' : value >= max / 10 ? 'text-yellow-400' : 'text-orange-400'
+    max <= 0 || value >= max / 1.5
+      ? 'text-emerald-400'
+      : value >= max / 2
+        ? 'text-yellow-400'
+        : value >= max / 3
+          ? 'text-orange-400'
+          : 'text-red-400'
 
   const sortBy = (col: SortCol) => {
     if (col === sortCol) {
@@ -314,9 +321,9 @@ export default function Bench() {
             </tbody>
           </table>
           <p className="mt-3 text-xs text-zinc-500">
-            Click a column header to sort. Colors are relative to the fastest result in the same column:{' '}
-            <span className="text-emerald-400">≥ 1/3×</span>, <span className="text-yellow-400">≥ 1/10×</span>,{' '}
-            <span className="text-orange-400">slower</span>.
+            Click a column header to sort. Colors show how much slower a cell is than the fastest in its column:{' '}
+            <span className="text-emerald-400">under 1.5×</span>, <span className="text-yellow-400">under 2×</span>,{' '}
+            <span className="text-orange-400">under 3×</span>, <span className="text-red-400">3× or more</span>.
           </p>
         </div>
       </div>
