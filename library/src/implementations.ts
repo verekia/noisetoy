@@ -66,6 +66,10 @@
 // GPUs. The table gradients live alongside it in common.ts as `gradTable2` /
 // `gradTable3`, so switching a noise over is a small change.
 
+import { mosaicFast2, mosaicFast3 } from './alt/cellular-fast'
+import { CELLULAR_FAST_GLSL } from './alt/cellular-fast.glsl'
+import { CELLULAR_FAST_TSL } from './alt/cellular-fast.tsl'
+import { CELLULAR_FAST_WGSL } from './alt/cellular-fast.wgsl'
 import { FAST_COMMON_GLSL } from './alt/fast-common.glsl'
 import { FAST_COMMON_TSL } from './alt/fast-common.tsl'
 import { FAST_COMMON_WGSL } from './alt/fast-common.wgsl'
@@ -642,6 +646,26 @@ export const IMPLEMENTATIONS: Record<string, NoiseImplementation[]> = {
       deviations: [ONE_POINT_PER_CELL],
       variantIds: ['mosaic-2d', 'mosaic-3d'],
     },
+    {
+      id: 'split-bits-pruned',
+      name: 'Split-bit offsets, pruned search, winner re-hash',
+      kind: 'canonical',
+      evidence: 'paper-only',
+      status: 'candidate',
+      archivedAt: 'src/alt/cellular-fast.ts',
+      reference: {
+        paper: 'Steven Worley, "A Cellular Texture Basis Function" (SIGGRAPH 1996), p. 293',
+        url: 'https://cedric.cnam.fr/~cubaud/PROCEDURAL/worley.pdf',
+      },
+      follows: 'Steven Worley (1996), which specifies the constant-per-Voronoi-cell shading explicitly',
+      deviations: [
+        ONE_POINT_PER_CELL,
+        'The worley split-bits-pruned substrate, tracking WHICH cell won the F1 search. The flat cell value is one lowbias32 avalanche of the winning lattice fold — independent of the offset bits, so cell colours cannot correlate with feature-point positions. The shipping implementation spends 4-6 avalanches per cell; this spends one short mix per cell plus one avalanche for the winner. Pruning is exact (zero mismatches over 400k probes vs the unpruned reference).',
+      ],
+      rationale:
+        'Measured with `bun run bench:impl`: 2.1x the shipping mosaic2 and 2.8x mosaic3 on the CPU, and a GPU win in 3D too — 1.9x (WebGL+WebGPU medians; 2D ~1.05x). Cell-value distribution matches shipping (mean 0.50, rms 0.577 — uniform). Not promoted: no tileable paths yet.',
+      variantIds: [],
+    },
   ],
   crackle: [
     {
@@ -868,6 +892,7 @@ const fastShaders = (
 const PERLIN_FAST_CHUNKS = { glsl: PERLIN_FAST_GLSL, wgsl: PERLIN_FAST_WGSL, tsl: PERLIN_FAST_TSL }
 const SIMPLEX_FAST_CHUNKS = { glsl: SIMPLEX_FAST_GLSL, wgsl: SIMPLEX_FAST_WGSL, tsl: SIMPLEX_FAST_TSL }
 const WORLEY_FAST_CHUNKS = { glsl: WORLEY_FAST_GLSL, wgsl: WORLEY_FAST_WGSL, tsl: WORLEY_FAST_TSL }
+const CELLULAR_FAST_CHUNKS = { glsl: CELLULAR_FAST_GLSL, wgsl: CELLULAR_FAST_WGSL, tsl: CELLULAR_FAST_TSL }
 const WORLEY_METRICS_FAST_CHUNKS = {
   glsl: WORLEY_METRICS_FAST_GLSL,
   wgsl: WORLEY_METRICS_FAST_WGSL,
@@ -952,6 +977,24 @@ export const ALT_VARIANTS: AltVariant[] = [
   // Metric-candidate costs: shipping VARIANT_COST x measured GPU throughput
   // ratio (WebGL+WebGPU medians). Manhattan: 0.94 (2D) / 0.65 (3D).
   // Chebyshev: 0.92 (2D) / 0.52 (3D).
+  // Mosaic cost: shipping VARIANT_COST x measured GPU ratio, 0.96 (2D) and
+  // 0.53 (3D) — WebGL+WebGPU medians.
+  altVariant(
+    'mosaic',
+    'split-bits-pruned',
+    2,
+    0.6,
+    (x, y) => mosaicFast2(x, y),
+    fastShaders(2, CELLULAR_FAST_CHUNKS, 'mosaicFast2(p)', null),
+  ),
+  altVariant(
+    'mosaic',
+    'split-bits-pruned',
+    3,
+    1.3,
+    (x, y, z) => mosaicFast3(x, y, z),
+    fastShaders(3, CELLULAR_FAST_CHUNKS, 'mosaicFast3(p)', null),
+  ),
   altVariant(
     'worley-manhattan',
     'split-bits-pruned',

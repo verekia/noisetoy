@@ -30,11 +30,13 @@
 // width, which a GPU also prices differently. Treat this as a strong hint,
 // not a settled answer.
 
+import { mosaic2, mosaic3 } from '../noises/cellular'
 import { flow3 } from '../noises/flow'
 import { perlin2, perlin3 } from '../noises/perlin'
 import { simplex2 as simplexTable2, simplex3 as simplexTable3 } from '../noises/simplex'
 import { worley2, worley3 } from '../noises/worley'
 import { chebyshev2, chebyshev3, manhattan2, manhattan3 } from '../noises/worley-metrics'
+import { mosaicFast2, mosaicFast3 } from './cellular-fast'
 import { flowFast3 } from './flow-fast'
 import { perlinFast2, perlinFast3 } from './perlin-fast'
 import { simplexFast2, simplexFast3 } from './simplex-fast'
@@ -131,6 +133,12 @@ compare(
   ['shipping  (chained avalanches)', chebyshev3],
   ['candidate (split bits, pruned)', chebyshevFast3],
 )
+compare(
+  'Mosaic 2D',
+  ['shipping  (chained avalanches)', (x, y) => mosaic2(x, y)],
+  ['candidate (split bits, pruned)', (x, y) => mosaicFast2(x, y)],
+)
+compare('Mosaic 3D', ['shipping  (chained avalanches)', mosaic3], ['candidate (split bits, pruned)', mosaicFast3])
 compare(
   'Simplex 2D vs candidate',
   ['shipping  (folded lowbias32)', (x, y) => simplexTable2(x, y)],
