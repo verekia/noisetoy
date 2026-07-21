@@ -67,9 +67,10 @@
 // `gradTable3`, so switching a noise over is a small change.
 
 import { perlinFast2, perlinFast3 } from './alt/perlin-fast'
+import { simplexFast2, simplexFast3 } from './alt/simplex-fast'
 import { simplex2 as simplexTrig2, simplex3 as simplexTrig3 } from './alt/simplex-trig'
 import { worleyFast2, worleyFast3 } from './alt/worley-fast'
-import { clamp01, PERLIN2_NORM, PERLIN3_NORM } from './noises/normalization'
+import { clamp01, PERLIN2_NORM, PERLIN3_NORM, SIMPLEX2_NORM, SIMPLEX3_NORM } from './noises/normalization'
 
 export type ImplementationKind = 'canonical' | 'alternative' | 'conventional' | 'novel'
 
@@ -286,13 +287,13 @@ export const IMPLEMENTATIONS: Record<string, NoiseImplementation[]> = {
       follows: "Ken Perlin, 'Improved Noise' (2002)",
       deviations: [
         HASH_NOT_PERMUTATION,
-        "A corner hash is one xor-shift and one multiply by 2^32/phi (Knuth multiplicative hashing) with every selection bit read from the TOP of the product, against the shipping implementation's full lowbias32 avalanche per corner. The pre-multiply xor-shift is load-bearing: without it the corner mix is affine in the lattice coordinates and neighbouring gradients correlate in a fixed pattern.",
-        'In 2D the xor-shift is hoisted out of the corners (applied to the two x lattice products, corners then combine by xor); the same hoist in 3D failed adjacent-corner chi-square (216 against a 143-df critical of 172), so 3D keeps the per-corner mix of the folded sum, which passes.',
+        'Corner hashes are cheaper than the shipping full lowbias32 and DIFFER BY DIMENSION, because the required mixing differs by dimension. 2D: one xor-shift and one multiply by 2^32/phi (Knuth multiplicative hashing), selection bits read from the TOP of the product — valid on the two-axis fold (joints at +x/+y/+xy inside the 95% chi-square criticals). 3D: lowbias32 minus its final xor-shift, two ops and the u32 coercions cheaper than hashU32 — the single-multiply mix fails corner pairs at +yz/+xyz offsets (chi-square 425 and 202 against a 143-df critical of 172), a defect the first version of this file shipped until the simplex pass caught it. The fix cost nothing measurable.',
+        'In 2D the xor-shift is hoisted out of the corners (applied to the two x lattice products, corners then combine by xor); the same hoist in 3D failed adjacent-corner chi-square (216 against a 143-df critical of 172).',
         'The 2D corner dots are factored: with the four diagonal gradients every dot is +-(fx + fy) or +-(fx - fy) up to a per-corner integer shift, so both bases are computed once per sample and a corner is a select, an add and a sign flip. The gradient set matches the shipping gradTable2, which draws the same four diagonals (its slots 4-7 repeat slots 0-3 with the operands swapped).',
         "3D keeps the reference's 12 cube-edge gradient set, chosen by the same integer range split as the shipping gradTable3, reading the low 30 bits so the axis choice stays disjoint from the sign bits at 30/31.",
       ],
       rationale:
-        "The current challenger, and the measured FLOOR of the scalar form: a second tuning pass tried a hoisted 3D pre-mix, weighted-sum interpolation, an Estrin-reassociated fade, branchless 2D signs and a bias-trick floor, and every one measured flat or worse over 8-12 interleaved repeats — the FP skeleton (floors, fades, lerps) is ~156 ms of the ~190/~222 ms totals in the bench harness, so the remaining integer work sits latency-hidden behind it. Details in the source header. Measured with `bun run bench:impl`: ~1.3x the shipping perlin3 (stable across runs) and ~1.1x perlin2 (noisy, 1.08-1.27x run to run) on the CPU. Gradient marginals, adjacent-corner joints along each axis and a checkerboard split all sit inside the 95% chi-square criticals, and the assembled field's mean, RMS, extrema and lattice-lag autocorrelation match the shipping perlin to three decimals — but the field is a DIFFERENT DRAW, so promotion would change the pattern every consumer sees. Not promoted because it has no GLSL/WGSL/TSL backends yet and the GPU is unmeasured, and a narrower avalanche is precisely the kind of trade a GPU prices differently.",
+        "The current challenger, and the measured FLOOR of the scalar form: a second tuning pass tried a hoisted 3D pre-mix, weighted-sum interpolation, an Estrin-reassociated fade, branchless 2D signs and a bias-trick floor, and every one measured flat or worse over 8-12 interleaved repeats — the FP skeleton (floors, fades, lerps) is ~156 ms of the ~190/~222 ms totals in the bench harness, so the remaining integer work sits latency-hidden behind it. Details in the source header. Measured with `bun run bench:impl`: perlin3 between 1.1x and 1.3x depending on the day's machine state, perlin2 ~1.1x, medians and bests agreeing within any single run. Gradient marginals, adjacent-corner joints along each axis and a checkerboard split all sit inside the 95% chi-square criticals, and the assembled field's mean, RMS, extrema and lattice-lag autocorrelation match the shipping perlin to three decimals — but the field is a DIFFERENT DRAW, so promotion would change the pattern every consumer sees. Not promoted because it has no GLSL/WGSL/TSL backends yet and the GPU is unmeasured, and a narrower avalanche is precisely the kind of trade a GPU prices differently.",
       variantIds: [],
     },
   ],
@@ -368,6 +369,32 @@ export const IMPLEMENTATIONS: Record<string, NoiseImplementation[]> = {
         "The repo's original Simplex, kept so the comparison can be re-run. Same gradient trade Perlin made, and it lost the same way: 2.4x on the CPU. The GPU comparison has not been run, and psrdnoise's argument for trigonometric gradients was about GPUs specifically.",
       variantIds: [],
     },
+    {
+      id: 'fast-hash',
+      name: 'Top-bit gradients, branchless ranking',
+      kind: 'alternative',
+      evidence: 'reference-exists-uncompared',
+      status: 'candidate',
+      archivedAt: 'src/alt/simplex-fast.ts',
+      reference: {
+        paper: 'Stefan Gustavson, "Simplex noise demystified" (2005), after Ken Perlin (2001)',
+        implementation:
+          'SimplexNoise.java, by Gustavson. The measured comparison is against the SHIPPING implementation above, not the reference.',
+        licence: 'Public domain (dedicated in the code file).',
+        url: 'https://github.com/SRombauts/SimplexNoise/blob/master/references/SimplexNoise.java',
+      },
+      follows: "Ken Perlin's simplex noise (2001) in Stefan Gustavson's 'Simplex noise demystified' (2005) formulation",
+      deviations: [
+        "Inherits the shipping implementation's deviations (kernel radius 0.5 with exponent 4 in 3D, folded lattice hash, deferred normalization) — this candidate changes how corners are hashed and ranked, not the algorithm's geometry.",
+        'Corner hashes differ by dimension, as in the Perlin candidate: 2D uses one xor-shift and one multiply by 2^32/phi with selection bits read from the top of the product (valid on the two-axis fold); 3D uses lowbias32 minus its final xor-shift, because the single-multiply mix fails corner pairs at +yz/+xyz offsets — offsets a simplex traversal blends — at chi-square 425/202 against a 143-df critical of 172. THIS PASS IS WHAT FOUND THAT DEFECT, which the Perlin and Worley candidates had shipped with.',
+        'The 3D corner-ranking ladder is replaced by branchless boolean algebra over a = x>=y, b = y>=z, c = x>=z (i1 = a&(b|c), j1 = !a&b, k1 = !b&(!a|!c); i2 = a|(b&c), j2 = !a|b, k2 = !b|(!a&!c)), verified equal to the reference ladder on 200k random triples plus every tie pattern.',
+        'Middle-corner hash sums are single selects: corner 1 adds exactly one lattice constant to the base sum, corner 2 subtracts exactly one from the far corner sum.',
+        "2D gradients are the four diagonals — the same set the shipping gradTable2 de facto draws (its slots 4-7 repeat slots 0-3 with operands swapped); 3D keeps the reference's 12 cube-edge set via the same integer range split.",
+      ],
+      rationale:
+        'The current challenger, and a modest one, kept for the 2D win: 1.1-1.25x the shipping simplex2 run to run with `bun run bench:impl`, and a TIE in 3D (0.99-1.05x, best and median disagreeing across runs — treat as noise). The decomposition explains the ceiling: the FP skeleton (skew, ranking, kernels) is ~303 ms of the shipping ~365 ms in the bench harness, simplex hashes only 3-4 corners, and those hashes sit off the FP critical path — so unlike Perlin (8 corners) and Worley (9-27 cells), there is little integer work to remove. Field mean/rms/extrema match the shipping simplex to three decimals (different draw, same statistics). Not promoted: no GPU backends, GPU unmeasured, and the 3D tie should be broken or accepted first.',
+      variantIds: [],
+    },
   ],
   'simplex-loop': [
     {
@@ -430,11 +457,11 @@ export const IMPLEMENTATIONS: Record<string, NoiseImplementation[]> = {
       follows: "Steven Worley, 'A Cellular Texture Basis Function' (SIGGRAPH 1996)",
       deviations: [
         ONE_POINT_PER_CELL,
-        'A cell costs one xor-shift, one multiply by 2^32/phi and one closing xor-shift, with ALL offset axes split out of the single 32-bit product (16+16 bits in 2D, 10+10+10 in 3D) — against the shipping three (2D) or five (3D) chained lowbias32 avalanches per cell. Feature-point positions are therefore quantized to 2^-16 / 2^-10 of a cell; offset uniformity and cross-cell independence measured inside the 95% chi-square criticals over 1M cells.',
+        "ALL of a cell's offset axes are split out of ONE 32-bit hash (16+16 bits in 2D, 10+10+10 in 3D) — against the shipping three (2D) or five (3D) chained lowbias32 avalanches per cell — so feature-point positions are quantized to 2^-16 / 2^-10 of a cell. The mix differs by dimension: 2D uses one xor-shift, one multiply by 2^32/phi and a closing xor-shift (its position-bin battery passes at +x/+y/+xy); 3D uses the full lowbias32 shape, because the cheap mix fails +yz adjacency on the three-axis fold (chi-square 531-682 against a 255-df critical of 293) — a defect the first version of this file shipped until the simplex pass caught it. The upgrade cost ~13% of the 3D win.",
         "The neighbourhood search prunes: centre column/plane first, then a neighbouring column or plane only if its boundary distance still beats the current F1. Conservative, so the result is exactly the unpruned minimum (verified, zero mismatches over 600k probes). This is closer to the paper's own algorithm — Worley skips cubes that cannot contain a closer point — than the shipping exhaustive 9/27-cell loop is.",
       ],
       rationale:
-        'The current challenger. Measured with `bun run bench:impl`: 2.0x the shipping worley2 and ~3.8x worley3 on the CPU (best and median agreeing) — the win grows with dimension because a pruned 3D plane is nine cells never hashed. The 3D search is written out longhand because routing each plane through a many-argument helper left the speedup at the mercy of a fragile JIT inlining decision, measured swinging between 430 and 550 ms for identical semantics. Field mean/rms/extrema match the shipping worley to three decimals (different draw, same distribution). Not promoted for the same reasons as the Perlin candidate: no GLSL/WGSL/TSL backends yet, and the pruning branches are exactly what a GPU pays divergence for, so the GPU needs its own measurement.',
+        'The current challenger. Measured with `bun run bench:impl`: ~2.0x the shipping worley2 and ~3.4x worley3 on the CPU, best and median agreeing (3D includes the ~13% cost of the hash fix; the 2D figure is from an isolated run, per the harness caveat in bench.ts) — the win grows with dimension because a pruned 3D plane is nine cells never hashed. The 3D search is written out longhand because routing each plane through a many-argument helper left the speedup at the mercy of a fragile JIT inlining decision, measured swinging between 430 and 550 ms for identical semantics. Field mean/rms/extrema match the shipping worley to three decimals (different draw, same distribution). Not promoted for the same reasons as the Perlin candidate: no GLSL/WGSL/TSL backends yet, and the pruning branches are exactly what a GPU pays divergence for, so the GPU needs its own measurement.',
       variantIds: [],
     },
   ],
@@ -733,6 +760,10 @@ export const ALT_VARIANTS: AltVariant[] = [
   altVariant('perlin', 'fib-hash', 3, (x, y, z) => 0.5 + 0.5 * PERLIN3_NORM * perlinFast3(x, y, z)),
   altVariant('simplex', 'trig-gradients', 2, (x, y) => 0.5 + 0.5 * SIMPLEX_TRIG2_NORM * simplexTrig2(x, y)),
   altVariant('simplex', 'trig-gradients', 3, (x, y, z) => 0.5 + 0.5 * SIMPLEX_TRIG3_NORM * simplexTrig3(x, y, z)),
+  // Same gradient set and kernel as the shipping simplex, so the shipping
+  // norms apply unchanged.
+  altVariant('simplex', 'fast-hash', 2, (x, y) => 0.5 + 0.5 * SIMPLEX2_NORM * simplexFast2(x, y)),
+  altVariant('simplex', 'fast-hash', 3, (x, y, z) => 0.5 + 0.5 * SIMPLEX3_NORM * simplexFast3(x, y, z)),
   altVariant('worley', 'split-bits-pruned', 2, (x, y) => worleyFast2(x, y)),
   altVariant('worley', 'split-bits-pruned', 3, (x, y, z) => worleyFast3(x, y, z)),
 ]

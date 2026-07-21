@@ -6,20 +6,27 @@
 //
 // Two things make this faster on a CPU:
 //
-// 1. ONE SHORT MIX PER CELL INSTEAD OF CHAINED AVALANCHES. The shipping code
+// 1. ONE HASH PER CELL INSTEAD OF CHAINED AVALANCHES. The shipping code
 //    hashes a cell with hash2/hash3 and then re-hashes for each extra offset
 //    axis: three full lowbias32 avalanches per 2D cell, five per 3D cell.
 //    Here the lattice products are folded exactly as in alt/perlin-fast.ts —
 //    per-axis odd-constant multiplies hoisted out of the loop, neighbours one
-//    add away — and a cell costs one xor-shift, one multiply by 2^32/phi and
-//    one closing xor-shift. ALL the offsets come out of that single 32-bit
-//    product: 16+16 bits in 2D, 10+10+10 bits in 3D. The feature-point
-//    positions are therefore quantized to 2^-16 (2D) / 2^-10 (3D) of a cell,
-//    against the shipping 2^-32; at display scale a thousandth of a cell is
-//    far below a pixel. Offset uniformity and independence were measured, not
-//    assumed: 16-bin chi-square 6-21 against a 95% critical of 25 (1M cells
-//    in 2D, 1M in 3D), within-cell and cross-cell offset correlations all at
-//    the 1e-3 sampling-noise floor.
+//    add away — and ALL of a cell's offsets come out of ONE 32-bit hash:
+//    16+16 bits in 2D, 10+10+10 bits in 3D. The feature-point positions are
+//    therefore quantized to 2^-16 (2D) / 2^-10 (3D) of a cell, against the
+//    shipping 2^-32; at display scale a thousandth of a cell is far below a
+//    pixel.
+//
+//    The mix differs by dimension, and the difference is a measured fact,
+//    not taste. 2D: one xor-shift, one multiply by 2^32/phi, one closing
+//    xor-shift — on the two-axis fold its position bins pass marginals and
+//    joints at +x/+y/+xy (worst 279 against a 255-df critical of 293). 3D:
+//    the SAME mix fails the diagonal joints on the three-axis fold — +yz
+//    measured at chi-square 531-682 against 293, a defect this file's first
+//    version SHIPPED and the simplex pass caught — so 3D cells use the full
+//    lowbias32 shape (minus the u32 coercions), which passes everywhere the
+//    battery looks. The upgrade costs ~13% of the 3D win and the single
+//    hash-per-cell structure keeps the rest.
 //
 // 2. THE SEARCH PRUNES WHOLE COLUMNS AND PLANES. The shipping loop hashes all
 //    9 / 27 cells unconditionally. Here the centre column (2D) or centre
@@ -31,8 +38,10 @@
 //    own algorithm skips neighbouring cubes that cannot contain a closer
 //    point, so pruning restores a reference behaviour the shipping exhaustive
 //    loop dropped. The win scales with dimension because a skipped 3D plane
-//    is nine cells: measured with `bun run bench:impl`, 2.0x the shipping
-//    worley2 and ~3.8x worley3 on the CPU, best and median agreeing.
+//    is nine cells: ~2.0x the shipping worley2 and ~3.4x worley3 on the CPU,
+//    best and median agreeing (`bun run bench:impl`; the 3D figure includes
+//    the ~13% cost of the hash fix, and the 2D figure is from an isolated
+//    run — see the harness caveat in bench.ts).
 //
 // The FIELD is a different draw from the shipping one — different hash,
 // different point positions, same distribution: field mean/rms/extrema match
@@ -105,9 +114,15 @@ export const worleyFast2 = (x: number, y: number): number => {
   return Math.sqrt(f1)
 }
 
+// Full lowbias32 shape: the 10-bit fields reach into low bits, and the
+// cheaper single-multiply mix fails +yz adjacency on the three-axis fold
+// (see header).
 const cell3 = (s: number, bx: number, by: number, bz: number, f1: number): number => {
-  let h = Math.imul(s ^ (s >>> 16), FIB)
+  let h = s ^ (s >>> 16)
+  h = Math.imul(h, 0x7feb352d)
   h ^= h >>> 15
+  h = Math.imul(h, 0x846ca68b)
+  h ^= h >>> 16
   const vx = bx + (h >>> 22) * INV10
   const vy = by + ((h >>> 12) & 1023) * INV10
   const vz = bz + ((h >>> 2) & 1023) * INV10

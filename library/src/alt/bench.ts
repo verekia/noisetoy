@@ -15,6 +15,12 @@
 // imports the non-shipping implementations directly from src/alt, which is why
 // that source is kept — see implementations.ts.
 //
+// A caveat learned the hard way: the full suite times a dozen functions
+// through one megamorphic call site, and the JIT's decisions under that load
+// can depress individual candidates — Worley 2D once read 305 ms here against
+// 236 ms in an isolated two-way run of identical code. When a single
+// comparison matters, re-run it isolated before believing a regression.
+//
 // CPU only. The GPU comparison needs the /bench page in the explorer, and the
 // two do not always agree: transcendentals are far cheaper relative to integer
 // work on a GPU than they are in JS, which is precisely the axis the two
@@ -26,6 +32,7 @@ import { perlin2, perlin3 } from '../noises/perlin'
 import { simplex2 as simplexTable2, simplex3 as simplexTable3 } from '../noises/simplex'
 import { worley2, worley3 } from '../noises/worley'
 import { perlinFast2, perlinFast3 } from './perlin-fast'
+import { simplexFast2, simplexFast3 } from './simplex-fast'
 import { simplex2 as simplexTrig2, simplex3 as simplexTrig3 } from './simplex-trig'
 import { worleyFast2, worleyFast3 } from './worley-fast'
 
@@ -104,3 +111,13 @@ compare(
   ['candidate (split bits, pruned)', (x, y) => worleyFast2(x, y)],
 )
 compare('Worley 3D', ['shipping  (chained avalanches)', worley3], ['candidate (split bits, pruned)', worleyFast3])
+compare(
+  'Simplex 2D vs candidate',
+  ['shipping  (folded lowbias32)', (x, y) => simplexTable2(x, y)],
+  ['candidate (fast hash)', (x, y) => simplexFast2(x, y)],
+)
+compare(
+  'Simplex 3D vs candidate',
+  ['shipping  (folded lowbias32)', simplexTable3],
+  ['candidate (fast hash)', simplexFast3],
+)

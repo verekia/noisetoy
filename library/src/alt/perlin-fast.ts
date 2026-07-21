@@ -6,27 +6,40 @@
 //
 // Three things make this faster on a CPU:
 //
-// 1. ONE MULTIPLY PER CORNER INSTEAD OF A FULL AVALANCHE. The shipping code
-//    runs lowbias32 per corner: two integer multiplies and three xor-shifts.
-//    Here a corner costs one xor-shift and one multiply by 2^32/phi (Knuth's
-//    multiplicative hashing constant), and every selection bit is read from
-//    the TOP of the product — bit k of a product depends only on input bits
-//    0..k, so the top bits are the only well-mixed ones and they are exactly
-//    the ones a single multiply mixes best. Signs come from bits 31 and 30;
-//    the 3D axis split reads the remaining 30 bits. The xor-shift before the
-//    multiply is load-bearing: without it the corner mix is affine in the
-//    lattice coordinates, so neighbouring corners' hashes differ by a
-//    constant and their gradients correlate in a fixed pattern.
+// 1. CHEAPER CORNER HASHES, DIMENSION-SPLIT. The shipping code runs a full
+//    lowbias32 per corner: two integer multiplies and three xor-shifts. Here
+//    every selection bit is read from the TOP of the mix output — bit k of a
+//    product depends only on input bits 0..k, so the top bits are what a
+//    multiply mixes best — with signs in bits 31/30 and the 3D axis split in
+//    the remaining 30 bits. How much mixing that read pattern needs turned
+//    out to DIFFER BY DIMENSION, and each claim is only as good as the
+//    offsets it was tested at:
 //
-// 2. THE PRE-MIX IS HOISTED WHERE THE STATISTICS ALLOW IT. In 2D the
-//    xor-shift is applied to the two x lattice products once (rx = x0 ^
-//    (x0 >>> 16)) and a corner is just rx ^ y0 before the multiply — two
-//    pre-mixes instead of four. The same trick in 3D FAILS adjacency
-//    statistics: with h = imul(rx ^ y0 ^ z0, K) the joint distribution of
-//    gradients one step apart in x comes out at chi-square 216 against a
-//    143-df critical value of 172. So 3D keeps the per-corner mix of the
-//    folded sum, s ^ (s >>> 16), which passes (chi-square 126 in +x, 153 in
-//    +z over 1.7M corners; marginals 10.8 against a critical 19.7).
+//    2D: one xor-shift and one multiply by 2^32/phi (Knuth's constant) per
+//    corner. Valid on the two-axis fold — marginals, parity, and joints at
+//    +x/+y/+xy are all inside the 95% chi-square criticals. The pre-multiply
+//    xor-shift is load-bearing: without it the corner mix is affine in the
+//    lattice coordinates and neighbouring gradients correlate in a fixed
+//    pattern.
+//
+//    3D: lowbias32 minus its final xor-shift (which only feeds low bits
+//    nothing here reads) — two multiplies, two xor-shifts, two ops and the
+//    u32 coercions cheaper than the shipping hashU32. The single-multiply
+//    mix 2D uses is NOT valid on the three-axis fold: it passed the
+//    single-axis joints this file originally tested, but corner pairs at
+//    +yz and +xyz — pairs inside every Perlin cell — measure at chi-square
+//    425 and 202 against a 143-df critical of 172. That defect SHIPPED in
+//    this file's first version and was caught during the simplex pass, which
+//    is why the battery now covers all seven cube offsets; with this mix the
+//    worst joint is 158. The fix cost nothing measurable: the extra integer
+//    work hides behind the FP dependency chain (242.4 ms defective vs
+//    242.1 ms fixed, medians of 8 interleaved).
+//
+// 2. THE 2D PRE-MIX IS HOISTED. The xor-shift is applied to the two x
+//    lattice products once (rx = x0 ^ (x0 >>> 16)) and a corner is just
+//    rx ^ y0 before the multiply — two pre-mixes instead of four. The same
+//    hoist on the three-axis fold fails adjacency (chi-square 216 in +x),
+//    one more instance of 3D demanding more mixing than 2D.
 //
 // 3. FACTORED 2D CORNER DOTS. The 2D gradient set is the four diagonals
 //    (+-1, +-1) — the same set the shipping gradTable2 draws, whose slots 4-7
@@ -40,17 +53,18 @@
 // integer range split as gradTable3 (all twelve equally likely), reading the
 // low 30 bits so the sign bits at 30/31 stay disjoint from the axis choice.
 //
-// Statistics, measured over 1.4M lattice corners (2D) / 1.7M (3D), off-origin:
-// gradient marginals, adjacent-corner joints along each axis and the diagonal,
-// and an even/odd checkerboard split are all inside the 95% chi-square
-// criticals; the assembled field's mean, RMS, extrema and lattice-lag
-// autocorrelation match the shipping perlin to three decimal places. The FIELD
-// is a different draw — same statistics, different hash, so different pattern.
+// Statistics, measured over 1.2M lattice corners (2D) / 1M (3D), off-origin:
+// gradient marginals, an even/odd checkerboard split, and adjacent-corner
+// joints at EVERY offset a Perlin cell pairs — +x/+y/+xy in 2D, all seven of
+// +x/+y/+z/+xy/+xz/+yz/+xyz in 3D — are inside the 95% chi-square criticals;
+// the assembled field's mean, RMS, extrema and lattice-lag autocorrelation
+// match the shipping perlin to three decimal places. The FIELD is a
+// different draw — same statistics, different hash, so different pattern.
 //
-// Measured with `bun run bench:impl` (methodology in bench.ts): ~1.3x the
-// shipping perlin3, stable across runs; perlin2 varied 1.08-1.27x run to run
-// on the measurement box, so call it ~1.1x and re-measure before believing
-// more. CPU ONLY. On a
+// Measured with `bun run bench:impl` (methodology in bench.ts): perlin3
+// between 1.1x and 1.3x depending on the day's machine state (medians and
+// bests agree within any single run); perlin2 ~1.1x. Re-measure before
+// quoting more precision than that. CPU ONLY. On a
 // GPU the trade is different — the avalanche this removes is integer work,
 // which GPUs price differently — and no GLSL/WGSL/TSL backends exist yet, so
 // this cannot ship: registry variants need all four languages. Promotion
@@ -121,13 +135,24 @@ export const perlinFast2 = (x: number, y: number): number => {
 }
 
 /**
- * One of Perlin's 12 cube-edge gradients dotted with (x, y, z), from the top
- * bits of a single multiply. Same range-split geometry as gradTable3: the
- * axis comparisons collapse to two selects because axis 0 and 1 share a = x
- * and axis 1 and 2 share b = z.
+ * One of Perlin's 12 cube-edge gradients dotted with (x, y, z). Same
+ * range-split geometry as gradTable3: the axis comparisons collapse to two
+ * selects because axis 0 and 1 share a = x and axis 1 and 2 share b = z.
+ *
+ * The mix is lowbias32 WITHOUT ITS FINAL XOR-SHIFT (only the top bits are
+ * consumed), not the single multiply the 2D path uses. The single-multiply
+ * mix is statistically defective on the three-axis fold: corner pairs at
+ * +yz and +xyz offsets — pairs inside every Perlin cell — measured at
+ * chi-square 425 and 202 against a 143-df critical of 172. This shipped
+ * that way at first; the simplex pass caught it. With this mix the full
+ * 7-offset battery passes (worst joint 158), and the fix costs nothing
+ * measurable — the extra integer work hides behind the FP chain.
  */
 const grad3 = (s: number, x: number, y: number, z: number): number => {
-  const h = Math.imul(s ^ (s >>> 16), FIB)
+  let h = s ^ (s >>> 16)
+  h = Math.imul(h, 0x7feb352d)
+  h ^= h >>> 15
+  h = Math.imul(h, 0x846ca68b)
   const t = h & 0x3fffffff
   // 2^30 / 3 and 2 * 2^30 / 3.
   const a = t < 715827882 ? x : y
