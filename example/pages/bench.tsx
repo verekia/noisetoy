@@ -9,18 +9,18 @@ import {
   benchWebgpuAlt,
   benchWebgpuVariant,
 } from '#/lib/bench-gpu'
-import Head from 'next/head'
-import Link from 'next/link'
-import { useRouter } from 'next/router'
-import { NOISES } from 'noisetoy'
 // Non-shipping implementations (candidates, superseded) bench through their
 // AltVariants — TS samplers for the JS column, GLSL/WGSL/TSL specs for the
 // GPU columns — so every implementation gets the full row.
-import { ALT_VARIANTS } from 'noisetoy/implementations'
+import { ALT_VARIANTS } from '#/lib/implementations'
+import { NOISES } from '#/lib/registry'
+import Head from 'next/head'
+import Link from 'next/link'
+import { useRouter } from 'next/router'
 
 import type { BenchResult } from '#/lib/bench'
-import type { Backend, NoiseVariant } from 'noisetoy'
-import type { AltVariant } from 'noisetoy/implementations'
+import type { AltVariant } from '#/lib/implementations'
+import type { Backend, NoiseVariant } from '#/lib/registry'
 
 const JS_SIZE = 256
 const GPU_SIZE = 512
@@ -111,15 +111,15 @@ export default function Bench() {
         const backends: { id: Backend; exec: (() => Promise<BenchResult> | BenchResult) | null }[] = row.variant
           ? [
               { id: 'js', exec: () => benchJsVariant(row.variant as NoiseVariant, row.scale, JS_SIZE) },
-              { id: 'webgl', exec: () => benchWebglVariant(row.variant as NoiseVariant, row.noiseId, GPU_SIZE) },
-              { id: 'webgpu', exec: () => benchWebgpuVariant(row.variant as NoiseVariant, row.noiseId, GPU_SIZE) },
-              { id: 'three', exec: () => benchThreeVariant(row.variant as NoiseVariant, row.noiseId, GPU_SIZE) },
+              { id: 'webgl', exec: () => benchWebglVariant(row.variant as NoiseVariant, row.scale, GPU_SIZE) },
+              { id: 'webgpu', exec: () => benchWebgpuVariant(row.variant as NoiseVariant, row.scale, GPU_SIZE) },
+              { id: 'three', exec: () => benchThreeVariant(row.variant as NoiseVariant, row.scale, GPU_SIZE) },
             ]
           : [
               { id: 'js', exec: () => benchJsVariant(row.alt as AltVariant, row.scale, JS_SIZE) },
-              { id: 'webgl', exec: () => benchWebglAlt(row.alt as AltVariant, GPU_SIZE) },
-              { id: 'webgpu', exec: () => benchWebgpuAlt(row.alt as AltVariant, GPU_SIZE) },
-              { id: 'three', exec: () => benchThreeAlt(row.alt as AltVariant, GPU_SIZE) },
+              { id: 'webgl', exec: () => benchWebglAlt(row.alt as AltVariant, row.scale, GPU_SIZE) },
+              { id: 'webgpu', exec: () => benchWebgpuAlt(row.alt as AltVariant, row.scale, GPU_SIZE) },
+              { id: 'three', exec: () => benchThreeAlt(row.alt as AltVariant, row.scale, GPU_SIZE) },
             ]
         for (const { id, exec } of backends) {
           const key = `${row.key}-${id}`

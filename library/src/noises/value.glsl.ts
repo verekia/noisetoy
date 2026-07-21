@@ -1,5 +1,9 @@
 // GLSL counterpart of value.ts. Requires COMMON_GLSL.
 
+import { COMMON_GLSL } from './common.glsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const VALUE_GLSL = /* glsl */ `
 float value2(vec2 p) {
   vec2 i = floor(p);
@@ -37,3 +41,17 @@ float value3(vec3 p) {
   return mix(nz0, nz1, uz);
 }
 `
+
+/** GLSL spec for Value 2D (shipping implementation). */
+export const value2dCanonicalGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, VALUE_GLSL],
+  expr: 'value2(p)',
+}
+
+/** GLSL spec for Value 3D (shipping implementation). */
+export const value3dCanonicalGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, VALUE_GLSL],
+  expr: 'value3(p)',
+}

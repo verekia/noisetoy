@@ -4,8 +4,8 @@
 // period 2, so the tile period must be even (this repo uses 8).
 // Kept out of the core implementation.
 
-import { CONTOUR_K, MARBLE_TURB } from '../perlin-derived'
-import { perlin2Tileable, perlin3Tileable } from './perlin-tileable'
+import { CONTOUR_K, MARBLE_TURB } from '../perlin-derived.js'
+import { perlin2Tileable, perlin3Tileable } from './perlin-tileable.js'
 
 const turb2T = (x: number, y: number, px: number, py: number): number =>
   Math.abs(perlin2Tileable(x, y, px, py)) +
@@ -28,3 +28,19 @@ export const contour2Tileable = (x: number, y: number, px: number, py: number): 
 
 export const contour3Tileable = (x: number, y: number, z: number, px: number, py: number): number =>
   Math.cos(perlin3Tileable(x, y, z, px, py) * CONTOUR_K)
+
+/** Marble 2D tileable, shipping implementation — wraps every periodX / periodY lattice cells; display value, nominally [0, 1], unclamped. */
+export const marble2dCanonicalTileable = (x: number, y: number, periodX: number, periodY: number): number =>
+  0.5 + 0.5 * marble2Tileable(x, y, periodX, periodY)
+
+/** Marble 3D tileable, shipping implementation — wraps every periodX / periodY lattice cells; display value, nominally [0, 1], unclamped. */
+export const marble3dCanonicalTileable = (x: number, y: number, z: number, periodX: number, periodY: number): number =>
+  0.5 + 0.5 * marble3Tileable(x, y, z, periodX, periodY)
+
+/** Contour 2D tileable, shipping implementation — wraps every periodX / periodY lattice cells; display value, nominally [0, 1], unclamped. */
+export const contour2dCanonicalTileable = (x: number, y: number, periodX: number, periodY: number): number =>
+  0.5 + 0.5 * contour2Tileable(x, y, periodX, periodY)
+
+/** Contour 3D tileable, shipping implementation — wraps every periodX / periodY lattice cells; display value, nominally [0, 1], unclamped. */
+export const contour3dCanonicalTileable = (x: number, y: number, z: number, periodX: number, periodY: number): number =>
+  0.5 + 0.5 * contour3Tileable(x, y, z, periodX, periodY)

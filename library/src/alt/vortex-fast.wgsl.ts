@@ -1,6 +1,11 @@
 // WGSL counterpart of vortex-fast.ts. Requires COMMON_WGSL and
 // FAST_COMMON_WGSL.
 
+import { COMMON_WGSL } from '../noises/common.wgsl.js'
+import { FAST_COMMON_WGSL } from './fast-common.wgsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const VORTEX_FAST_WGSL = /* wgsl */ `
 fn vtxFastDir(h: u32) -> vec2f {
   let t = (h >> 28u) & 3u;
@@ -72,3 +77,17 @@ fn vortexFast3(p: vec3f) -> f32 {
   return select(1.0, (a - b) / n, n > 0.0);
 }
 `
+
+/** Vortex 2D Fast (fast-dirs candidate) — WGSL ShaderSpec, pre-clamp display expression. */
+export const vortex2dFastWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, FAST_COMMON_WGSL, VORTEX_FAST_WGSL],
+  expr: '0.5 + 0.5 * 1.0 * vortexFast2(p)',
+}
+
+/** Vortex 3D Fast (fast-dirs candidate) — WGSL ShaderSpec, pre-clamp display expression. */
+export const vortex3dFastWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, FAST_COMMON_WGSL, VORTEX_FAST_WGSL],
+  expr: '0.5 + 0.5 * 1.0 * vortexFast3(p)',
+}

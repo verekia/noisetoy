@@ -1,5 +1,10 @@
 // TSL counterpart of ripple.ts. Requires COMMON_TSL.
 
+import { COMMON_TSL } from './common.tsl.js'
+import { RIPPLE_NORM } from './normalization.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const RIPPLE_TSL = /* js */ `
 const ripple2 = Fn(([p]) => {
   const i = floor(p)
@@ -47,3 +52,17 @@ const ripple3 = Fn(([p]) => {
   return sum
 })
 `
+
+/** Ripple 2D (Canonical) — TSL shader spec. */
+export const ripple2dCanonicalTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, RIPPLE_TSL],
+  expr: `ripple2(p).mul(${0.5 * RIPPLE_NORM}).add(0.5)`,
+}
+
+/** Ripple 3D (Canonical) — TSL shader spec. */
+export const ripple3dCanonicalTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, RIPPLE_TSL],
+  expr: `ripple3(p).mul(${0.5 * RIPPLE_NORM}).add(0.5)`,
+}

@@ -1,5 +1,10 @@
 // WGSL counterpart of simplex.ts. Requires COMMON_WGSL.
 
+import { COMMON_WGSL } from './common.wgsl.js'
+import { fmt, SIMPLEX2_NORM, SIMPLEX3_NORM } from './normalization.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const SIMPLEX_WGSL = /* wgsl */ `
 fn simplex2(p: vec2f) -> f32 {
   const F2 = 0.3660254037844386;
@@ -103,3 +108,17 @@ fn simplex3(p: vec3f) -> f32 {
   return n;
 }
 `
+
+/** Simplex 2D — Canonical WGSL shader spec. */
+export const simplex2dCanonicalWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, SIMPLEX_WGSL],
+  expr: `0.5 + 0.5 * ${fmt(SIMPLEX2_NORM)} * simplex2(p)`,
+}
+
+/** Simplex 3D — Canonical WGSL shader spec. */
+export const simplex3dCanonicalWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, SIMPLEX_WGSL],
+  expr: `0.5 + 0.5 * ${fmt(SIMPLEX3_NORM)} * simplex3(p)`,
+}

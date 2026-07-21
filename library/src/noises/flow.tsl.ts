@@ -1,5 +1,10 @@
 // TSL counterpart of flow.ts. Requires COMMON_TSL.
 
+import { COMMON_TSL } from './common.tsl.js'
+import { PERLIN2_NORM } from './normalization.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const FLOW_TSL = /* js */ `
 const rotGradDot2 = Fn(([h, phase, d]) => {
   const b = lowbias32(h).bitAnd(uint(3)).toVar()
@@ -23,3 +28,10 @@ const flow3 = Fn(([p]) => {
   return mix(mix(g00, g10, ux), mix(g01, g11, ux), uy)
 })
 `
+
+/** Flow 3D (Canonical) — TSL shader spec. */
+export const flow3dCanonicalTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, FLOW_TSL],
+  expr: `flow3(p).mul(${0.5 * PERLIN2_NORM}).add(0.5)`,
+}

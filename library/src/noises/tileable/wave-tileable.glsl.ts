@@ -1,6 +1,11 @@
 // GLSL counterpart of wave-tileable.ts. Requires COMMON_GLSL and WAVE_GLSL
 // (reuses waveCorner2/waveCorner3).
 
+import { COMMON_GLSL } from '../common.glsl.js'
+import { WAVE_GLSL } from '../wave.glsl.js'
+
+import type { ShaderSpec } from '../../spec.js'
+
 export const WAVE_TILEABLE_GLSL = /* glsl */ `
 float wave2T(vec2 p, vec2 per) {
   vec2 i = floor(p);
@@ -46,3 +51,17 @@ float wave3T(vec3 p, vec2 per) {
   return mix(nz0, nz1, uz);
 }
 `
+
+/** GLSL spec for Wave 2D, tileable (shipping implementation). */
+export const wave2dCanonicalTileableGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, WAVE_GLSL, WAVE_TILEABLE_GLSL],
+  expr: '0.5 + 0.5 * wave2T(p, per)',
+}
+
+/** GLSL spec for Wave 3D, tileable (shipping implementation). */
+export const wave3dCanonicalTileableGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, WAVE_GLSL, WAVE_TILEABLE_GLSL],
+  expr: '0.5 + 0.5 * wave3T(p, per)',
+}

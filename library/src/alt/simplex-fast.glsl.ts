@@ -1,6 +1,12 @@
 // GLSL counterpart of simplex-fast.ts. Requires COMMON_GLSL and
 // FAST_COMMON_GLSL.
 
+import { COMMON_GLSL } from '../noises/common.glsl.js'
+import { fmt, SIMPLEX2_NORM, SIMPLEX3_NORM } from '../noises/normalization.js'
+import { FAST_COMMON_GLSL } from './fast-common.glsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const SIMPLEX_FAST_GLSL = /* glsl */ `
 float simplexFast2(vec2 p) {
   const float F2 = 0.3660254037844386;
@@ -97,3 +103,17 @@ float simplexFast3(vec3 p) {
   return n;
 }
 `
+
+/** Simplex 2D, 'fast-hash' fast implementation — GLSL spec. */
+export const simplex2dFastGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, FAST_COMMON_GLSL, SIMPLEX_FAST_GLSL],
+  expr: `0.5 + 0.5 * ${fmt(SIMPLEX2_NORM)} * simplexFast2(p)`,
+}
+
+/** Simplex 3D, 'fast-hash' fast implementation — GLSL spec. */
+export const simplex3dFastGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, FAST_COMMON_GLSL, SIMPLEX_FAST_GLSL],
+  expr: `0.5 + 0.5 * ${fmt(SIMPLEX3_NORM)} * simplexFast3(p)`,
+}

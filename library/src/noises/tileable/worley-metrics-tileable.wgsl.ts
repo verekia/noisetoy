@@ -1,5 +1,10 @@
 // WGSL counterpart of worley-metrics-tileable.ts. Requires COMMON_WGSL.
 
+import { COMMON_WGSL } from '../common.wgsl.js'
+import { CHEBYSHEV2_NORM, CHEBYSHEV3_NORM, fmt, MANHATTAN2_NORM, MANHATTAN3_NORM } from '../normalization.js'
+
+import type { ShaderSpec } from '../../spec.js'
+
 export const WORLEY_METRICS_TILEABLE_WGSL = /* wgsl */ `
 fn manhattan2T(p: vec2f, per: vec2f) -> f32 {
   let i = floor(p);
@@ -85,3 +90,31 @@ fn chebyshev3T(p: vec3f, per: vec2f) -> f32 {
   return f1;
 }
 `
+
+/** Worley (Manhattan) 2D — Canonical tileable WGSL shader spec. */
+export const worleyManhattan2dCanonicalTileableWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, WORLEY_METRICS_TILEABLE_WGSL],
+  expr: `${fmt(MANHATTAN2_NORM)} * manhattan2T(p, per)`,
+}
+
+/** Worley (Manhattan) 3D — Canonical tileable WGSL shader spec. */
+export const worleyManhattan3dCanonicalTileableWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, WORLEY_METRICS_TILEABLE_WGSL],
+  expr: `${fmt(MANHATTAN3_NORM)} * manhattan3T(p, per)`,
+}
+
+/** Worley (Chebyshev) 2D — Canonical tileable WGSL shader spec. */
+export const worleyChebyshev2dCanonicalTileableWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, WORLEY_METRICS_TILEABLE_WGSL],
+  expr: `${fmt(CHEBYSHEV2_NORM)} * chebyshev2T(p, per)`,
+}
+
+/** Worley (Chebyshev) 3D — Canonical tileable WGSL shader spec. */
+export const worleyChebyshev3dCanonicalTileableWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, WORLEY_METRICS_TILEABLE_WGSL],
+  expr: `${fmt(CHEBYSHEV3_NORM)} * chebyshev3T(p, per)`,
+}

@@ -1,9 +1,18 @@
 import { describe, expect, test } from 'bun:test'
 
-import { costTier, MEASURED_COST, PENDING_GPU_CALIBRATION, TIER_LIMITS, VARIANT_COST, variantCost } from './cost'
+import {
+  costTier,
+  estimateCost,
+  MEASURED_COST,
+  PENDING_GPU_CALIBRATION,
+  TIER_LIMITS,
+  VARIANT_COST,
+  variantCost,
+} from './cost'
 import ANALYTIC from './cost-analytic.json'
-import { createEffect } from './effect'
 import { NOISES } from './registry'
+
+import type { CostLayer } from './cost'
 
 describe('cost calibration', () => {
   test('every variant is calibrated', () => {
@@ -70,14 +79,14 @@ describe('cost calibration', () => {
 })
 
 describe('estimateCost', () => {
-  const cost = (spec: Parameters<typeof createEffect>[0]) => createEffect(spec).cost()
+  const units = (layers: CostLayer[]) => estimateCost(layers).units
 
   // The unit is one evaluation of the trig-gradient Perlin 3D and stays frozen
   // there: re-anchoring it to the shipping, 2.6x cheaper Perlin would detach
   // every other entry from the timings it came from. So Perlin 3D does not
   // cost 1.
   test('Perlin 3D costs a fraction of the frozen unit', () => {
-    expect(cost({ layers: [{ noise: 'perlin', dim: 3 }] }).units).toBe(0.42)
+    expect(units([{ variantId: 'perlin-3d' }])).toBe(0.42)
   })
 
   test('the frozen unit still means what the tier thresholds were calibrated against', () => {
@@ -89,55 +98,35 @@ describe('estimateCost', () => {
 
   // The measured relationship: an octave and a layer cost the same.
   test('octaves scale linearly', () => {
-    const one = cost({ layers: [{ noise: 'perlin', dim: 3 }] }).units
-    const six = cost({ layers: [{ noise: 'perlin', dim: 3, octaves: 6 }] }).units
+    const one = units([{ variantId: 'perlin-3d' }])
+    const six = units([{ variantId: 'perlin-3d', octaves: 6 }])
     expect(six).toBeCloseTo(one * 6, 5)
   })
 
   test('a layer costs the same as an octave', () => {
-    const octaves = cost({ layers: [{ noise: 'perlin', dim: 3, octaves: 4 }] }).units
-    const layers = cost({
-      layers: Array.from({ length: 4 }, () => ({ noise: 'perlin', dim: 3 as const, blend: 'multiply' as const })),
-    }).units
+    const octaves = units([{ variantId: 'perlin-3d', octaves: 4 }])
+    const layers = units(Array.from({ length: 4 }, () => ({ variantId: 'perlin-3d', blend: 'multiply' as const })))
     expect(layers).toBeCloseTo(octaves, 5)
-  })
-
-  test('scale is free', () => {
-    const a = cost({ layers: [{ noise: 'perlin', dim: 3, scale: 0.25 }] }).units
-    const b = cost({ layers: [{ noise: 'perlin', dim: 3, scale: 4 }] }).units
-    expect(a).toBe(b)
   })
 
   // An opaque 'normal' layer discards everything under it, and the shader
   // compiler drops the dead code — measured on both GPU backends.
   test('layers under an opaque normal blend are free', () => {
-    const e = cost({
-      layers: [
-        { noise: 'ripple', dim: 3, octaves: 6 },
-        { noise: 'perlin', dim: 3, blend: 'normal', opacity: 1 },
-      ],
-    })
+    const e = estimateCost([
+      { variantId: 'ripple-3d', octaves: 6 },
+      { variantId: 'perlin-3d', blend: 'normal', opacity: 1 },
+    ])
     expect(e.skipped).toEqual([0])
     expect(e.units).toBe(variantCost('perlin-3d'))
   })
 
   test('a partly transparent normal blend keeps the layers below', () => {
-    const e = cost({
-      layers: [
-        { noise: 'perlin', dim: 3 },
-        { noise: 'worley', dim: 3, blend: 'normal', opacity: 0.5 },
-      ],
-    })
+    const e = estimateCost([{ variantId: 'perlin-3d' }, { variantId: 'worley-3d', blend: 'normal', opacity: 0.5 }])
     expect(e.skipped).toEqual([])
   })
 
   test('warp never kills the layer below, since it consumes the accumulator', () => {
-    const e = cost({
-      layers: [
-        { noise: 'perlin', dim: 3 },
-        { noise: 'worley', dim: 3, blend: 'warp', opacity: 1 },
-      ],
-    })
+    const e = estimateCost([{ variantId: 'perlin-3d' }, { variantId: 'worley-3d', blend: 'warp', opacity: 1 }])
     expect(e.skipped).toEqual([])
   })
 
@@ -149,17 +138,15 @@ describe('estimateCost', () => {
   })
 
   test('a plausible heavy stack lands in the heavy tier', () => {
-    const e = cost({
-      layers: [
-        { noise: 'ripple', dim: 3, octaves: 6 },
-        { noise: 'worley', dim: 3, octaves: 4, blend: 'multiply' },
-      ],
-    })
+    const e = estimateCost([
+      { variantId: 'ripple-3d', octaves: 6 },
+      { variantId: 'worley-3d', octaves: 4, blend: 'multiply' },
+    ])
     expect(e.tier).toBe('heavy')
     expect(e.units).toBeCloseTo(3.57 * 6 + 2.32 * 4, 2)
   })
 
   test('a single cheap 2D noise is cheap', () => {
-    expect(cost({ layers: [{ noise: 'truchet', dim: 2 }] }).tier).toBe('cheap')
+    expect(estimateCost([{ variantId: 'truchet-2d' }]).tier).toBe('cheap')
   })
 })

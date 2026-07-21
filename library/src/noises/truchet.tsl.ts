@@ -1,5 +1,9 @@
 // TSL counterpart of truchet.ts. Requires COMMON_TSL.
 
+import { COMMON_TSL } from './common.tsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const TRUCHET_TSL = /* js */ `
 const truchet2 = Fn(([p]) => {
   const i = floor(p)
@@ -15,3 +19,10 @@ const truchet2 = Fn(([p]) => {
   return cos(d1.min(d2).mul(6.283185307179586 * 3))
 })
 `
+
+/** Truchet 2D (Canonical) — TSL shader spec. */
+export const truchet2dCanonicalTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, TRUCHET_TSL],
+  expr: 'truchet2(p).mul(0.5).add(0.5)',
+}

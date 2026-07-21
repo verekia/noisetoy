@@ -1,5 +1,9 @@
 // WGSL counterpart of vortex.ts. Requires COMMON_WGSL.
 
+import { COMMON_WGSL } from './common.wgsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const VORTEX_WGSL = /* wgsl */ `
 fn vortex2(p: vec2f) -> f32 {
   let i = floor(p);
@@ -52,3 +56,17 @@ fn vortex3(p: vec3f) -> f32 {
   return cos(2.0 * atan2(s.y, s.x));
 }
 `
+
+/** Vortex 2D — Canonical WGSL shader spec. */
+export const vortex2dCanonicalWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, VORTEX_WGSL],
+  expr: '0.5 + 0.5 * vortex2(p)',
+}
+
+/** Vortex 3D — Canonical WGSL shader spec. */
+export const vortex3dCanonicalWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, VORTEX_WGSL],
+  expr: '0.5 + 0.5 * vortex3(p)',
+}

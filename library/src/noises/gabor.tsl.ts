@@ -1,6 +1,11 @@
 // TSL counterpart of gabor.ts. Requires COMMON_TSL.
 // 3.141592653589793 is GABOR_ENVELOPE; 12.566370614359172 is 2*pi*GABOR_FREQ.
 
+import { COMMON_TSL } from './common.tsl.js'
+import { GABOR2_NORM, GABOR3_NORM } from './normalization.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const GABOR_TSL = /* js */ `
 const gabor2 = Fn(([p]) => {
   const i = floor(p)
@@ -50,3 +55,17 @@ const gabor3 = Fn(([p]) => {
   return sum
 })
 `
+
+/** Gabor 2D (Canonical) — TSL shader spec. */
+export const gabor2dCanonicalTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, GABOR_TSL],
+  expr: `gabor2(p).mul(${0.5 * GABOR2_NORM}).add(0.5)`,
+}
+
+/** Gabor 3D (Canonical) — TSL shader spec. */
+export const gabor3dCanonicalTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, GABOR_TSL],
+  expr: `gabor3(p).mul(${0.5 * GABOR3_NORM}).add(0.5)`,
+}

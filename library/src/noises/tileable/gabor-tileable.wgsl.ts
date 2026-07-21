@@ -1,5 +1,10 @@
 // WGSL counterpart of gabor-tileable.ts. Requires COMMON_WGSL.
 
+import { COMMON_WGSL } from '../common.wgsl.js'
+import { fmt, GABOR2_NORM, GABOR3_NORM } from '../normalization.js'
+
+import type { ShaderSpec } from '../../spec.js'
+
 export const GABOR_TILEABLE_WGSL = /* wgsl */ `
 fn gabor2T(p: vec2f, per: vec2f) -> f32 {
   let i = floor(p);
@@ -53,3 +58,17 @@ fn gabor3T(p: vec3f, per: vec2f) -> f32 {
   return sum;
 }
 `
+
+/** Gabor 2D — Canonical tileable WGSL shader spec. */
+export const gabor2dCanonicalTileableWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, GABOR_TILEABLE_WGSL],
+  expr: `0.5 + 0.5 * ${fmt(GABOR2_NORM)} * gabor2T(p, per)`,
+}
+
+/** Gabor 3D — Canonical tileable WGSL shader spec. */
+export const gabor3dCanonicalTileableWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, GABOR_TILEABLE_WGSL],
+  expr: `0.5 + 0.5 * ${fmt(GABOR3_NORM)} * gabor3T(p, per)`,
+}

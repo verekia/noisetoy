@@ -22,7 +22,7 @@ import type { NoiseVariant } from '../registry'
 import type { LayerConfig } from './types'
 
 const layer = (variant: NoiseVariant, scale: number): LayerConfig => ({
-  variant,
+  noise: variant.source,
   scale,
   octaves: 2,
   rotate: false,

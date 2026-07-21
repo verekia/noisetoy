@@ -4,7 +4,8 @@
 // three/tsl API — the same text is evaluated for the Three.js backend and
 // exported verbatim by Copy TSL.
 
-import { COMMON_TSL } from '../noises/common.tsl'
+import { TSL_IMPORTS } from 'noisetoy'
+
 import {
   FRACTAL_GAIN,
   fractalAmpSum,
@@ -21,38 +22,17 @@ import {
   Z_SPEED,
 } from './types'
 
+import type { ShaderSpec } from 'noisetoy'
+
 import type { BlendMode, LayerConfig, RenderConfig } from './types'
 
-/** Identifiers the composed code expects from the three/tsl namespace. */
-export const TSL_IMPORTS = [
-  'Fn',
-  'If',
-  'Loop',
-  'select',
-  'float',
-  'int',
-  'uint',
-  'vec2',
-  'vec3',
-  'vec4',
-  'mat3',
-  'mix',
-  'dot',
-  'length',
-  'floor',
-  'fract',
-  'abs',
-  'min',
-  'max',
-  'clamp',
-  'sqrt',
-  'smoothstep',
-  'cos',
-  'sin',
-  'exp',
-  'atan',
-  'mod',
-] as const
+const requireTsl = (L: LayerConfig, i: number): ShaderSpec => {
+  const spec = L.noise.tsl
+  if (!spec) throw new Error(`layer ${i} has no TSL spec: set \`tsl\` on its noise from the ...Tsl exports`)
+  return spec
+}
+
+export { TSL_IMPORTS }
 
 /**
  * One row of the rotated-octave step as TSL method chains, skipping zero
@@ -106,8 +86,8 @@ const blendExpr = (mode: BlendMode, a: string, v: string): string => {
 
 const layerFunctions = (L: LayerConfig, i: number, tiled: boolean, solid: boolean): string => {
   const rotated = L.rotate && L.octaves > 1
-  const lTiled = !solid && tiled && L.variant.tslTileable !== null && !rotated
-  const shaderSpec = lTiled && L.variant.tslTileable ? L.variant.tslTileable : L.variant.tsl
+  const lTiled = !solid && tiled && L.noise.tslTileable != null && !rotated
+  const shaderSpec = lTiled && L.noise.tslTileable ? L.noise.tslTileable : requireTsl(L, i)
   const value = lTiled
     ? `const lv${i} = Fn(([p, per]) => ${shaderSpec.expr})`
     : `const lv${i} = Fn(([p]) => ${shaderSpec.expr})`
@@ -186,13 +166,15 @@ export const buildTslBody = (cfg: RenderConfig): string => {
   const be = band ? Math.min(cfg.bandSmoothing ?? BAND_SMOOTHING, band.width / 2) : 0
   const bandLo = band ? band.center - band.width / 2 : 0
   const bandHi = band ? band.center + band.width / 2 : 0
-  const chunks: string[] = [COMMON_TSL]
-  const seen = new Set<string>(chunks)
+  // Specs carry their full dependency chains (common chunk included), so the
+  // build is just an ordered dedupe across layers.
+  const chunks: string[] = []
+  const seen = new Set<string>()
   const fns: string[] = []
   const mainLines: string[] = []
   layers.forEach((L, i) => {
-    const lTiled = !solid && tiled && L.variant.tslTileable !== null
-    const shaderSpec = lTiled && L.variant.tslTileable ? L.variant.tslTileable : L.variant.tsl
+    const lTiled = !solid && tiled && L.noise.tslTileable != null
+    const shaderSpec = lTiled && L.noise.tslTileable ? L.noise.tslTileable : requireTsl(L, i)
     for (const dep of shaderSpec.deps) {
       if (!seen.has(dep)) {
         seen.add(dep)

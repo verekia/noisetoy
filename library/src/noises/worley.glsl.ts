@@ -1,5 +1,9 @@
 // GLSL counterpart of worley.ts. Requires COMMON_GLSL.
 
+import { COMMON_GLSL } from './common.glsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const WORLEY_GLSL = /* glsl */ `
 float worley2(vec2 p) {
   vec2 i = floor(p);
@@ -41,3 +45,17 @@ float worley3(vec3 p) {
   return sqrt(f1);
 }
 `
+
+/** GLSL spec for Worley 2D (shipping implementation). */
+export const worley2dCanonicalGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, WORLEY_GLSL],
+  expr: 'worley2(p)',
+}
+
+/** GLSL spec for Worley 3D (shipping implementation). */
+export const worley3dCanonicalGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, WORLEY_GLSL],
+  expr: 'worley3(p)',
+}

@@ -1,5 +1,10 @@
 // GLSL counterpart of ripple-tileable.ts. Requires COMMON_GLSL.
 
+import { COMMON_GLSL } from '../common.glsl.js'
+import { fmt, RIPPLE_NORM } from '../normalization.js'
+
+import type { ShaderSpec } from '../../spec.js'
+
 export const RIPPLE_TILEABLE_GLSL = /* glsl */ `
 float ripple2T(vec2 p, vec2 per) {
   vec2 i = floor(p);
@@ -51,3 +56,17 @@ float ripple3T(vec3 p, vec2 per) {
   return sum;
 }
 `
+
+/** GLSL spec for Ripple 2D, tileable (shipping implementation). */
+export const ripple2dCanonicalTileableGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, RIPPLE_TILEABLE_GLSL],
+  expr: `0.5 + 0.5 * ${fmt(RIPPLE_NORM)} * ripple2T(p, per)`,
+}
+
+/** GLSL spec for Ripple 3D, tileable (shipping implementation). */
+export const ripple3dCanonicalTileableGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, RIPPLE_TILEABLE_GLSL],
+  expr: `0.5 + 0.5 * ${fmt(RIPPLE_NORM)} * ripple3T(p, per)`,
+}

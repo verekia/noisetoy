@@ -1,5 +1,9 @@
 // WGSL counterpart of truchet-tileable.ts. Requires COMMON_WGSL.
 
+import { COMMON_WGSL } from '../common.wgsl.js'
+
+import type { ShaderSpec } from '../../spec.js'
+
 export const TRUCHET_TILEABLE_WGSL = /* wgsl */ `
 fn truchet2T(p: vec2f, per: vec2f) -> f32 {
   let i = floor(p);
@@ -10,3 +14,10 @@ fn truchet2T(p: vec2f, per: vec2f) -> f32 {
   return cos(min(d1, d2) * 6.283185307179586 * 3.0);
 }
 `
+
+/** Truchet 2D — Canonical tileable WGSL shader spec. */
+export const truchet2dCanonicalTileableWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, TRUCHET_TILEABLE_WGSL],
+  expr: '0.5 + 0.5 * truchet2T(p, per)',
+}

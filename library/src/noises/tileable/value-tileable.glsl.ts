@@ -1,5 +1,9 @@
 // GLSL counterpart of value-tileable.ts. Requires COMMON_GLSL.
 
+import { COMMON_GLSL } from '../common.glsl.js'
+
+import type { ShaderSpec } from '../../spec.js'
+
 export const VALUE_TILEABLE_GLSL = /* glsl */ `
 float value2T(vec2 p, vec2 per) {
   vec2 i = floor(p);
@@ -45,3 +49,17 @@ float value3T(vec3 p, vec2 per) {
   return mix(nz0, nz1, uz);
 }
 `
+
+/** GLSL spec for Value 2D, tileable (shipping implementation). */
+export const value2dCanonicalTileableGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, VALUE_TILEABLE_GLSL],
+  expr: 'value2T(p, per)',
+}
+
+/** GLSL spec for Value 3D, tileable (shipping implementation). */
+export const value3dCanonicalTileableGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, VALUE_TILEABLE_GLSL],
+  expr: 'value3T(p, per)',
+}

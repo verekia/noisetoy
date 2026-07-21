@@ -1,6 +1,11 @@
 // GLSL counterpart of value-fast.ts. Requires COMMON_GLSL and
 // FAST_COMMON_GLSL.
 
+import { COMMON_GLSL } from '../noises/common.glsl.js'
+import { FAST_COMMON_GLSL } from './fast-common.glsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const VALUE_FAST_GLSL = /* glsl */ `
 float valFastCorner2(uint s) {
   uint h = fibMix(s);
@@ -53,3 +58,17 @@ float valueFast3(vec3 p) {
   return mix(nz0, nz1, uz);
 }
 `
+
+/** Value 2D, 'fib-hash' fast implementation — GLSL spec. */
+export const value2dFastGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, FAST_COMMON_GLSL, VALUE_FAST_GLSL],
+  expr: 'valueFast2(p)',
+}
+
+/** Value 3D, 'fib-hash' fast implementation — GLSL spec. */
+export const value3dFastGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, FAST_COMMON_GLSL, VALUE_FAST_GLSL],
+  expr: 'valueFast3(p)',
+}

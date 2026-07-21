@@ -1,5 +1,9 @@
 // WGSL counterpart of value.ts. Requires COMMON_WGSL.
 
+import { COMMON_WGSL } from './common.wgsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const VALUE_WGSL = /* wgsl */ `
 fn value2(p: vec2f) -> f32 {
   let i = floor(p);
@@ -37,3 +41,17 @@ fn value3(p: vec3f) -> f32 {
   return mix(nz0, nz1, uz);
 }
 `
+
+/** Value 2D — Canonical WGSL shader spec. */
+export const value2dCanonicalWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, VALUE_WGSL],
+  expr: 'value2(p)',
+}
+
+/** Value 3D — Canonical WGSL shader spec. */
+export const value3dCanonicalWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, VALUE_WGSL],
+  expr: 'value3(p)',
+}

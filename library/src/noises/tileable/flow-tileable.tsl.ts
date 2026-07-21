@@ -1,6 +1,12 @@
 // TSL counterpart of flow-tileable.ts. Requires COMMON_TSL and FLOW_TSL
 // (for rotGradDot2).
 
+import { COMMON_TSL } from '../common.tsl.js'
+import { FLOW_TSL } from '../flow.tsl.js'
+import { PERLIN2_NORM } from '../normalization.js'
+
+import type { ShaderSpec } from '../../spec.js'
+
 export const FLOW_TILEABLE_TSL = /* js */ `
 const flow3T = Fn(([p, per]) => {
   const i = floor(p.xy)
@@ -21,3 +27,10 @@ const flow3T = Fn(([p, per]) => {
   return mix(mix(g00, g10, ux), mix(g01, g11, ux), uy)
 })
 `
+
+/** Flow 3D (Canonical), tileable — TSL shader spec. */
+export const flow3dCanonicalTileableTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, FLOW_TSL, FLOW_TILEABLE_TSL],
+  expr: `flow3T(p, per).mul(${0.5 * PERLIN2_NORM}).add(0.5)`,
+}

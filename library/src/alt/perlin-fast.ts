@@ -104,7 +104,8 @@
 // contract is a pure scalar function), not an implementation of this noise,
 // so it does not belong in this file.
 
-import { fade, LATTICE_HX, LATTICE_HY, LATTICE_HZ, lerp } from '../noises/common'
+import { fade, LATTICE_HX, LATTICE_HY, LATTICE_HZ, lerp } from '../noises/common.js'
+import { PERLIN2_NORM, PERLIN3_NORM } from '../noises/normalization.js'
 
 /** 2^32 / phi, odd — Knuth's multiplicative hashing constant. */
 const FIB = 0x9e3779b1
@@ -199,3 +200,9 @@ export const perlinFast3 = (x: number, y: number, z: number): number => {
   const nz1 = lerp(lerp(g001, g101, ux), lerp(g011, g111, ux), uy)
   return lerp(nz0, nz1, uz)
 }
+
+/** Perlin 2D, 'fib-hash' fast implementation — display value, unclamped. */
+export const perlin2dFast = (x: number, y: number): number => 0.5 + 0.5 * PERLIN2_NORM * perlinFast2(x, y)
+
+/** Perlin 3D, 'fib-hash' fast implementation — display value, unclamped. */
+export const perlin3dFast = (x: number, y: number, z: number): number => 0.5 + 0.5 * PERLIN3_NORM * perlinFast3(x, y, z)

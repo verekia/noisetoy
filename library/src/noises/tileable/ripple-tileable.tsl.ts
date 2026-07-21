@@ -1,5 +1,10 @@
 // TSL counterpart of ripple-tileable.ts. Requires COMMON_TSL.
 
+import { COMMON_TSL } from '../common.tsl.js'
+import { RIPPLE_NORM } from '../normalization.js'
+
+import type { ShaderSpec } from '../../spec.js'
+
 export const RIPPLE_TILEABLE_TSL = /* js */ `
 const ripple2T = Fn(([p, per]) => {
   const i = floor(p)
@@ -51,3 +56,17 @@ const ripple3T = Fn(([p, per]) => {
   return sum
 })
 `
+
+/** Ripple 2D (Canonical), tileable — TSL shader spec. */
+export const ripple2dCanonicalTileableTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, RIPPLE_TILEABLE_TSL],
+  expr: `ripple2T(p, per).mul(${0.5 * RIPPLE_NORM}).add(0.5)`,
+}
+
+/** Ripple 3D (Canonical), tileable — TSL shader spec. */
+export const ripple3dCanonicalTileableTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, RIPPLE_TILEABLE_TSL],
+  expr: `ripple3T(p, per).mul(${0.5 * RIPPLE_NORM}).add(0.5)`,
+}

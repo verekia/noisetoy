@@ -1,5 +1,10 @@
 // WGSL counterpart of ripple.ts. Requires COMMON_WGSL.
 
+import { COMMON_WGSL } from './common.wgsl.js'
+import { fmt, RIPPLE_NORM } from './normalization.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const RIPPLE_WGSL = /* wgsl */ `
 fn ripple2(p: vec2f) -> f32 {
   let i = floor(p);
@@ -47,3 +52,17 @@ fn ripple3(p: vec3f) -> f32 {
   return sum;
 }
 `
+
+/** Ripple 2D — Canonical WGSL shader spec. */
+export const ripple2dCanonicalWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, RIPPLE_WGSL],
+  expr: `0.5 + 0.5 * ${fmt(RIPPLE_NORM)} * ripple2(p)`,
+}
+
+/** Ripple 3D — Canonical WGSL shader spec. */
+export const ripple3dCanonicalWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, RIPPLE_WGSL],
+  expr: `0.5 + 0.5 * ${fmt(RIPPLE_NORM)} * ripple3(p)`,
+}

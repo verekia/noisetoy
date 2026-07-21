@@ -37,7 +37,8 @@
 // gradients have length sqrt(2). The display norms in normalization.ts absorb
 // it; they are chosen to match display contrast, not to hug the bounds.
 
-import { fade, gradTable2, gradTable3, hashU32, LATTICE_HX, LATTICE_HY, LATTICE_HZ, lerp } from './common'
+import { fade, gradTable2, gradTable3, hashU32, LATTICE_HX, LATTICE_HY, LATTICE_HZ, lerp } from './common.js'
+import { PERLIN2_NORM, PERLIN3_NORM } from './normalization.js'
 
 export const perlin2 = (x: number, y: number): number => {
   const ix = Math.floor(x)
@@ -85,3 +86,10 @@ export const perlin3 = (x: number, y: number, z: number): number => {
   const nz1 = lerp(lerp(g001, g101, ux), lerp(g011, g111, ux), uy)
   return lerp(nz0, nz1, uz)
 }
+
+/** Perlin 2D, shipping implementation — display value, nominally [0, 1], unclamped. */
+export const perlin2dCanonical = (x: number, y: number): number => 0.5 + 0.5 * PERLIN2_NORM * perlin2(x, y)
+
+/** Perlin 3D, shipping implementation — display value, nominally [0, 1], unclamped. */
+export const perlin3dCanonical = (x: number, y: number, z: number): number =>
+  0.5 + 0.5 * PERLIN3_NORM * perlin3(x, y, z)

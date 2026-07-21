@@ -3,6 +3,12 @@
 // unconditionally); the L1 plane bound ADDS the axis clearances, the Linf
 // bound takes their MAX.
 
+import { COMMON_GLSL } from '../noises/common.glsl.js'
+import { fmt, CHEBYSHEV2_NORM, CHEBYSHEV3_NORM, MANHATTAN2_NORM, MANHATTAN3_NORM } from '../noises/normalization.js'
+import { FAST_COMMON_GLSL } from './fast-common.glsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const WORLEY_METRICS_FAST_GLSL = /* glsl */ `
 vec2 wmFastOffsets2(uint s) {
   uint h = fibMix(s);
@@ -165,3 +171,31 @@ float chebyshevFast3(vec3 p) {
   return f1;
 }
 `
+
+/** Worley (Manhattan) 2D, 'split-bits-pruned' fast implementation — GLSL spec. */
+export const worleyManhattan2dFastGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, FAST_COMMON_GLSL, WORLEY_METRICS_FAST_GLSL],
+  expr: `${fmt(MANHATTAN2_NORM)} * manhattanFast2(p)`,
+}
+
+/** Worley (Manhattan) 3D, 'split-bits-pruned' fast implementation — GLSL spec. */
+export const worleyManhattan3dFastGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, FAST_COMMON_GLSL, WORLEY_METRICS_FAST_GLSL],
+  expr: `${fmt(MANHATTAN3_NORM)} * manhattanFast3(p)`,
+}
+
+/** Worley (Chebyshev) 2D, 'split-bits-pruned' fast implementation — GLSL spec. */
+export const worleyChebyshev2dFastGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, FAST_COMMON_GLSL, WORLEY_METRICS_FAST_GLSL],
+  expr: `${fmt(CHEBYSHEV2_NORM)} * chebyshevFast2(p)`,
+}
+
+/** Worley (Chebyshev) 3D, 'split-bits-pruned' fast implementation — GLSL spec. */
+export const worleyChebyshev3dFastGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, FAST_COMMON_GLSL, WORLEY_METRICS_FAST_GLSL],
+  expr: `${fmt(CHEBYSHEV3_NORM)} * chebyshevFast3(p)`,
+}

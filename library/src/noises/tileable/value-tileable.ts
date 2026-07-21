@@ -3,7 +3,7 @@
 // hashing, so the pattern repeats seamlessly every `px` x `py` cells.
 // This wrapping is deliberately kept out of the core implementation.
 
-import { fade, hash2, hash3, imod, lerp, to01 } from '../common'
+import { fade, hash2, hash3, imod, lerp, to01 } from '../common.js'
 
 export const value2Tileable = (x: number, y: number, px: number, py: number): number => {
   const ix = Math.floor(x)
@@ -49,3 +49,9 @@ export const value3Tileable = (x: number, y: number, z: number, px: number, py: 
   const nz1 = lerp(lerp(n001, n101, ux), lerp(n011, n111, ux), uy)
   return lerp(nz0, nz1, uz)
 }
+
+/** Value 2D tileable, shipping implementation — wraps every periodX / periodY lattice cells; display value, nominally [0, 1], unclamped. */
+export const value2dCanonicalTileable = value2Tileable
+
+/** Value 3D tileable, shipping implementation — wraps every periodX / periodY lattice cells; display value, nominally [0, 1], unclamped. */
+export const value3dCanonicalTileable = value3Tileable

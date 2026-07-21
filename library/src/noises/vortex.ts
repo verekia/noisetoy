@@ -11,7 +11,7 @@
 // blended random vector field appears to be original. Related to vector-field
 // visualization folklore. MIT.
 
-import { fade, hash2, hash3, hashU32, to01 } from './common'
+import { fade, hash2, hash3, hashU32, to01 } from './common.js'
 
 const TAU = 6.283185307179586
 
@@ -59,3 +59,9 @@ export const vortex3 = (x: number, y: number, z: number): number => {
   const theta = Math.atan2(sy, sx)
   return Math.cos(2 * theta)
 }
+
+/** Vortex 2D, shipping implementation — display value, nominally [0, 1], unclamped. */
+export const vortex2dCanonical = (x: number, y: number): number => 0.5 + 0.5 * vortex2(x, y)
+
+/** Vortex 3D, shipping implementation — display value, nominally [0, 1], unclamped. */
+export const vortex3dCanonical = (x: number, y: number, z: number): number => 0.5 + 0.5 * vortex3(x, y, z)

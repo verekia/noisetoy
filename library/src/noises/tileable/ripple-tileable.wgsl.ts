@@ -1,5 +1,10 @@
 // WGSL counterpart of ripple-tileable.ts. Requires COMMON_WGSL.
 
+import { COMMON_WGSL } from '../common.wgsl.js'
+import { fmt, RIPPLE_NORM } from '../normalization.js'
+
+import type { ShaderSpec } from '../../spec.js'
+
 export const RIPPLE_TILEABLE_WGSL = /* wgsl */ `
 fn ripple2T(p: vec2f, per: vec2f) -> f32 {
   let i = floor(p);
@@ -51,3 +56,17 @@ fn ripple3T(p: vec3f, per: vec2f) -> f32 {
   return sum;
 }
 `
+
+/** Ripple 2D — Canonical tileable WGSL shader spec. */
+export const ripple2dCanonicalTileableWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, RIPPLE_TILEABLE_WGSL],
+  expr: `0.5 + 0.5 * ${fmt(RIPPLE_NORM)} * ripple2T(p, per)`,
+}
+
+/** Ripple 3D — Canonical tileable WGSL shader spec. */
+export const ripple3dCanonicalTileableWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, RIPPLE_TILEABLE_WGSL],
+  expr: `0.5 + 0.5 * ${fmt(RIPPLE_NORM)} * ripple3T(p, per)`,
+}

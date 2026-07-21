@@ -1,6 +1,12 @@
 // WGSL counterpart of flow-fast.ts. Requires COMMON_WGSL and FAST_COMMON_WGSL.
 // Note WGSL's select(falseValue, trueValue, condition) argument order.
 
+import { COMMON_WGSL } from '../noises/common.wgsl.js'
+import { PERLIN2_NORM, fmt } from '../noises/normalization.js'
+import { FAST_COMMON_WGSL } from './fast-common.wgsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const FLOW_FAST_WGSL = /* wgsl */ `
 fn flowFastCorner(h: u32, d: vec2f, c1: f32, s1: f32, c2: f32, s2: f32) -> f32 {
   let dir = h >> 29u;
@@ -39,3 +45,10 @@ fn flowFast3(p: vec3f) -> f32 {
   return mix(mix(n00, n10, ux), mix(n01, n11, ux), uy);
 }
 `
+
+/** Flow 3D Fast (fast-rot candidate) — WGSL ShaderSpec, pre-clamp display expression. */
+export const flow3dFastWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, FAST_COMMON_WGSL, FLOW_FAST_WGSL],
+  expr: `0.5 + 0.5 * ${fmt(PERLIN2_NORM)} * flowFast3(p)`,
+}

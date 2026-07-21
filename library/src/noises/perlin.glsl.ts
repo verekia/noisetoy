@@ -1,5 +1,10 @@
 // GLSL counterpart of perlin.ts. Requires COMMON_GLSL.
 
+import { COMMON_GLSL } from './common.glsl.js'
+import { fmt, PERLIN2_NORM, PERLIN3_NORM } from './normalization.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const PERLIN_GLSL = /* glsl */ `
 float perlin2(vec2 p) {
   vec2 i = floor(p);
@@ -42,3 +47,17 @@ float perlin3(vec3 p) {
   return mix(nz0, nz1, uz);
 }
 `
+
+/** GLSL spec for Perlin 2D (shipping implementation). */
+export const perlin2dCanonicalGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, PERLIN_GLSL],
+  expr: `0.5 + 0.5 * ${fmt(PERLIN2_NORM)} * perlin2(p)`,
+}
+
+/** GLSL spec for Perlin 3D (shipping implementation). */
+export const perlin3dCanonicalGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, PERLIN_GLSL],
+  expr: `0.5 + 0.5 * ${fmt(PERLIN3_NORM)} * perlin3(p)`,
+}

@@ -1,6 +1,11 @@
 // WGSL counterpart of wave-fast.ts. Requires COMMON_WGSL and
 // FAST_COMMON_WGSL. See the GLSL file for the quantized-angle note.
 
+import { COMMON_WGSL } from '../noises/common.wgsl.js'
+import { FAST_COMMON_WGSL } from './fast-common.wgsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const WAVE_FAST_WGSL = /* wgsl */ `
 fn wavFastCorner2(s0: u32, d: vec2f) -> f32 {
   var h = fibMix(s0);
@@ -60,3 +65,17 @@ fn waveFast3(p: vec3f) -> f32 {
   return mix(nz0, nz1, uz);
 }
 `
+
+/** Wave 2D Fast (fast-dirs candidate) — WGSL ShaderSpec, pre-clamp display expression. */
+export const wave2dFastWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, FAST_COMMON_WGSL, WAVE_FAST_WGSL],
+  expr: '0.5 + 0.5 * 1.0 * waveFast2(p)',
+}
+
+/** Wave 3D Fast (fast-dirs candidate) — WGSL ShaderSpec, pre-clamp display expression. */
+export const wave3dFastWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, FAST_COMMON_WGSL, WAVE_FAST_WGSL],
+  expr: '0.5 + 0.5 * 1.0 * waveFast3(p)',
+}

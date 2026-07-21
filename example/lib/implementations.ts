@@ -66,81 +66,7 @@
 // GPUs. The table gradients live alongside it in common.ts as `gradTable2` /
 // `gradTable3`, so switching a noise over is a small change.
 
-import {
-  crackleFast2,
-  crackleFast3,
-  foamFast2,
-  foamFast3,
-  mosaicFast2,
-  mosaicFast3,
-  rippleFast2,
-  rippleFast3,
-  starsFast2,
-  starsFast3,
-} from './alt/cellular-fast'
-import { CELLULAR_FAST_GLSL } from './alt/cellular-fast.glsl'
-import { CELLULAR_FAST_TSL } from './alt/cellular-fast.tsl'
-import { CELLULAR_FAST_WGSL } from './alt/cellular-fast.wgsl'
-import { FAST_COMMON_GLSL } from './alt/fast-common.glsl'
-import { FAST_COMMON_TSL } from './alt/fast-common.tsl'
-import { FAST_COMMON_WGSL } from './alt/fast-common.wgsl'
-import { flowFast3 } from './alt/flow-fast'
-import { FLOW_FAST_GLSL } from './alt/flow-fast.glsl'
-import { FLOW_FAST_TSL } from './alt/flow-fast.tsl'
-import { FLOW_FAST_WGSL } from './alt/flow-fast.wgsl'
-import { gaborFast2, gaborFast3 } from './alt/gabor-fast'
-import { GABOR_FAST_GLSL } from './alt/gabor-fast.glsl'
-import { GABOR_FAST_TSL } from './alt/gabor-fast.tsl'
-import { GABOR_FAST_WGSL } from './alt/gabor-fast.wgsl'
-import { perlinFast2, perlinFast3 } from './alt/perlin-fast'
-import { perlinFastTileable2, perlinFastTileable3 } from './alt/perlin-fast-tileable'
-import { PERLIN_FAST_TILEABLE_GLSL } from './alt/perlin-fast-tileable.glsl'
-import { PERLIN_FAST_TILEABLE_TSL } from './alt/perlin-fast-tileable.tsl'
-import { PERLIN_FAST_TILEABLE_WGSL } from './alt/perlin-fast-tileable.wgsl'
-import { PERLIN_FAST_GLSL } from './alt/perlin-fast.glsl'
-import { PERLIN_FAST_TSL } from './alt/perlin-fast.tsl'
-import { PERLIN_FAST_WGSL } from './alt/perlin-fast.wgsl'
-import { simplexFast2, simplexFast3 } from './alt/simplex-fast'
-import { SIMPLEX_FAST_GLSL } from './alt/simplex-fast.glsl'
-import { SIMPLEX_FAST_TSL } from './alt/simplex-fast.tsl'
-import { SIMPLEX_FAST_WGSL } from './alt/simplex-fast.wgsl'
-import { valueFast2, valueFast3 } from './alt/value-fast'
-import { VALUE_FAST_GLSL } from './alt/value-fast.glsl'
-import { VALUE_FAST_TSL } from './alt/value-fast.tsl'
-import { VALUE_FAST_WGSL } from './alt/value-fast.wgsl'
-import { vortexFast2, vortexFast3 } from './alt/vortex-fast'
-import { VORTEX_FAST_GLSL } from './alt/vortex-fast.glsl'
-import { VORTEX_FAST_TSL } from './alt/vortex-fast.tsl'
-import { VORTEX_FAST_WGSL } from './alt/vortex-fast.wgsl'
-import { waveFast2, waveFast3 } from './alt/wave-fast'
-import { WAVE_FAST_GLSL } from './alt/wave-fast.glsl'
-import { WAVE_FAST_TSL } from './alt/wave-fast.tsl'
-import { WAVE_FAST_WGSL } from './alt/wave-fast.wgsl'
-import { worleyFast2, worleyFast3 } from './alt/worley-fast'
-import { WORLEY_FAST_GLSL } from './alt/worley-fast.glsl'
-import { WORLEY_FAST_TSL } from './alt/worley-fast.tsl'
-import { WORLEY_FAST_WGSL } from './alt/worley-fast.wgsl'
-import { chebyshevFast2, chebyshevFast3, manhattanFast2, manhattanFast3 } from './alt/worley-metrics-fast'
-import { WORLEY_METRICS_FAST_GLSL } from './alt/worley-metrics-fast.glsl'
-import { WORLEY_METRICS_FAST_TSL } from './alt/worley-metrics-fast.tsl'
-import { WORLEY_METRICS_FAST_WGSL } from './alt/worley-metrics-fast.wgsl'
-import {
-  CHEBYSHEV2_NORM,
-  CRACKLE_NORM,
-  CHEBYSHEV3_NORM,
-  clamp01,
-  fmt,
-  GABOR2_NORM,
-  GABOR3_NORM,
-  MANHATTAN2_NORM,
-  MANHATTAN3_NORM,
-  PERLIN2_NORM,
-  PERLIN3_NORM,
-  RIPPLE_NORM,
-  SIMPLEX2_NORM,
-  SIMPLEX3_NORM,
-  STARS_NORM,
-} from './noises/normalization'
+import * as n from 'noisetoy'
 
 export type ImplementationKind = 'canonical' | 'alternative' | 'conventional' | 'novel'
 
@@ -964,17 +890,14 @@ export const IMPLEMENTATION_STATUS_BLURB: Record<NonNullable<NoiseImplementation
 //
 // A registry variant is the full contract: four languages, tileable paths, a
 // cost-model entry. An AltVariant is the runnable slice of that contract a
-// non-shipping implementation carries: the TS samplers plus GLSL/WGSL/TSL
-// shader specs, display-mapped exactly like the registry variant it stands in
-// for, so previews, exports and benchmarks are apples-to-apples with the
-// shipping row on every backend. What it deliberately lacks is the tileable
-// paths and a cost entry — growing those, and winning the GPU measurement the
-// shader specs now make possible, is what promotion means.
-//
-// Shader function names carry a Fast/Trig suffix so a stack can compose a
-// candidate next to the shipping chunk of the same noise without collisions.
+// non-shipping implementation carries: a NoiseSource built from the library's
+// qualified Fast exports (CPU sampler plus GLSL/WGSL/TSL specs, display-mapped
+// exactly like the registry variant it stands in for), so previews, exports
+// and benchmarks are apples-to-apples with the shipping row on every backend.
+// What it deliberately lacks is the tileable paths and a cost entry — growing
+// those is what promotion means.
 
-import type { ShaderSpec } from './registry'
+import type { NoiseSource, ShaderSpec } from 'noisetoy'
 
 export type AltSampleFn = (x: number, y: number, z: number) => number
 
@@ -995,6 +918,8 @@ export type AltVariant = {
   glsl: ShaderSpec
   wgsl: ShaderSpec
   tsl: ShaderSpec
+  /** The same pieces as a createEffect layer noise. No tileable paths. */
+  source: NoiseSource
   /**
    * Cost of one evaluation in the shared unit (Perlin 3D = 1, see cost.ts) —
    * a transferred estimate in the cost model's own sense: the registry
@@ -1006,78 +931,37 @@ export type AltVariant = {
   cost: number
 }
 
-const spec = (dim: 2 | 3, deps: string[], expr: string): ShaderSpec => ({ dim, deps, expr })
-
-/** value * (0.5 * norm) + 0.5, unclamped — matches signedExpr in the registry. */
-const signedText = (norm: number, call: string): string => `0.5 + 0.5 * ${fmt(norm)} * ${call}`
-
-const signedTsl = (norm: number, call: string): string => `${call}.mul(${0.5 * norm}).add(0.5)`
-
-type AltShaders = { glsl: ShaderSpec; wgsl: ShaderSpec; tsl: ShaderSpec }
-
-const altVariant = (
-  noiseId: string,
-  implementationId: string,
-  dim: 2 | 3,
-  cost: number,
-  sampleRaw: AltSampleFn,
-  shaders: AltShaders,
-): AltVariant => ({
-  id: `${noiseId}-${dim}d@${implementationId}`,
-  variantId: `${noiseId}-${dim}d`,
-  noiseId,
-  implementationId,
-  dim,
-  cost,
-  sampleRaw,
-  sample: (x, y, z) => clamp01(sampleRaw(x, y, z)),
-  ...shaders,
-})
-
-/**
- * The three language specs for one candidate call, sharing one display
- * expression shape: null norm renders raw, 'signed' maps 0.5 + 0.5 * norm * v
- * (Perlin-family), 'unsigned' maps norm * v (distance-family).
- */
-const fastShaders = (
-  dim: 2 | 3,
-  chunks: { glsl: string; wgsl: string; tsl: string },
-  call: string,
-  norm: number | null,
-  mode: 'signed' | 'unsigned' = 'signed',
-): AltShaders => {
-  const text = norm === null ? call : mode === 'signed' ? signedText(norm, call) : `${fmt(norm)} * ${call}`
-  const tslText = norm === null ? call : mode === 'signed' ? signedTsl(norm, call) : `${call}.mul(${norm})`
+const altVariant = (noiseId: string, implementationId: string, cost: number, source: NoiseSource): AltVariant => {
+  if (!source.glsl || !source.wgsl || !source.tsl) {
+    throw new Error(`${noiseId}@${implementationId}: alt source is missing a shader spec`)
+  }
+  let sampleRaw: AltSampleFn
+  if (source.dim === 2) {
+    const sample = source.sample
+    if (!sample) throw new Error(`${noiseId}@${implementationId}: alt source has no CPU sampler`)
+    sampleRaw = (x, y) => sample(x, y)
+  } else {
+    const sample = source.sample
+    if (!sample) throw new Error(`${noiseId}@${implementationId}: alt source has no CPU sampler`)
+    sampleRaw = sample
+  }
   return {
-    glsl: spec(dim, [FAST_COMMON_GLSL, chunks.glsl], text),
-    wgsl: spec(dim, [FAST_COMMON_WGSL, chunks.wgsl], text),
-    tsl: spec(dim, [FAST_COMMON_TSL, chunks.tsl], tslText),
+    id: `${noiseId}-${source.dim}d@${implementationId}`,
+    variantId: `${noiseId}-${source.dim}d`,
+    noiseId,
+    implementationId,
+    dim: source.dim,
+    cost,
+    sampleRaw,
+    sample: (x, y, z) => n.clamp01(sampleRaw(x, y, z)),
+    glsl: source.glsl,
+    wgsl: source.wgsl,
+    tsl: source.tsl,
+    source,
   }
 }
 
-const PERLIN_FAST_CHUNKS = { glsl: PERLIN_FAST_GLSL, wgsl: PERLIN_FAST_WGSL, tsl: PERLIN_FAST_TSL }
-const PERLIN_FAST_TILEABLE_CHUNKS = {
-  glsl: PERLIN_FAST_TILEABLE_GLSL,
-  wgsl: PERLIN_FAST_TILEABLE_WGSL,
-  tsl: PERLIN_FAST_TILEABLE_TSL,
-}
-const SIMPLEX_FAST_CHUNKS = { glsl: SIMPLEX_FAST_GLSL, wgsl: SIMPLEX_FAST_WGSL, tsl: SIMPLEX_FAST_TSL }
-const WORLEY_FAST_CHUNKS = { glsl: WORLEY_FAST_GLSL, wgsl: WORLEY_FAST_WGSL, tsl: WORLEY_FAST_TSL }
-const CELLULAR_FAST_CHUNKS = { glsl: CELLULAR_FAST_GLSL, wgsl: CELLULAR_FAST_WGSL, tsl: CELLULAR_FAST_TSL }
-const VORTEX_FAST_CHUNKS = { glsl: VORTEX_FAST_GLSL, wgsl: VORTEX_FAST_WGSL, tsl: VORTEX_FAST_TSL }
-const VALUE_FAST_CHUNKS = { glsl: VALUE_FAST_GLSL, wgsl: VALUE_FAST_WGSL, tsl: VALUE_FAST_TSL }
-const WAVE_FAST_CHUNKS = { glsl: WAVE_FAST_GLSL, wgsl: WAVE_FAST_WGSL, tsl: WAVE_FAST_TSL }
-const GABOR_FAST_CHUNKS = { glsl: GABOR_FAST_GLSL, wgsl: GABOR_FAST_WGSL, tsl: GABOR_FAST_TSL }
-const WORLEY_METRICS_FAST_CHUNKS = {
-  glsl: WORLEY_METRICS_FAST_GLSL,
-  wgsl: WORLEY_METRICS_FAST_WGSL,
-  tsl: WORLEY_METRICS_FAST_TSL,
-}
-
 /**
- * Display mappings mirror the registry: Perlin and Simplex are signed noises
- * mapped 0.5 + 0.5 * norm * raw; Worley's F1 distance is displayed raw.
- *
  * Costs, per the AltVariant doc, are the shipping VARIANT_COST scaled by the
  * measured GPU throughput ratio. The measurements (Msamples/s, WebGL /
  * WebGPU, 512x512, median of 5 calibrated batches): Perlin and Simplex
@@ -1085,275 +969,230 @@ const WORLEY_METRICS_FAST_CHUNKS = {
  * shipping figures (0.23/0.42 and 0.29/0.39 after the ~2% tie). The pruned
  * Worley WINS on the GPU: 5274/3617 against shipping 4546/3101 in 2D (0.86x
  * the cost -> 0.51) and 3422/3216 against 1712/1723 in 3D (0.52x -> 1.2) —
- * the branch-divergence worry never materialized.
+ * the branch-divergence worry never materialized. Flow measured a slight
+ * candidate win (ratio ~0.97 -> 0.52); vortex, value and wave 2D measured as
+ * ties; ripple 0.91/0.79, stars 0.97/0.65, foam 0.94/0.50, crackle 0.97/0.61,
+ * mosaic 0.96/0.53, Manhattan 0.94/0.65, Chebyshev 0.92/0.52; Gabor is a real
+ * GPU win (0.74x -> 1.3 in 2D, 0.63x -> 4.4 in 3D).
  */
 export const ALT_VARIANTS: AltVariant[] = [
-  altVariant(
-    'perlin',
-    'fib-hash',
-    2,
-    0.23,
-    (x, y) => 0.5 + 0.5 * PERLIN2_NORM * perlinFast2(x, y),
-    fastShaders(2, PERLIN_FAST_CHUNKS, 'perlinFast2(p)', PERLIN2_NORM),
-  ),
-  altVariant(
-    'perlin',
-    'fib-hash',
-    3,
-    0.42,
-    (x, y, z) => 0.5 + 0.5 * PERLIN3_NORM * perlinFast3(x, y, z),
-    fastShaders(3, PERLIN_FAST_CHUNKS, 'perlinFast3(p)', PERLIN3_NORM),
-  ),
-  altVariant(
-    'perlin',
-    'fib-hash-tileable',
-    2,
-    0.23,
-    (x, y) => 0.5 + 0.5 * PERLIN2_NORM * perlinFastTileable2(x, y),
-    fastShaders(2, PERLIN_FAST_TILEABLE_CHUNKS, 'perlinFastT2(p)', PERLIN2_NORM),
-  ),
-  altVariant(
-    'perlin',
-    'fib-hash-tileable',
-    3,
-    0.42,
-    (x, y, z) => 0.5 + 0.5 * PERLIN3_NORM * perlinFastTileable3(x, y, z),
-    fastShaders(3, PERLIN_FAST_TILEABLE_CHUNKS, 'perlinFastT3(p)', PERLIN3_NORM),
-  ),
-  // Flow's display mapping reuses PERLIN2_NORM like the shipping flow (unit
-  // gradients in both). GPU measured a slight candidate win (WebGL 4688 vs
-  // 4572, WebGPU 3305 vs 3179 Msamples/s), ratio ~0.97 -> cost 0.52.
-  altVariant(
-    'flow',
-    'fast-rot',
-    3,
-    0.52,
-    (x, y, z) => 0.5 + 0.5 * PERLIN2_NORM * flowFast3(x, y, z),
-    fastShaders(3, { glsl: FLOW_FAST_GLSL, wgsl: FLOW_FAST_WGSL, tsl: FLOW_FAST_TSL }, 'flowFast3(p)', PERLIN2_NORM),
-  ),
-  // Same gradient set and kernel as the shipping simplex, so the shipping
-  // norms apply unchanged.
-  altVariant(
-    'simplex',
-    'fast-hash',
-    2,
-    0.29,
-    (x, y) => 0.5 + 0.5 * SIMPLEX2_NORM * simplexFast2(x, y),
-    fastShaders(2, SIMPLEX_FAST_CHUNKS, 'simplexFast2(p)', SIMPLEX2_NORM),
-  ),
-  altVariant(
-    'simplex',
-    'fast-hash',
-    3,
-    0.39,
-    (x, y, z) => 0.5 + 0.5 * SIMPLEX3_NORM * simplexFast3(x, y, z),
-    fastShaders(3, SIMPLEX_FAST_CHUNKS, 'simplexFast3(p)', SIMPLEX3_NORM),
-  ),
-  altVariant(
-    'worley',
-    'split-bits-pruned',
-    2,
-    0.51,
-    (x, y) => worleyFast2(x, y),
-    fastShaders(2, WORLEY_FAST_CHUNKS, 'worleyFast2(p)', null),
-  ),
-  altVariant(
-    'worley',
-    'split-bits-pruned',
-    3,
-    1.2,
-    (x, y, z) => worleyFast3(x, y, z),
-    fastShaders(3, WORLEY_FAST_CHUNKS, 'worleyFast3(p)', null),
-  ),
-  // Metric-candidate costs: shipping VARIANT_COST x measured GPU throughput
-  // ratio (WebGL+WebGPU medians). Manhattan: 0.94 (2D) / 0.65 (3D).
-  // Chebyshev: 0.92 (2D) / 0.52 (3D).
-  // Vortex costs: GPU measured a tie (ratios 0.97-0.99, WebGL+WebGPU), as
-  // expected where trig is cheap, so the shipping figures carry over.
-  // Display is the registry's 0.5 + 0.5 * v (norm 1).
-  altVariant(
-    'vortex',
-    'fast-dirs',
-    2,
-    0.45,
-    (x, y) => 0.5 + 0.5 * vortexFast2(x, y),
-    fastShaders(2, VORTEX_FAST_CHUNKS, 'vortexFast2(p)', 1),
-  ),
-  altVariant(
-    'vortex',
-    'fast-dirs',
-    3,
-    1.0,
-    (x, y, z) => 0.5 + 0.5 * vortexFast3(x, y, z),
-    fastShaders(3, VORTEX_FAST_CHUNKS, 'vortexFast3(p)', 1),
-  ),
-  // Ripple costs: shipping VARIANT_COST x measured GPU ratio, 0.91 (2D) and
-  // 0.79 (3D) — WebGL+WebGPU medians.
-  altVariant(
-    'ripple',
-    'split-bits-pruned',
-    2,
-    0.9,
-    (x, y) => 0.5 + 0.5 * RIPPLE_NORM * rippleFast2(x, y),
-    fastShaders(2, CELLULAR_FAST_CHUNKS, 'rippleFast2(p)', RIPPLE_NORM),
-  ),
-  altVariant(
-    'ripple',
-    'split-bits-pruned',
-    3,
-    2.8,
-    (x, y, z) => 0.5 + 0.5 * RIPPLE_NORM * rippleFast3(x, y, z),
-    fastShaders(3, CELLULAR_FAST_CHUNKS, 'rippleFast3(p)', RIPPLE_NORM),
-  ),
-  // Stars costs: shipping VARIANT_COST x measured GPU ratio, 0.97 (2D) and
-  // 0.65 (3D) — WebGL+WebGPU medians.
-  altVariant(
-    'stars',
-    'split-bits-pruned',
-    2,
-    0.81,
-    (x, y) => STARS_NORM * starsFast2(x, y),
-    fastShaders(2, CELLULAR_FAST_CHUNKS, 'starsFast2(p)', STARS_NORM, 'unsigned'),
-  ),
-  altVariant(
-    'stars',
-    'split-bits-pruned',
-    3,
-    2.0,
-    (x, y, z) => STARS_NORM * starsFast3(x, y, z),
-    fastShaders(3, CELLULAR_FAST_CHUNKS, 'starsFast3(p)', STARS_NORM, 'unsigned'),
-  ),
-  // Foam costs: shipping VARIANT_COST x measured GPU ratio, 0.94 (2D) and
-  // 0.50 (3D) — WebGL+WebGPU medians.
-  altVariant(
-    'foam',
-    'split-bits-pruned',
-    2,
-    0.59,
-    (x, y) => foamFast2(x, y),
-    fastShaders(2, CELLULAR_FAST_CHUNKS, 'foamFast2(p)', null),
-  ),
-  altVariant(
-    'foam',
-    'split-bits-pruned',
-    3,
-    1.25,
-    (x, y, z) => foamFast3(x, y, z),
-    fastShaders(3, CELLULAR_FAST_CHUNKS, 'foamFast3(p)', null),
-  ),
-  // Crackle costs: shipping VARIANT_COST x measured GPU ratio, 0.97 (2D)
-  // and 0.61 (3D) — WebGL+WebGPU medians.
-  altVariant(
-    'crackle',
-    'split-bits-pruned',
-    2,
-    0.58,
-    (x, y) => CRACKLE_NORM * crackleFast2(x, y),
-    fastShaders(2, CELLULAR_FAST_CHUNKS, 'crackleFast2(p)', CRACKLE_NORM, 'unsigned'),
-  ),
-  altVariant(
-    'crackle',
-    'split-bits-pruned',
-    3,
-    1.45,
-    (x, y, z) => CRACKLE_NORM * crackleFast3(x, y, z),
-    fastShaders(3, CELLULAR_FAST_CHUNKS, 'crackleFast3(p)', CRACKLE_NORM, 'unsigned'),
-  ),
-  // Mosaic cost: shipping VARIANT_COST x measured GPU ratio, 0.96 (2D) and
-  // 0.53 (3D) — WebGL+WebGPU medians.
-  altVariant(
-    'mosaic',
-    'split-bits-pruned',
-    2,
-    0.6,
-    (x, y) => mosaicFast2(x, y),
-    fastShaders(2, CELLULAR_FAST_CHUNKS, 'mosaicFast2(p)', null),
-  ),
-  altVariant(
-    'mosaic',
-    'split-bits-pruned',
-    3,
-    1.3,
-    (x, y, z) => mosaicFast3(x, y, z),
-    fastShaders(3, CELLULAR_FAST_CHUNKS, 'mosaicFast3(p)', null),
-  ),
-  altVariant(
-    'worley-manhattan',
-    'split-bits-pruned',
-    2,
-    0.54,
-    (x, y) => MANHATTAN2_NORM * manhattanFast2(x, y),
-    fastShaders(2, WORLEY_METRICS_FAST_CHUNKS, 'manhattanFast2(p)', MANHATTAN2_NORM, 'unsigned'),
-  ),
-  altVariant(
-    'worley-manhattan',
-    'split-bits-pruned',
-    3,
-    1.5,
-    (x, y, z) => MANHATTAN3_NORM * manhattanFast3(x, y, z),
-    fastShaders(3, WORLEY_METRICS_FAST_CHUNKS, 'manhattanFast3(p)', MANHATTAN3_NORM, 'unsigned'),
-  ),
-  altVariant(
-    'worley-chebyshev',
-    'split-bits-pruned',
-    2,
-    0.53,
-    (x, y) => CHEBYSHEV2_NORM * chebyshevFast2(x, y),
-    fastShaders(2, WORLEY_METRICS_FAST_CHUNKS, 'chebyshevFast2(p)', CHEBYSHEV2_NORM, 'unsigned'),
-  ),
-  altVariant(
-    'worley-chebyshev',
-    'split-bits-pruned',
-    3,
-    1.2,
-    (x, y, z) => CHEBYSHEV3_NORM * chebyshevFast3(x, y, z),
-    fastShaders(3, WORLEY_METRICS_FAST_CHUNKS, 'chebyshevFast3(p)', CHEBYSHEV3_NORM, 'unsigned'),
-  ),
-  // Value and wave 2D measured as GPU ties, so they keep the shipping
-  // figures; wave 3D won only on WebGL (ratio 0.94 -> 1.2). Gabor is a real
-  // GPU win: 2409/2363 -> 3385/3087 in 2D (0.74x -> 1.3) and 630/627 ->
-  // 1000/987 in 3D (0.63x -> 4.4), WebGL/WebGPU medians.
-  altVariant(
-    'value',
-    'fib-hash',
-    2,
-    0.39,
-    (x, y) => valueFast2(x, y),
-    fastShaders(2, VALUE_FAST_CHUNKS, 'valueFast2(p)', null),
-  ),
-  altVariant('value', 'fib-hash', 3, 0.5, valueFast3, fastShaders(3, VALUE_FAST_CHUNKS, 'valueFast3(p)', null)),
-  altVariant(
-    'wave',
-    'fast-dirs',
-    2,
-    0.54,
-    (x, y) => 0.5 + 0.5 * waveFast2(x, y),
-    fastShaders(2, WAVE_FAST_CHUNKS, 'waveFast2(p)', 1),
-  ),
-  altVariant(
-    'wave',
-    'fast-dirs',
-    3,
-    1.2,
-    (x, y, z) => 0.5 + 0.5 * waveFast3(x, y, z),
-    fastShaders(3, WAVE_FAST_CHUNKS, 'waveFast3(p)', 1),
-  ),
-  altVariant(
-    'gabor',
-    'split-bits-gated',
-    2,
-    1.3,
-    (x, y) => 0.5 + 0.5 * GABOR2_NORM * gaborFast2(x, y),
-    fastShaders(2, GABOR_FAST_CHUNKS, 'gaborFast2(p)', GABOR2_NORM),
-  ),
-  altVariant(
-    'gabor',
-    'split-bits-gated',
-    3,
-    4.4,
-    (x, y, z) => 0.5 + 0.5 * GABOR3_NORM * gaborFast3(x, y, z),
-    fastShaders(3, GABOR_FAST_CHUNKS, 'gaborFast3(p)', GABOR3_NORM),
-  ),
+  altVariant('perlin', 'fib-hash', 0.23, {
+    dim: 2,
+    sample: n.perlin2dFast,
+    glsl: n.perlin2dFastGlsl,
+    wgsl: n.perlin2dFastWgsl,
+    tsl: n.perlin2dFastTsl,
+  }),
+  altVariant('perlin', 'fib-hash', 0.42, {
+    dim: 3,
+    sample: n.perlin3dFast,
+    glsl: n.perlin3dFastGlsl,
+    wgsl: n.perlin3dFastWgsl,
+    tsl: n.perlin3dFastTsl,
+  }),
+  altVariant('perlin', 'fib-hash-tileable', 0.23, {
+    dim: 2,
+    sample: n.perlin2dFastTileable,
+    glsl: n.perlin2dFastTileableGlsl,
+    wgsl: n.perlin2dFastTileableWgsl,
+    tsl: n.perlin2dFastTileableTsl,
+  }),
+  altVariant('perlin', 'fib-hash-tileable', 0.42, {
+    dim: 3,
+    sample: n.perlin3dFastTileable,
+    glsl: n.perlin3dFastTileableGlsl,
+    wgsl: n.perlin3dFastTileableWgsl,
+    tsl: n.perlin3dFastTileableTsl,
+  }),
+  altVariant('flow', 'fast-rot', 0.52, {
+    dim: 3,
+    sample: n.flow3dFast,
+    glsl: n.flow3dFastGlsl,
+    wgsl: n.flow3dFastWgsl,
+    tsl: n.flow3dFastTsl,
+  }),
+  altVariant('simplex', 'fast-hash', 0.29, {
+    dim: 2,
+    sample: n.simplex2dFast,
+    glsl: n.simplex2dFastGlsl,
+    wgsl: n.simplex2dFastWgsl,
+    tsl: n.simplex2dFastTsl,
+  }),
+  altVariant('simplex', 'fast-hash', 0.39, {
+    dim: 3,
+    sample: n.simplex3dFast,
+    glsl: n.simplex3dFastGlsl,
+    wgsl: n.simplex3dFastWgsl,
+    tsl: n.simplex3dFastTsl,
+  }),
+  altVariant('worley', 'split-bits-pruned', 0.51, {
+    dim: 2,
+    sample: n.worley2dFast,
+    glsl: n.worley2dFastGlsl,
+    wgsl: n.worley2dFastWgsl,
+    tsl: n.worley2dFastTsl,
+  }),
+  altVariant('worley', 'split-bits-pruned', 1.2, {
+    dim: 3,
+    sample: n.worley3dFast,
+    glsl: n.worley3dFastGlsl,
+    wgsl: n.worley3dFastWgsl,
+    tsl: n.worley3dFastTsl,
+  }),
+  altVariant('vortex', 'fast-dirs', 0.45, {
+    dim: 2,
+    sample: n.vortex2dFast,
+    glsl: n.vortex2dFastGlsl,
+    wgsl: n.vortex2dFastWgsl,
+    tsl: n.vortex2dFastTsl,
+  }),
+  altVariant('vortex', 'fast-dirs', 1.0, {
+    dim: 3,
+    sample: n.vortex3dFast,
+    glsl: n.vortex3dFastGlsl,
+    wgsl: n.vortex3dFastWgsl,
+    tsl: n.vortex3dFastTsl,
+  }),
+  altVariant('ripple', 'split-bits-pruned', 0.9, {
+    dim: 2,
+    sample: n.ripple2dFast,
+    glsl: n.ripple2dFastGlsl,
+    wgsl: n.ripple2dFastWgsl,
+    tsl: n.ripple2dFastTsl,
+  }),
+  altVariant('ripple', 'split-bits-pruned', 2.8, {
+    dim: 3,
+    sample: n.ripple3dFast,
+    glsl: n.ripple3dFastGlsl,
+    wgsl: n.ripple3dFastWgsl,
+    tsl: n.ripple3dFastTsl,
+  }),
+  altVariant('stars', 'split-bits-pruned', 0.81, {
+    dim: 2,
+    sample: n.stars2dFast,
+    glsl: n.stars2dFastGlsl,
+    wgsl: n.stars2dFastWgsl,
+    tsl: n.stars2dFastTsl,
+  }),
+  altVariant('stars', 'split-bits-pruned', 2.0, {
+    dim: 3,
+    sample: n.stars3dFast,
+    glsl: n.stars3dFastGlsl,
+    wgsl: n.stars3dFastWgsl,
+    tsl: n.stars3dFastTsl,
+  }),
+  altVariant('foam', 'split-bits-pruned', 0.59, {
+    dim: 2,
+    sample: n.foam2dFast,
+    glsl: n.foam2dFastGlsl,
+    wgsl: n.foam2dFastWgsl,
+    tsl: n.foam2dFastTsl,
+  }),
+  altVariant('foam', 'split-bits-pruned', 1.25, {
+    dim: 3,
+    sample: n.foam3dFast,
+    glsl: n.foam3dFastGlsl,
+    wgsl: n.foam3dFastWgsl,
+    tsl: n.foam3dFastTsl,
+  }),
+  altVariant('crackle', 'split-bits-pruned', 0.58, {
+    dim: 2,
+    sample: n.crackle2dFast,
+    glsl: n.crackle2dFastGlsl,
+    wgsl: n.crackle2dFastWgsl,
+    tsl: n.crackle2dFastTsl,
+  }),
+  altVariant('crackle', 'split-bits-pruned', 1.45, {
+    dim: 3,
+    sample: n.crackle3dFast,
+    glsl: n.crackle3dFastGlsl,
+    wgsl: n.crackle3dFastWgsl,
+    tsl: n.crackle3dFastTsl,
+  }),
+  altVariant('mosaic', 'split-bits-pruned', 0.6, {
+    dim: 2,
+    sample: n.mosaic2dFast,
+    glsl: n.mosaic2dFastGlsl,
+    wgsl: n.mosaic2dFastWgsl,
+    tsl: n.mosaic2dFastTsl,
+  }),
+  altVariant('mosaic', 'split-bits-pruned', 1.3, {
+    dim: 3,
+    sample: n.mosaic3dFast,
+    glsl: n.mosaic3dFastGlsl,
+    wgsl: n.mosaic3dFastWgsl,
+    tsl: n.mosaic3dFastTsl,
+  }),
+  altVariant('worley-manhattan', 'split-bits-pruned', 0.54, {
+    dim: 2,
+    sample: n.worleyManhattan2dFast,
+    glsl: n.worleyManhattan2dFastGlsl,
+    wgsl: n.worleyManhattan2dFastWgsl,
+    tsl: n.worleyManhattan2dFastTsl,
+  }),
+  altVariant('worley-manhattan', 'split-bits-pruned', 1.5, {
+    dim: 3,
+    sample: n.worleyManhattan3dFast,
+    glsl: n.worleyManhattan3dFastGlsl,
+    wgsl: n.worleyManhattan3dFastWgsl,
+    tsl: n.worleyManhattan3dFastTsl,
+  }),
+  altVariant('worley-chebyshev', 'split-bits-pruned', 0.53, {
+    dim: 2,
+    sample: n.worleyChebyshev2dFast,
+    glsl: n.worleyChebyshev2dFastGlsl,
+    wgsl: n.worleyChebyshev2dFastWgsl,
+    tsl: n.worleyChebyshev2dFastTsl,
+  }),
+  altVariant('worley-chebyshev', 'split-bits-pruned', 1.2, {
+    dim: 3,
+    sample: n.worleyChebyshev3dFast,
+    glsl: n.worleyChebyshev3dFastGlsl,
+    wgsl: n.worleyChebyshev3dFastWgsl,
+    tsl: n.worleyChebyshev3dFastTsl,
+  }),
+  altVariant('value', 'fib-hash', 0.39, {
+    dim: 2,
+    sample: n.value2dFast,
+    glsl: n.value2dFastGlsl,
+    wgsl: n.value2dFastWgsl,
+    tsl: n.value2dFastTsl,
+  }),
+  altVariant('value', 'fib-hash', 0.5, {
+    dim: 3,
+    sample: n.value3dFast,
+    glsl: n.value3dFastGlsl,
+    wgsl: n.value3dFastWgsl,
+    tsl: n.value3dFastTsl,
+  }),
+  altVariant('wave', 'fast-dirs', 0.54, {
+    dim: 2,
+    sample: n.wave2dFast,
+    glsl: n.wave2dFastGlsl,
+    wgsl: n.wave2dFastWgsl,
+    tsl: n.wave2dFastTsl,
+  }),
+  altVariant('wave', 'fast-dirs', 1.2, {
+    dim: 3,
+    sample: n.wave3dFast,
+    glsl: n.wave3dFastGlsl,
+    wgsl: n.wave3dFastWgsl,
+    tsl: n.wave3dFastTsl,
+  }),
+  altVariant('gabor', 'split-bits-gated', 1.3, {
+    dim: 2,
+    sample: n.gabor2dFast,
+    glsl: n.gabor2dFastGlsl,
+    wgsl: n.gabor2dFastWgsl,
+    tsl: n.gabor2dFastTsl,
+  }),
+  altVariant('gabor', 'split-bits-gated', 4.4, {
+    dim: 3,
+    sample: n.gabor3dFast,
+    glsl: n.gabor3dFastGlsl,
+    wgsl: n.gabor3dFastWgsl,
+    tsl: n.gabor3dFastTsl,
+  }),
 ]
 
 export const altVariantsFor = (noiseId: string, implementationId: string): AltVariant[] =>

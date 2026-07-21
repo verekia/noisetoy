@@ -3,8 +3,9 @@
 // the tile stays seamless at every phase.
 // This wrapping is deliberately kept out of the core implementation.
 
-import { fade, hash2, imod, lerp } from '../common'
-import { rotGradDot2 } from '../flow'
+import { fade, hash2, imod, lerp } from '../common.js'
+import { rotGradDot2 } from '../flow.js'
+import { PERLIN2_NORM } from '../normalization.js'
 
 const TAU = 6.283185307179586
 
@@ -26,3 +27,7 @@ export const flow3Tileable = (x: number, y: number, z: number, px: number, py: n
   const n11 = rotGradDot2(hash2(x1, y1), ph, fx - 1, fy - 1)
   return lerp(lerp(n00, n10, ux), lerp(n01, n11, ux), uy)
 }
+
+/** Flow 3D tileable, shipping implementation — wraps every periodX / periodY lattice cells; display value, nominally [0, 1], unclamped. */
+export const flow3dCanonicalTileable = (x: number, y: number, z: number, periodX: number, periodY: number): number =>
+  0.5 + 0.5 * PERLIN2_NORM * flow3Tileable(x, y, z, periodX, periodY)

@@ -1,6 +1,11 @@
 // TSL counterpart of value-fast.ts. Requires COMMON_TSL and
 // FAST_COMMON_TSL.
 
+import { COMMON_TSL } from '../noises/common.tsl.js'
+import { FAST_COMMON_TSL } from './fast-common.tsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const VALUE_FAST_TSL = /* js */ `
 const valFastCorner2 = Fn(([s]) => {
   const h = fibMix(s).toVar()
@@ -53,3 +58,17 @@ const valueFast3 = Fn(([p]) => {
   return mix(nz0, nz1, uz)
 })
 `
+
+/** Value 2D Fast (fib-hash candidate) — TSL ShaderSpec, pre-clamp display expression. */
+export const value2dFastTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, FAST_COMMON_TSL, VALUE_FAST_TSL],
+  expr: 'valueFast2(p)',
+}
+
+/** Value 3D Fast (fib-hash candidate) — TSL ShaderSpec, pre-clamp display expression. */
+export const value3dFastTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, FAST_COMMON_TSL, VALUE_FAST_TSL],
+  expr: 'valueFast3(p)',
+}

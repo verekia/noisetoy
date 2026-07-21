@@ -1,6 +1,12 @@
 // TSL counterpart of flow-fast.ts. Requires COMMON_TSL and FAST_COMMON_TSL.
 // Note TSL's select(condition, ifTrue, ifFalse) argument order.
 
+import { COMMON_TSL } from '../noises/common.tsl.js'
+import { PERLIN2_NORM } from '../noises/normalization.js'
+import { FAST_COMMON_TSL } from './fast-common.tsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const FLOW_FAST_TSL = /* js */ `
 const flowFastCorner = Fn(([h, d, c1, s1, c2, s2]) => {
   const dir = uint(h).shiftRight(uint(29)).toVar()
@@ -48,3 +54,10 @@ const flowFast3 = Fn(([p]) => {
   return mix(mix(n00, n10, ux), mix(n01, n11, ux), uy)
 })
 `
+
+/** Flow 3D Fast (fast-rot candidate) — TSL ShaderSpec, pre-clamp display expression. */
+export const flow3dFastTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, FAST_COMMON_TSL, FLOW_FAST_TSL],
+  expr: `flowFast3(p).mul(${0.5 * PERLIN2_NORM}).add(0.5)`,
+}

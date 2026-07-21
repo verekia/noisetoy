@@ -1,5 +1,10 @@
 // GLSL counterpart of cellular-tileable.ts. Requires COMMON_GLSL.
 
+import { COMMON_GLSL } from '../common.glsl.js'
+import { CRACKLE_NORM, fmt, STARS_NORM } from '../normalization.js'
+
+import type { ShaderSpec } from '../../spec.js'
+
 export const CELLULAR_TILEABLE_GLSL = /* glsl */ `
 float mosaic2T(vec2 p, vec2 per) {
   vec2 i = floor(p);
@@ -175,3 +180,59 @@ float stars3T(vec3 p, vec2 per) {
   return sum;
 }
 `
+
+/** GLSL spec for Mosaic 2D, tileable (shipping implementation). */
+export const mosaic2dCanonicalTileableGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, CELLULAR_TILEABLE_GLSL],
+  expr: 'mosaic2T(p, per)',
+}
+
+/** GLSL spec for Mosaic 3D, tileable (shipping implementation). */
+export const mosaic3dCanonicalTileableGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, CELLULAR_TILEABLE_GLSL],
+  expr: 'mosaic3T(p, per)',
+}
+
+/** GLSL spec for Crackle 2D, tileable (shipping implementation). */
+export const crackle2dCanonicalTileableGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, CELLULAR_TILEABLE_GLSL],
+  expr: `${fmt(CRACKLE_NORM)} * crackle2T(p, per)`,
+}
+
+/** GLSL spec for Crackle 3D, tileable (shipping implementation). */
+export const crackle3dCanonicalTileableGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, CELLULAR_TILEABLE_GLSL],
+  expr: `${fmt(CRACKLE_NORM)} * crackle3T(p, per)`,
+}
+
+/** GLSL spec for Foam 2D, tileable (shipping implementation). */
+export const foam2dCanonicalTileableGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, CELLULAR_TILEABLE_GLSL],
+  expr: 'foam2T(p, per)',
+}
+
+/** GLSL spec for Foam 3D, tileable (shipping implementation). */
+export const foam3dCanonicalTileableGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, CELLULAR_TILEABLE_GLSL],
+  expr: 'foam3T(p, per)',
+}
+
+/** GLSL spec for Stars 2D, tileable (shipping implementation). */
+export const stars2dCanonicalTileableGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, CELLULAR_TILEABLE_GLSL],
+  expr: `${fmt(STARS_NORM)} * stars2T(p, per)`,
+}
+
+/** GLSL spec for Stars 3D, tileable (shipping implementation). */
+export const stars3dCanonicalTileableGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, CELLULAR_TILEABLE_GLSL],
+  expr: `${fmt(STARS_NORM)} * stars3T(p, per)`,
+}

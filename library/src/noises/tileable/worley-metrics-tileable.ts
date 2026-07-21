@@ -3,7 +3,8 @@
 // period in x and y; the distances themselves stay geometric (unwrapped).
 // This wrapping is deliberately kept out of the core implementations.
 
-import { hash2, hash3, hashU32, imod, to01 } from '../common'
+import { hash2, hash3, hashU32, imod, to01 } from '../common.js'
+import { CHEBYSHEV2_NORM, CHEBYSHEV3_NORM, MANHATTAN2_NORM, MANHATTAN3_NORM } from '../normalization.js'
 
 export const manhattan2Tileable = (x: number, y: number, px: number, py: number): number => {
   const ix = Math.floor(x)
@@ -88,3 +89,29 @@ export const chebyshev3Tileable = (x: number, y: number, z: number, px: number, 
   }
   return f1
 }
+
+/** Worley (Manhattan) 2D tileable, shipping implementation — wraps every periodX / periodY lattice cells; display value, nominally [0, 1], unclamped. */
+export const worleyManhattan2dCanonicalTileable = (x: number, y: number, periodX: number, periodY: number): number =>
+  MANHATTAN2_NORM * manhattan2Tileable(x, y, periodX, periodY)
+
+/** Worley (Manhattan) 3D tileable, shipping implementation — wraps every periodX / periodY lattice cells; display value, nominally [0, 1], unclamped. */
+export const worleyManhattan3dCanonicalTileable = (
+  x: number,
+  y: number,
+  z: number,
+  periodX: number,
+  periodY: number,
+): number => MANHATTAN3_NORM * manhattan3Tileable(x, y, z, periodX, periodY)
+
+/** Worley (Chebyshev) 2D tileable, shipping implementation — wraps every periodX / periodY lattice cells; display value, nominally [0, 1], unclamped. */
+export const worleyChebyshev2dCanonicalTileable = (x: number, y: number, periodX: number, periodY: number): number =>
+  CHEBYSHEV2_NORM * chebyshev2Tileable(x, y, periodX, periodY)
+
+/** Worley (Chebyshev) 3D tileable, shipping implementation — wraps every periodX / periodY lattice cells; display value, nominally [0, 1], unclamped. */
+export const worleyChebyshev3dCanonicalTileable = (
+  x: number,
+  y: number,
+  z: number,
+  periodX: number,
+  periodY: number,
+): number => CHEBYSHEV3_NORM * chebyshev3Tileable(x, y, z, periodX, periodY)

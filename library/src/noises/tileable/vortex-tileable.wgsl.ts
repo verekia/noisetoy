@@ -1,5 +1,9 @@
 // WGSL counterpart of vortex-tileable.ts. Requires COMMON_WGSL.
 
+import { COMMON_WGSL } from '../common.wgsl.js'
+
+import type { ShaderSpec } from '../../spec.js'
+
 export const VORTEX_TILEABLE_WGSL = /* wgsl */ `
 fn vortex2T(p: vec2f, per: vec2f) -> f32 {
   let i = floor(p);
@@ -56,3 +60,17 @@ fn vortex3T(p: vec3f, per: vec2f) -> f32 {
   return cos(2.0 * atan2(s.y, s.x));
 }
 `
+
+/** Vortex 2D — Canonical tileable WGSL shader spec. */
+export const vortex2dCanonicalTileableWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, VORTEX_TILEABLE_WGSL],
+  expr: '0.5 + 0.5 * vortex2T(p, per)',
+}
+
+/** Vortex 3D — Canonical tileable WGSL shader spec. */
+export const vortex3dCanonicalTileableWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, VORTEX_TILEABLE_WGSL],
+  expr: '0.5 + 0.5 * vortex3T(p, per)',
+}

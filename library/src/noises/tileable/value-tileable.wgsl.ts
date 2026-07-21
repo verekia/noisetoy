@@ -1,5 +1,9 @@
 // WGSL counterpart of value-tileable.ts. Requires COMMON_WGSL.
 
+import { COMMON_WGSL } from '../common.wgsl.js'
+
+import type { ShaderSpec } from '../../spec.js'
+
 export const VALUE_TILEABLE_WGSL = /* wgsl */ `
 fn value2T(p: vec2f, per: vec2f) -> f32 {
   let i = floor(p);
@@ -45,3 +49,17 @@ fn value3T(p: vec3f, per: vec2f) -> f32 {
   return mix(nz0, nz1, uz);
 }
 `
+
+/** Value 2D — Canonical tileable WGSL shader spec. */
+export const value2dCanonicalTileableWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, VALUE_TILEABLE_WGSL],
+  expr: 'value2T(p, per)',
+}
+
+/** Value 3D — Canonical tileable WGSL shader spec. */
+export const value3dCanonicalTileableWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, VALUE_TILEABLE_WGSL],
+  expr: 'value3T(p, per)',
+}

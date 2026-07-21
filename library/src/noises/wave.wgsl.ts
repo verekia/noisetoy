@@ -1,5 +1,9 @@
 // WGSL counterpart of wave.ts. Requires COMMON_WGSL.
 
+import { COMMON_WGSL } from './common.wgsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const WAVE_WGSL = /* wgsl */ `
 fn waveCorner2(h: u32, d: vec2f) -> f32 {
   let a = to01(h) * 6.283185307179586;
@@ -52,3 +56,17 @@ fn wave3(p: vec3f) -> f32 {
   return mix(nz0, nz1, uz);
 }
 `
+
+/** Wave 2D — Canonical WGSL shader spec. */
+export const wave2dCanonicalWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, WAVE_WGSL],
+  expr: '0.5 + 0.5 * wave2(p)',
+}
+
+/** Wave 3D — Canonical WGSL shader spec. */
+export const wave3dCanonicalWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, WAVE_WGSL],
+  expr: '0.5 + 0.5 * wave3(p)',
+}

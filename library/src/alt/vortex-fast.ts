@@ -29,7 +29,7 @@
 // battery-covered reads. The field is a different draw with the same
 // character; see the inventory entry for the measured statistics.
 
-import { fade, LATTICE_HX, LATTICE_HY, LATTICE_HZ } from '../noises/common'
+import { fade, LATTICE_HX, LATTICE_HY, LATTICE_HZ } from '../noises/common.js'
 
 /** 2^32 / phi, odd — Knuth's multiplicative hashing constant. */
 const FIB = 0x9e3779b1
@@ -165,3 +165,9 @@ export const vortexFast3 = (x: number, y: number, z: number): number => {
   const n = a + b
   return n > 0 ? (a - b) / n : 1
 }
+
+/** Vortex 2D, 'fast-dirs' fast implementation — display value, unclamped. */
+export const vortex2dFast = (x: number, y: number): number => 0.5 + 0.5 * vortexFast2(x, y)
+
+/** Vortex 3D, 'fast-dirs' fast implementation — display value, unclamped. */
+export const vortex3dFast = (x: number, y: number, z: number): number => 0.5 + 0.5 * vortexFast3(x, y, z)

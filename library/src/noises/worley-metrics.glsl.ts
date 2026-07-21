@@ -1,5 +1,10 @@
 // GLSL counterpart of worley-metrics.ts. Requires COMMON_GLSL.
 
+import { COMMON_GLSL } from './common.glsl.js'
+import { CHEBYSHEV2_NORM, CHEBYSHEV3_NORM, fmt, MANHATTAN2_NORM, MANHATTAN3_NORM } from './normalization.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const WORLEY_METRICS_GLSL = /* glsl */ `
 float manhattan2(vec2 p) {
   vec2 i = floor(p);
@@ -77,3 +82,31 @@ float chebyshev3(vec3 p) {
   return f1;
 }
 `
+
+/** GLSL spec for Worley (Manhattan) 2D (shipping implementation). */
+export const worleyManhattan2dCanonicalGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, WORLEY_METRICS_GLSL],
+  expr: `${fmt(MANHATTAN2_NORM)} * manhattan2(p)`,
+}
+
+/** GLSL spec for Worley (Manhattan) 3D (shipping implementation). */
+export const worleyManhattan3dCanonicalGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, WORLEY_METRICS_GLSL],
+  expr: `${fmt(MANHATTAN3_NORM)} * manhattan3(p)`,
+}
+
+/** GLSL spec for Worley (Chebyshev) 2D (shipping implementation). */
+export const worleyChebyshev2dCanonicalGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, WORLEY_METRICS_GLSL],
+  expr: `${fmt(CHEBYSHEV2_NORM)} * chebyshev2(p)`,
+}
+
+/** GLSL spec for Worley (Chebyshev) 3D (shipping implementation). */
+export const worleyChebyshev3dCanonicalGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, WORLEY_METRICS_GLSL],
+  expr: `${fmt(CHEBYSHEV3_NORM)} * chebyshev3(p)`,
+}

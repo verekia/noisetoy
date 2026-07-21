@@ -2,7 +2,6 @@
 // mirroring glsl.ts (per-layer value functions, deduplicated dependency
 // chunks, bottom-to-top blend fold, 'warp' uv displacement).
 
-import { COMMON_WGSL } from '../noises/common.wgsl'
 import {
   FRACTAL_GAIN,
   fractalAmpSum,
@@ -19,9 +18,17 @@ import {
   Z_SPEED,
 } from './types'
 
+import type { ShaderSpec } from 'noisetoy'
+
 import type { BlendMode, LayerConfig, RenderConfig } from './types'
 
 const f = (n: number): string => (Number.isInteger(n) ? `${n}.0` : `${n}`)
+
+const requireWgsl = (L: LayerConfig, i: number): ShaderSpec => {
+  const spec = L.noise.wgsl
+  if (!spec) throw new Error(`layer ${i} has no WGSL spec: set \`wgsl\` on its noise from the ...Wgsl exports`)
+  return spec
+}
 
 /** WGSL matrix constructors are column-major; the shared matrices are row-major. */
 const rotMat = (dim: 2 | 3): string => {
@@ -53,8 +60,8 @@ const blendExpr = (mode: BlendMode, a: string, v: string): string => {
 
 const layerFunctions = (L: LayerConfig, i: number, tiled: boolean): string => {
   const rotated = L.rotate && L.octaves > 1
-  const lTiled = tiled && L.variant.wgslTileable !== null && !rotated
-  const shaderSpec = lTiled && L.variant.wgslTileable ? L.variant.wgslTileable : L.variant.wgsl
+  const lTiled = tiled && L.noise.wgslTileable != null && !rotated
+  const shaderSpec = lTiled && L.noise.wgslTileable ? L.noise.wgslTileable : requireWgsl(L, i)
   const vec = `vec${shaderSpec.dim}f`
   const value = lTiled
     ? `fn lv${i}(p: ${vec}, per: vec2f) -> f32 { return ${shaderSpec.expr}; }`
@@ -120,13 +127,15 @@ export const buildWgslShader = (cfg: RenderConfig): string => {
   const be = band ? Math.min(cfg.bandSmoothing ?? BAND_SMOOTHING, band.width / 2) : 0
   const bandLo = band ? band.center - band.width / 2 : 0
   const bandHi = band ? band.center + band.width / 2 : 0
-  const chunks: string[] = [COMMON_WGSL]
-  const seen = new Set<string>(chunks)
+  // Specs carry their full dependency chains (common chunk included), so the
+  // build is just an ordered dedupe across layers.
+  const chunks: string[] = []
+  const seen = new Set<string>()
   const fns: string[] = []
   const mainLines: string[] = []
   layers.forEach((L, i) => {
-    const lTiled = tiled && L.variant.wgslTileable !== null
-    const shaderSpec = lTiled && L.variant.wgslTileable ? L.variant.wgslTileable : L.variant.wgsl
+    const lTiled = tiled && L.noise.wgslTileable != null
+    const shaderSpec = lTiled && L.noise.wgslTileable ? L.noise.wgslTileable : requireWgsl(L, i)
     for (const dep of shaderSpec.deps) {
       if (!seen.has(dep)) {
         seen.add(dep)

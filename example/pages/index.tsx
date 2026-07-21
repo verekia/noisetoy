@@ -4,17 +4,23 @@ import { TIER_CLASS } from '#/components/CostBadge'
 import NoiseCanvas from '#/components/NoiseCanvas'
 import NoisePicker from '#/components/NoisePicker'
 import Segmented from '#/components/Segmented'
-import Head from 'next/head'
-import Link from 'next/link'
-import { BLEND_MODES, costTier, createEffect, defaultVariant, getNoise, getVariant, NOISES, TIER_LABEL } from 'noisetoy'
+import { costTier, estimateCost, TIER_LABEL } from '#/lib/cost'
+import { createEffect } from '#/lib/effect'
 // Non-shipping implementations (candidates, superseded): the sidebar offers
 // them per layer, and a layer carrying one renders through the inventory's
-// AltVariant (TS samplers + GLSL/WGSL/TSL specs) on every backend.
-import { altVariantsFor, IMPLEMENTATION_STATUS_LABEL, IMPLEMENTATIONS } from 'noisetoy/implementations'
+// AltVariant (its NoiseSource: TS sampler + GLSL/WGSL/TSL specs) on every
+// backend.
+import { altVariantsFor, IMPLEMENTATION_STATUS_LABEL, IMPLEMENTATIONS } from '#/lib/implementations'
+import { defaultVariant, getNoise, getVariant, NOISES } from '#/lib/registry'
+import { BLEND_MODES } from '#/lib/render/types'
+import Head from 'next/head'
+import Link from 'next/link'
 
 import type { PickerDraft, PickerStack } from '#/components/NoisePicker'
-import type { Backend, BlendMode, FractalStyle, LayerSpec, NoiseDef, NoiseVariant, ViewMode } from 'noisetoy'
-import type { AltVariant } from 'noisetoy/implementations'
+import type { LayerSpec } from '#/lib/effect'
+import type { AltVariant } from '#/lib/implementations'
+import type { Backend, NoiseDef, NoiseVariant } from '#/lib/registry'
+import type { BlendMode, FractalStyle, ViewMode } from '#/lib/render/types'
 
 const STYLES: FractalStyle[] = ['basic', 'billow', 'ridged']
 
@@ -157,51 +163,37 @@ export default function Home() {
       // sphere, and both views slice the same volume. Tiling is the one
       // exception — it needs the wrapped uv code paths.
       domain: view === 'sphere' || (view === 'plane' && !tiled) ? 'position' : 'uv',
-      layers: active.map(l => ({
-        noise: l.noiseId,
-        variant: l.variantId,
-        octaves: l.octaves,
-        rotate: l.rotate,
-        style: l.style,
-        scale: l.scaleMul,
-        blend: l.blend,
-        opacity: l.opacity,
-        speed: l.speed,
-        angle: l.angle,
-      })),
-    })
-    // Swap each alt layer's variant for the non-shipping implementation's
-    // stand-in: TS samplers for the CPU backend, shader specs for the GPU
-    // ones. Copy buttons compose from these layers too, so shader exports
-    // emit the selected implementation's code.
-    active.forEach((l, idx) => {
-      const alt = resolveAlt(l)
-      const layer = built.layers[idx]
-      if (!alt || !layer) return
-      layer.variant = {
-        ...layer.variant,
-        sample: alt.sample,
-        sampleRaw: alt.sampleRaw,
-        glsl: alt.glsl,
-        wgsl: alt.wgsl,
-        tsl: alt.tsl,
-        sampleTileable: null,
-        sampleRawTileable: null,
-        glslTileable: null,
-        wgslTileable: null,
-        tslTileable: null,
-      }
+      // A layer rendering a non-shipping implementation uses its AltVariant's
+      // NoiseSource directly (TS sampler for the CPU backend, shader specs for
+      // the GPU ones). Copy buttons compose from these layers too, so shader
+      // exports emit the selected implementation's code.
+      layers: active.map(l => {
+        const alt = resolveAlt(l)
+        return {
+          noise: alt ? alt.source : resolveVariant(l).source,
+          octaves: l.octaves,
+          rotate: l.rotate,
+          style: l.style,
+          scale: resolveNoise(l).scale * l.scaleMul,
+          blend: l.blend,
+          opacity: l.opacity,
+          speed: l.speed,
+          angle: l.angle,
+        }
+      }),
     })
     return built
   }, [layers, tiled, view, steps, band, altCount])
 
-  // The library's estimate is keyed to shipping variants; layers rendering a
+  // The cost model is keyed to shipping variant ids; layers rendering a
   // non-shipping implementation substitute its own measured cost
   // (AltVariant.cost), keeping the skipped-layer logic from the estimate.
   const cost = useMemo(() => {
-    const base = effect.cost()
     const visible = layers.filter(l => !l.hidden)
     const active = visible.length > 0 ? visible : [layers[0] as UILayer]
+    const base = estimateCost(
+      active.map(l => ({ variantId: l.variantId, octaves: l.octaves, blend: l.blend, opacity: l.opacity })),
+    )
     const units = base.perLayer.reduce((sum, layerUnits, i) => {
       const layer = active[i]
       if (layerUnits === 0 || !layer) return sum + layerUnits
@@ -210,7 +202,7 @@ export default function Home() {
     }, 0)
     const rounded = Math.round(units * 100) / 100
     return { units: rounded, tier: costTier(rounded) }
-  }, [effect, layers])
+  }, [layers])
 
   const allTileable = effect.tileable
 
@@ -405,18 +397,20 @@ export default function Home() {
 
   /** Layers around the one being picked, so the preview can composite in context. */
   const pickerStack = useMemo((): PickerStack | null => {
-    const toSpec = (l: UILayer): LayerSpec => ({
-      noise: l.noiseId,
-      variant: l.variantId,
-      octaves: l.octaves,
-      rotate: l.rotate,
-      style: l.style,
-      scale: l.scaleMul,
-      blend: l.blend,
-      opacity: l.opacity,
-      speed: l.speed,
-      angle: l.angle,
-    })
+    const toSpec = (l: UILayer): LayerSpec => {
+      const alt = resolveAlt(l)
+      return {
+        noise: alt ? alt.source : resolveVariant(l).source,
+        octaves: l.octaves,
+        rotate: l.rotate,
+        style: l.style,
+        scale: resolveNoise(l).scale * l.scaleMul,
+        blend: l.blend,
+        opacity: l.opacity,
+        speed: l.speed,
+        angle: l.angle,
+      }
+    }
     const visible = layers.filter(l => !l.hidden)
     if (picking === 'add') {
       // A new layer lands on top of everything, with the blend confirmPicker gives it.

@@ -2,8 +2,8 @@
 // period in x/y; the arc geometry is per-cell and translation-invariant.
 // Kept out of the core implementation.
 
-import { hash2, imod } from '../common'
-import { TRUCHET_RINGS } from '../truchet'
+import { hash2, imod } from '../common.js'
+import { TRUCHET_RINGS } from '../truchet.js'
 
 const TAU = 6.283185307179586
 
@@ -19,3 +19,7 @@ export const truchet2Tileable = (x: number, y: number, px: number, py: number): 
   const d2 = Math.abs(Math.sqrt(gx * gx + gy * gy) - 0.5)
   return Math.cos(Math.min(d1, d2) * TAU * TRUCHET_RINGS)
 }
+
+/** Truchet 2D tileable, shipping implementation — wraps every periodX / periodY lattice cells; display value, nominally [0, 1], unclamped. */
+export const truchet2dCanonicalTileable = (x: number, y: number, periodX: number, periodY: number): number =>
+  0.5 + 0.5 * truchet2Tileable(x, y, periodX, periodY)

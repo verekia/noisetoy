@@ -2,6 +2,12 @@
 // FAST_COMMON_GLSL. Function names carry the Fast suffix so a stack can
 // compose this next to the shipping perlin chunk without collisions.
 
+import { COMMON_GLSL } from '../noises/common.glsl.js'
+import { fmt, PERLIN2_NORM, PERLIN3_NORM } from '../noises/normalization.js'
+import { FAST_COMMON_GLSL } from './fast-common.glsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const PERLIN_FAST_GLSL = /* glsl */ `
 float perlinFast2(vec2 p) {
   vec2 i = floor(p);
@@ -53,3 +59,17 @@ float perlinFast3(vec3 p) {
   return mix(nz0, nz1, uz);
 }
 `
+
+/** Perlin 2D, 'fib-hash' fast implementation — GLSL spec. */
+export const perlin2dFastGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, FAST_COMMON_GLSL, PERLIN_FAST_GLSL],
+  expr: `0.5 + 0.5 * ${fmt(PERLIN2_NORM)} * perlinFast2(p)`,
+}
+
+/** Perlin 3D, 'fib-hash' fast implementation — GLSL spec. */
+export const perlin3dFastGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, FAST_COMMON_GLSL, PERLIN_FAST_GLSL],
+  expr: `0.5 + 0.5 * ${fmt(PERLIN3_NORM)} * perlinFast3(p)`,
+}

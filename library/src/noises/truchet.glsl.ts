@@ -1,5 +1,9 @@
 // GLSL counterpart of truchet.ts. Requires COMMON_GLSL.
 
+import { COMMON_GLSL } from './common.glsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const TRUCHET_GLSL = /* glsl */ `
 float truchet2(vec2 p) {
   vec2 i = floor(p);
@@ -11,3 +15,10 @@ float truchet2(vec2 p) {
   return cos(d * 6.283185307179586 * 3.0);
 }
 `
+
+/** GLSL spec for Truchet 2D (shipping implementation). */
+export const truchet2dCanonicalGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, TRUCHET_GLSL],
+  expr: '0.5 + 0.5 * truchet2(p)',
+}

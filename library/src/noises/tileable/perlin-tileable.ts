@@ -7,7 +7,8 @@
 // wrapped axis costs a real multiply here. z is not wrapped and keeps the
 // shortcut.
 
-import { fade, gradTable2, gradTable3, hashU32, imod, LATTICE_HX, LATTICE_HY, LATTICE_HZ, lerp } from '../common'
+import { fade, gradTable2, gradTable3, hashU32, imod, LATTICE_HX, LATTICE_HY, LATTICE_HZ, lerp } from '../common.js'
+import { PERLIN2_NORM, PERLIN3_NORM } from '../normalization.js'
 
 export const perlin2Tileable = (x: number, y: number, px: number, py: number): number => {
   const ix = Math.floor(x)
@@ -55,3 +56,11 @@ export const perlin3Tileable = (x: number, y: number, z: number, px: number, py:
   const nz1 = lerp(lerp(g001, g101, ux), lerp(g011, g111, ux), uy)
   return lerp(nz0, nz1, uz)
 }
+
+/** Perlin 2D tileable, shipping implementation — wraps every periodX / periodY lattice cells; display value, nominally [0, 1], unclamped. */
+export const perlin2dCanonicalTileable = (x: number, y: number, periodX: number, periodY: number): number =>
+  0.5 + 0.5 * PERLIN2_NORM * perlin2Tileable(x, y, periodX, periodY)
+
+/** Perlin 3D tileable, shipping implementation — wraps every periodX / periodY lattice cells; display value, nominally [0, 1], unclamped. */
+export const perlin3dCanonicalTileable = (x: number, y: number, z: number, periodX: number, periodY: number): number =>
+  0.5 + 0.5 * PERLIN3_NORM * perlin3Tileable(x, y, z, periodX, periodY)

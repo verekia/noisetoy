@@ -7,6 +7,12 @@
 // directly, no Fn call involved. The JS loops below unroll at graph build
 // time exactly like handwritten longhand.
 
+import { COMMON_TSL } from '../noises/common.tsl.js'
+import { CRACKLE_NORM, RIPPLE_NORM, STARS_NORM } from '../noises/normalization.js'
+import { FAST_COMMON_TSL } from './fast-common.tsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const CELLULAR_FAST_TSL = /* js */ `
 const mosaicFast2 = Fn(([p]) => {
   const i = floor(p)
@@ -386,3 +392,73 @@ const rippleFast3 = Fn(([p]) => {
   return sum
 })
 `
+
+/** Ripple 2D Fast (split-bits-pruned candidate) — TSL ShaderSpec, pre-clamp display expression. */
+export const ripple2dFastTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, FAST_COMMON_TSL, CELLULAR_FAST_TSL],
+  expr: `rippleFast2(p).mul(${0.5 * RIPPLE_NORM}).add(0.5)`,
+}
+
+/** Ripple 3D Fast (split-bits-pruned candidate) — TSL ShaderSpec, pre-clamp display expression. */
+export const ripple3dFastTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, FAST_COMMON_TSL, CELLULAR_FAST_TSL],
+  expr: `rippleFast3(p).mul(${0.5 * RIPPLE_NORM}).add(0.5)`,
+}
+
+/** Stars 2D Fast (split-bits-pruned candidate) — TSL ShaderSpec, pre-clamp display expression. */
+export const stars2dFastTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, FAST_COMMON_TSL, CELLULAR_FAST_TSL],
+  expr: `starsFast2(p).mul(${STARS_NORM})`,
+}
+
+/** Stars 3D Fast (split-bits-pruned candidate) — TSL ShaderSpec, pre-clamp display expression. */
+export const stars3dFastTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, FAST_COMMON_TSL, CELLULAR_FAST_TSL],
+  expr: `starsFast3(p).mul(${STARS_NORM})`,
+}
+
+/** Foam 2D Fast (split-bits-pruned candidate) — TSL ShaderSpec, pre-clamp display expression. */
+export const foam2dFastTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, FAST_COMMON_TSL, CELLULAR_FAST_TSL],
+  expr: 'foamFast2(p)',
+}
+
+/** Foam 3D Fast (split-bits-pruned candidate) — TSL ShaderSpec, pre-clamp display expression. */
+export const foam3dFastTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, FAST_COMMON_TSL, CELLULAR_FAST_TSL],
+  expr: 'foamFast3(p)',
+}
+
+/** Crackle 2D Fast (split-bits-pruned candidate) — TSL ShaderSpec, pre-clamp display expression. */
+export const crackle2dFastTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, FAST_COMMON_TSL, CELLULAR_FAST_TSL],
+  expr: `crackleFast2(p).mul(${CRACKLE_NORM})`,
+}
+
+/** Crackle 3D Fast (split-bits-pruned candidate) — TSL ShaderSpec, pre-clamp display expression. */
+export const crackle3dFastTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, FAST_COMMON_TSL, CELLULAR_FAST_TSL],
+  expr: `crackleFast3(p).mul(${CRACKLE_NORM})`,
+}
+
+/** Mosaic 2D Fast (split-bits-pruned candidate) — TSL ShaderSpec, pre-clamp display expression. */
+export const mosaic2dFastTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, FAST_COMMON_TSL, CELLULAR_FAST_TSL],
+  expr: 'mosaicFast2(p)',
+}
+
+/** Mosaic 3D Fast (split-bits-pruned candidate) — TSL ShaderSpec, pre-clamp display expression. */
+export const mosaic3dFastTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, FAST_COMMON_TSL, CELLULAR_FAST_TSL],
+  expr: 'mosaicFast3(p)',
+}

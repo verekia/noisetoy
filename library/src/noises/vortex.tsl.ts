@@ -1,5 +1,9 @@
 // TSL counterpart of vortex.ts (corners unrolled). Requires COMMON_TSL.
 
+import { COMMON_TSL } from './common.tsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const VORTEX_TSL = /* js */ `
 const vortexCorner2 = Fn(([h, w]) => {
   const a = to01(h).mul(6.283185307179586)
@@ -47,3 +51,17 @@ const vortex3 = Fn(([p]) => {
   return cos(atan(s.y, s.x).mul(2))
 })
 `
+
+/** Vortex 2D (Canonical) — TSL shader spec. */
+export const vortex2dCanonicalTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, VORTEX_TSL],
+  expr: 'vortex2(p).mul(0.5).add(0.5)',
+}
+
+/** Vortex 3D (Canonical) — TSL shader spec. */
+export const vortex3dCanonicalTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, VORTEX_TSL],
+  expr: 'vortex3(p).mul(0.5).add(0.5)',
+}

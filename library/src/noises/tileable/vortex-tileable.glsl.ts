@@ -1,5 +1,9 @@
 // GLSL counterpart of vortex-tileable.ts. Requires COMMON_GLSL.
 
+import { COMMON_GLSL } from '../common.glsl.js'
+
+import type { ShaderSpec } from '../../spec.js'
+
 export const VORTEX_TILEABLE_GLSL = /* glsl */ `
 float vortex2T(vec2 p, vec2 per) {
   vec2 i = floor(p);
@@ -48,3 +52,17 @@ float vortex3T(vec3 p, vec2 per) {
   return cos(2.0 * atan(s.y, s.x));
 }
 `
+
+/** GLSL spec for Vortex 2D, tileable (shipping implementation). */
+export const vortex2dCanonicalTileableGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, VORTEX_TILEABLE_GLSL],
+  expr: '0.5 + 0.5 * vortex2T(p, per)',
+}
+
+/** GLSL spec for Vortex 3D, tileable (shipping implementation). */
+export const vortex3dCanonicalTileableGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, VORTEX_TILEABLE_GLSL],
+  expr: '0.5 + 0.5 * vortex3T(p, per)',
+}

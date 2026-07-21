@@ -5,8 +5,9 @@ import { createThreeRenderer } from '#/lib/render/three'
 import { createWebglRenderer } from '#/lib/render/webgl'
 import { createWebgpuRenderer } from '#/lib/render/webgpu'
 
-import type { Renderer } from '#/lib/render/types'
-import type { Backend, Effect, ViewMode } from 'noisetoy'
+import type { Effect } from '#/lib/effect'
+import type { Backend } from '#/lib/registry'
+import type { Renderer, ViewMode } from '#/lib/render/types'
 
 /** Square resolution used by the flat views, which never fill the viewport. */
 export const RENDER_SIZE = 512

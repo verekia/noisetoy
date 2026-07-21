@@ -1,6 +1,12 @@
 // WGSL counterpart of perlin-fast.ts. Requires COMMON_WGSL and
 // FAST_COMMON_WGSL.
 
+import { COMMON_WGSL } from '../noises/common.wgsl.js'
+import { PERLIN2_NORM, PERLIN3_NORM, fmt } from '../noises/normalization.js'
+import { FAST_COMMON_WGSL } from './fast-common.wgsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const PERLIN_FAST_WGSL = /* wgsl */ `
 fn perlinFast2(p: vec2f) -> f32 {
   let i = floor(p);
@@ -52,3 +58,17 @@ fn perlinFast3(p: vec3f) -> f32 {
   return mix(nz0, nz1, uz);
 }
 `
+
+/** Perlin 2D Fast (fib-hash candidate) — WGSL ShaderSpec, pre-clamp display expression. */
+export const perlin2dFastWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, FAST_COMMON_WGSL, PERLIN_FAST_WGSL],
+  expr: `0.5 + 0.5 * ${fmt(PERLIN2_NORM)} * perlinFast2(p)`,
+}
+
+/** Perlin 3D Fast (fib-hash candidate) — WGSL ShaderSpec, pre-clamp display expression. */
+export const perlin3dFastWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, FAST_COMMON_WGSL, PERLIN_FAST_WGSL],
+  expr: `0.5 + 0.5 * ${fmt(PERLIN3_NORM)} * perlinFast3(p)`,
+}

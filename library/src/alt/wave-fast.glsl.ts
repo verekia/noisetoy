@@ -3,6 +3,11 @@
 // angle — trig is cheap on a GPU and matches the TS table values.
 // 0.09817477042468103 is 2*pi/64; 0.02454369260617026 is 2*pi/256.
 
+import { COMMON_GLSL } from '../noises/common.glsl.js'
+import { FAST_COMMON_GLSL } from './fast-common.glsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const WAVE_FAST_GLSL = /* glsl */ `
 float wavFastCorner2(uint s0, vec2 d) {
   uint h = fibMix(s0);
@@ -62,3 +67,17 @@ float waveFast3(vec3 p) {
   return mix(nz0, nz1, uz);
 }
 `
+
+/** Wave 2D, 'fast-dirs' fast implementation — GLSL spec. */
+export const wave2dFastGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, FAST_COMMON_GLSL, WAVE_FAST_GLSL],
+  expr: '0.5 + 0.5 * 1.0 * waveFast2(p)',
+}
+
+/** Wave 3D, 'fast-dirs' fast implementation — GLSL spec. */
+export const wave3dFastGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, FAST_COMMON_GLSL, WAVE_FAST_GLSL],
+  expr: '0.5 + 0.5 * 1.0 * waveFast3(p)',
+}

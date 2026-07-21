@@ -1,6 +1,12 @@
 // GLSL counterpart of perlin-tileable.ts. Requires COMMON_GLSL and PERLIN_GLSL
 // (for perlinGrad2 / perlinGrad3).
 
+import { COMMON_GLSL } from '../common.glsl.js'
+import { fmt, PERLIN2_NORM, PERLIN3_NORM } from '../normalization.js'
+import { PERLIN_GLSL } from '../perlin.glsl.js'
+
+import type { ShaderSpec } from '../../spec.js'
+
 export const PERLIN_TILEABLE_GLSL = /* glsl */ `
 float perlin2T(vec2 p, vec2 per) {
   vec2 i = floor(p);
@@ -47,3 +53,17 @@ float perlin3T(vec3 p, vec2 per) {
   return mix(nz0, nz1, uz);
 }
 `
+
+/** GLSL spec for Perlin 2D, tileable (shipping implementation). */
+export const perlin2dCanonicalTileableGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, PERLIN_GLSL, PERLIN_TILEABLE_GLSL],
+  expr: `0.5 + 0.5 * ${fmt(PERLIN2_NORM)} * perlin2T(p, per)`,
+}
+
+/** GLSL spec for Perlin 3D, tileable (shipping implementation). */
+export const perlin3dCanonicalTileableGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, PERLIN_GLSL, PERLIN_TILEABLE_GLSL],
+  expr: `0.5 + 0.5 * ${fmt(PERLIN3_NORM)} * perlin3T(p, per)`,
+}

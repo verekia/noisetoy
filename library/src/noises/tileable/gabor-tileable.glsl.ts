@@ -1,5 +1,10 @@
 // GLSL counterpart of gabor-tileable.ts. Requires COMMON_GLSL.
 
+import { COMMON_GLSL } from '../common.glsl.js'
+import { fmt, GABOR2_NORM, GABOR3_NORM } from '../normalization.js'
+
+import type { ShaderSpec } from '../../spec.js'
+
 export const GABOR_TILEABLE_GLSL = /* glsl */ `
 float gabor2T(vec2 p, vec2 per) {
   vec2 i = floor(p);
@@ -53,3 +58,17 @@ float gabor3T(vec3 p, vec2 per) {
   return sum;
 }
 `
+
+/** GLSL spec for Gabor 2D, tileable (shipping implementation). */
+export const gabor2dCanonicalTileableGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, GABOR_TILEABLE_GLSL],
+  expr: `0.5 + 0.5 * ${fmt(GABOR2_NORM)} * gabor2T(p, per)`,
+}
+
+/** GLSL spec for Gabor 3D, tileable (shipping implementation). */
+export const gabor3dCanonicalTileableGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, GABOR_TILEABLE_GLSL],
+  expr: `0.5 + 0.5 * ${fmt(GABOR3_NORM)} * gabor3T(p, per)`,
+}

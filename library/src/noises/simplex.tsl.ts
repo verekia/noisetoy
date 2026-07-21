@@ -4,6 +4,11 @@
 // plain JS branches the TypeScript uses: i1..k2 are node values, not numbers,
 // so the comparison has to happen in the shader graph.
 
+import { COMMON_TSL } from './common.tsl.js'
+import { SIMPLEX2_NORM, SIMPLEX3_NORM } from './normalization.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const SIMPLEX_TSL = /* js */ `
 const simplex2 = Fn(([p]) => {
   const F2 = float(0.3660254037844386)
@@ -123,3 +128,17 @@ const simplex3 = Fn(([p]) => {
   return n
 })
 `
+
+/** Simplex 2D (Canonical) — TSL shader spec. */
+export const simplex2dCanonicalTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, SIMPLEX_TSL],
+  expr: `simplex2(p).mul(${0.5 * SIMPLEX2_NORM}).add(0.5)`,
+}
+
+/** Simplex 3D (Canonical) — TSL shader spec. */
+export const simplex3dCanonicalTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, SIMPLEX_TSL],
+  expr: `simplex3(p).mul(${0.5 * SIMPLEX3_NORM}).add(0.5)`,
+}

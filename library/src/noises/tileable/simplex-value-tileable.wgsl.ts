@@ -1,5 +1,10 @@
 // WGSL counterpart of simplex-value-tileable.ts. Requires COMMON_WGSL.
 
+import { COMMON_WGSL } from '../common.wgsl.js'
+import { fmt, SIMPLEX_VALUE4_NORM } from '../normalization.js'
+
+import type { ShaderSpec } from '../../spec.js'
+
 export const SIMPLEX_VALUE_TILEABLE_WGSL = /* wgsl */ `
 fn contribV4(d: vec4f, h: u32) -> f32 {
   var t = 0.6 - dot(d, d);
@@ -53,3 +58,10 @@ fn simplexValue2T(p: vec2f, per: vec2f) -> f32 {
   return simplexValue4(vec4f(r.x * cos(a.x), r.x * sin(a.x), r.y * cos(a.y), r.y * sin(a.y)));
 }
 `
+
+/** Simplex Value 2D — Canonical tileable (torus) WGSL shader spec. */
+export const simplexValue2dCanonicalTileableWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, SIMPLEX_VALUE_TILEABLE_WGSL],
+  expr: `0.5 + 0.5 * ${fmt(SIMPLEX_VALUE4_NORM)} * simplexValue2T(p, per)`,
+}

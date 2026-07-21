@@ -1,6 +1,12 @@
 // WGSL counterpart of flow-tileable.ts. Requires COMMON_WGSL and FLOW_WGSL
 // (for rotGradDot2).
 
+import { COMMON_WGSL } from '../common.wgsl.js'
+import { FLOW_WGSL } from '../flow.wgsl.js'
+import { fmt, PERLIN2_NORM } from '../normalization.js'
+
+import type { ShaderSpec } from '../../spec.js'
+
 export const FLOW_TILEABLE_WGSL = /* wgsl */ `
 fn flow3T(p: vec3f, per: vec2f) -> f32 {
   let i = floor(p.xy);
@@ -21,3 +27,10 @@ fn flow3T(p: vec3f, per: vec2f) -> f32 {
   return mix(mix(g00, g10, ux), mix(g01, g11, ux), uy);
 }
 `
+
+/** Flow 3D — Canonical tileable WGSL shader spec. */
+export const flow3dCanonicalTileableWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, FLOW_WGSL, FLOW_TILEABLE_WGSL],
+  expr: `0.5 + 0.5 * ${fmt(PERLIN2_NORM)} * flow3T(p, per)`,
+}

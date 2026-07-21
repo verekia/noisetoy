@@ -1,6 +1,12 @@
 // WGSL counterpart of simplex-fast.ts. Requires COMMON_WGSL and
 // FAST_COMMON_WGSL.
 
+import { COMMON_WGSL } from '../noises/common.wgsl.js'
+import { SIMPLEX2_NORM, SIMPLEX3_NORM, fmt } from '../noises/normalization.js'
+import { FAST_COMMON_WGSL } from './fast-common.wgsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const SIMPLEX_FAST_WGSL = /* wgsl */ `
 fn simplexFast2(p: vec2f) -> f32 {
   let F2 = 0.3660254037844386;
@@ -97,3 +103,17 @@ fn simplexFast3(p: vec3f) -> f32 {
   return n;
 }
 `
+
+/** Simplex 2D Fast (fast-hash candidate) — WGSL ShaderSpec, pre-clamp display expression. */
+export const simplex2dFastWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, FAST_COMMON_WGSL, SIMPLEX_FAST_WGSL],
+  expr: `0.5 + 0.5 * ${fmt(SIMPLEX2_NORM)} * simplexFast2(p)`,
+}
+
+/** Simplex 3D Fast (fast-hash candidate) — WGSL ShaderSpec, pre-clamp display expression. */
+export const simplex3dFastWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, FAST_COMMON_WGSL, SIMPLEX_FAST_WGSL],
+  expr: `0.5 + 0.5 * ${fmt(SIMPLEX3_NORM)} * simplexFast3(p)`,
+}

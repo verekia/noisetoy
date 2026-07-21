@@ -1,5 +1,9 @@
 // WGSL counterpart of worley-tileable.ts. Requires COMMON_WGSL.
 
+import { COMMON_WGSL } from '../common.wgsl.js'
+
+import type { ShaderSpec } from '../../spec.js'
+
 export const WORLEY_TILEABLE_WGSL = /* wgsl */ `
 fn worley2T(p: vec2f, per: vec2f) -> f32 {
   let i = floor(p);
@@ -45,3 +49,17 @@ fn worley3T(p: vec3f, per: vec2f) -> f32 {
   return sqrt(f1);
 }
 `
+
+/** Worley 2D — Canonical tileable WGSL shader spec. */
+export const worley2dCanonicalTileableWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, WORLEY_TILEABLE_WGSL],
+  expr: 'worley2T(p, per)',
+}
+
+/** Worley 3D — Canonical tileable WGSL shader spec. */
+export const worley3dCanonicalTileableWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, WORLEY_TILEABLE_WGSL],
+  expr: 'worley3T(p, per)',
+}

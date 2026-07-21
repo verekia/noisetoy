@@ -24,7 +24,8 @@
 // Ranges are wider (L1) and narrower (Linf) than Euclidean, so each gets its
 // own display normalization; see normalization.ts.
 
-import { hash2, hash3, hashU32, to01 } from './common'
+import { hash2, hash3, hashU32, to01 } from './common.js'
+import { CHEBYSHEV2_NORM, CHEBYSHEV3_NORM, MANHATTAN2_NORM, MANHATTAN3_NORM } from './normalization.js'
 
 export const manhattan2 = (x: number, y: number): number => {
   const ix = Math.floor(x)
@@ -109,3 +110,17 @@ export const chebyshev3 = (x: number, y: number, z: number): number => {
   }
   return f1
 }
+
+/** Worley (Manhattan) 2D, shipping implementation — display value, nominally [0, 1], unclamped. */
+export const worleyManhattan2dCanonical = (x: number, y: number): number => MANHATTAN2_NORM * manhattan2(x, y)
+
+/** Worley (Manhattan) 3D, shipping implementation — display value, nominally [0, 1], unclamped. */
+export const worleyManhattan3dCanonical = (x: number, y: number, z: number): number =>
+  MANHATTAN3_NORM * manhattan3(x, y, z)
+
+/** Worley (Chebyshev) 2D, shipping implementation — display value, nominally [0, 1], unclamped. */
+export const worleyChebyshev2dCanonical = (x: number, y: number): number => CHEBYSHEV2_NORM * chebyshev2(x, y)
+
+/** Worley (Chebyshev) 3D, shipping implementation — display value, nominally [0, 1], unclamped. */
+export const worleyChebyshev3dCanonical = (x: number, y: number, z: number): number =>
+  CHEBYSHEV3_NORM * chebyshev3(x, y, z)

@@ -1,6 +1,11 @@
 // TSL counterpart of wave-fast.ts. Requires COMMON_TSL and FAST_COMMON_TSL.
 // See the GLSL file for the quantized-angle note.
 
+import { COMMON_TSL } from '../noises/common.tsl.js'
+import { FAST_COMMON_TSL } from './fast-common.tsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const WAVE_FAST_TSL = /* js */ `
 const wavFastCorner2 = Fn(([s0, d]) => {
   const h = fibMix(s0).toVar()
@@ -60,3 +65,17 @@ const waveFast3 = Fn(([p]) => {
   return mix(nz0, nz1, uz)
 })
 `
+
+/** Wave 2D Fast (fast-dirs candidate) — TSL ShaderSpec, pre-clamp display expression. */
+export const wave2dFastTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, FAST_COMMON_TSL, WAVE_FAST_TSL],
+  expr: 'waveFast2(p).mul(0.5).add(0.5)',
+}
+
+/** Wave 3D Fast (fast-dirs candidate) — TSL ShaderSpec, pre-clamp display expression. */
+export const wave3dFastTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, FAST_COMMON_TSL, WAVE_FAST_TSL],
+  expr: 'waveFast3(p).mul(0.5).add(0.5)',
+}

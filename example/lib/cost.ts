@@ -73,7 +73,7 @@
 
 import { defaultVariant, getNoise, getVariant, NOISES } from './registry'
 
-import type { LayerConfig } from './render/types'
+import type { BlendMode } from './render/types'
 
 /**
  * Cost of one evaluation of each variant, relative to Perlin 3D = 1. On the
@@ -246,6 +246,18 @@ export type CostEstimate = {
   msPerMegapixel: number
 }
 
+/** What the estimator needs to know about one layer: identity and blending. */
+export type CostLayer = {
+  /** Registry variant id, e.g. 'perlin-3d'. */
+  variantId: string
+  /** Fractal octaves. Default 1. */
+  octaves?: number
+  /** Blend against the layers below. Default 'normal'. */
+  blend?: BlendMode
+  /** 0-1. Default 1. */
+  opacity?: number
+}
+
 /**
  * Estimates what a stack costs to evaluate once per pixel.
  *
@@ -254,18 +266,18 @@ export type CostEstimate = {
  * never dead, because it feeds the accumulated value back into the sampling
  * position of the layer above.
  */
-export const estimateCost = (layers: LayerConfig[]): CostEstimate => {
+export const estimateCost = (layers: CostLayer[]): CostEstimate => {
   // Everything below the topmost fully-opaque 'normal' layer is unreachable.
   let firstLive = 0
   for (let i = layers.length - 1; i > 0; i--) {
-    const l = layers[i] as LayerConfig
-    if (l.blend === 'normal' && l.opacity >= 1) {
+    const l = layers[i] as CostLayer
+    if ((l.blend ?? 'normal') === 'normal' && (l.opacity ?? 1) >= 1) {
       firstLive = i
       break
     }
   }
 
-  const perLayer = layers.map((l, i) => (i < firstLive ? 0 : variantCost(l.variant.id, l.octaves)))
+  const perLayer = layers.map((l, i) => (i < firstLive ? 0 : variantCost(l.variantId, l.octaves ?? 1)))
   const units = perLayer.reduce((a, b) => a + b, 0)
   const skipped = layers.map((_, i) => i).filter(i => i < firstLive)
 

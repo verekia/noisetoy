@@ -43,7 +43,8 @@
 // The field is a different draw from the shipping one — different hash, same
 // statistics (field mean/rms/extrema match to three decimals).
 
-import { LATTICE_HX, LATTICE_HY, LATTICE_HZ } from '../noises/common'
+import { LATTICE_HX, LATTICE_HY, LATTICE_HZ } from '../noises/common.js'
+import { SIMPLEX2_NORM, SIMPLEX3_NORM } from '../noises/normalization.js'
 
 /** 2^32 / phi, odd — Knuth's multiplicative hashing constant. */
 const FIB = 0x9e3779b1
@@ -167,3 +168,10 @@ export const simplexFast3 = (x: number, y: number, z: number): number => {
   }
   return n
 }
+
+/** Simplex 2D, 'fast-hash' fast implementation — display value, unclamped. */
+export const simplex2dFast = (x: number, y: number): number => 0.5 + 0.5 * SIMPLEX2_NORM * simplexFast2(x, y)
+
+/** Simplex 3D, 'fast-hash' fast implementation — display value, unclamped. */
+export const simplex3dFast = (x: number, y: number, z: number): number =>
+  0.5 + 0.5 * SIMPLEX3_NORM * simplexFast3(x, y, z)

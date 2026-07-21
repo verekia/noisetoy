@@ -2,6 +2,11 @@
 // contributions). Requires COMMON_TSL. Self-contained like its GLSL/WGSL
 // counterparts (does not require the gradient-based SIMPLEX4_TSL).
 
+import { COMMON_TSL } from '../common.tsl.js'
+import { SIMPLEX_VALUE4_NORM } from '../normalization.js'
+
+import type { ShaderSpec } from '../../spec.js'
+
 export const SIMPLEX_VALUE_TILEABLE_TSL = /* js */ `
 const contribV4 = Fn(([d, h]) => {
   const t = float(0.6).sub(dot(d, d)).toVar()
@@ -61,3 +66,10 @@ const simplexValue2T = Fn(([p, per]) => {
   return simplexValue4(vec4(r.x.mul(cos(a.x)), r.x.mul(sin(a.x)), r.y.mul(cos(a.y)), r.y.mul(sin(a.y))))
 })
 `
+
+/** Simplex Value 2D (Canonical), tileable (4D torus) — TSL shader spec. */
+export const simplexValue2dCanonicalTileableTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, SIMPLEX_VALUE_TILEABLE_TSL],
+  expr: `simplexValue2T(p, per).mul(${0.5 * SIMPLEX_VALUE4_NORM}).add(0.5)`,
+}

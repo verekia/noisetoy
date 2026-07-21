@@ -1,6 +1,12 @@
 // TSL counterpart of worley-metrics-fast.ts. Requires COMMON_TSL and
 // FAST_COMMON_TSL. See the GLSL file for the metric-specific prune bounds.
 
+import { COMMON_TSL } from '../noises/common.tsl.js'
+import { CHEBYSHEV2_NORM, CHEBYSHEV3_NORM, MANHATTAN2_NORM, MANHATTAN3_NORM } from '../noises/normalization.js'
+import { FAST_COMMON_TSL } from './fast-common.tsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const WORLEY_METRICS_FAST_TSL = /* js */ `
 const wmFastOffsets2 = Fn(([s]) => {
   const h = fibMix(s).toVar()
@@ -167,3 +173,31 @@ const chebyshevFast3 = Fn(([p]) => {
   return f1
 })
 `
+
+/** Worley (Manhattan) 2D Fast (split-bits-pruned candidate) — TSL ShaderSpec, pre-clamp display expression. */
+export const worleyManhattan2dFastTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, FAST_COMMON_TSL, WORLEY_METRICS_FAST_TSL],
+  expr: `manhattanFast2(p).mul(${MANHATTAN2_NORM})`,
+}
+
+/** Worley (Manhattan) 3D Fast (split-bits-pruned candidate) — TSL ShaderSpec, pre-clamp display expression. */
+export const worleyManhattan3dFastTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, FAST_COMMON_TSL, WORLEY_METRICS_FAST_TSL],
+  expr: `manhattanFast3(p).mul(${MANHATTAN3_NORM})`,
+}
+
+/** Worley (Chebyshev) 2D Fast (split-bits-pruned candidate) — TSL ShaderSpec, pre-clamp display expression. */
+export const worleyChebyshev2dFastTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, FAST_COMMON_TSL, WORLEY_METRICS_FAST_TSL],
+  expr: `chebyshevFast2(p).mul(${CHEBYSHEV2_NORM})`,
+}
+
+/** Worley (Chebyshev) 3D Fast (split-bits-pruned candidate) — TSL ShaderSpec, pre-clamp display expression. */
+export const worleyChebyshev3dFastTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, FAST_COMMON_TSL, WORLEY_METRICS_FAST_TSL],
+  expr: `chebyshevFast3(p).mul(${CHEBYSHEV3_NORM})`,
+}

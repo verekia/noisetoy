@@ -1,6 +1,11 @@
 // WGSL counterpart of wave-tileable.ts. Requires COMMON_WGSL and WAVE_WGSL
 // (reuses waveCorner2/waveCorner3).
 
+import { COMMON_WGSL } from '../common.wgsl.js'
+import { WAVE_WGSL } from '../wave.wgsl.js'
+
+import type { ShaderSpec } from '../../spec.js'
+
 export const WAVE_TILEABLE_WGSL = /* wgsl */ `
 fn wave2T(p: vec2f, per: vec2f) -> f32 {
   let i = floor(p);
@@ -46,3 +51,17 @@ fn wave3T(p: vec3f, per: vec2f) -> f32 {
   return mix(nz0, nz1, uz);
 }
 `
+
+/** Wave 2D — Canonical tileable WGSL shader spec. */
+export const wave2dCanonicalTileableWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, WAVE_WGSL, WAVE_TILEABLE_WGSL],
+  expr: '0.5 + 0.5 * wave2T(p, per)',
+}
+
+/** Wave 3D — Canonical tileable WGSL shader spec. */
+export const wave3dCanonicalTileableWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, WAVE_WGSL, WAVE_TILEABLE_WGSL],
+  expr: '0.5 + 0.5 * wave3T(p, per)',
+}

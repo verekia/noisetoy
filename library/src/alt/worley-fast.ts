@@ -56,7 +56,7 @@
 //
 // Output matches noises/worley.ts: Euclidean F1, roughly [0, 1.3].
 
-import { LATTICE_HX, LATTICE_HY, LATTICE_HZ } from '../noises/common'
+import { LATTICE_HX, LATTICE_HY, LATTICE_HZ } from '../noises/common.js'
 
 /** 2^32 / phi, odd — Knuth's multiplicative hashing constant. */
 const FIB = 0x9e3779b1
@@ -228,3 +228,9 @@ export const worleyFast3 = (x: number, y: number, z: number): number => {
   }
   return Math.sqrt(f1)
 }
+
+/** Worley 2D, 'split-bits-pruned' fast implementation — display value, unclamped. */
+export const worley2dFast = worleyFast2
+
+/** Worley 3D, 'split-bits-pruned' fast implementation — display value, unclamped. */
+export const worley3dFast = worleyFast3

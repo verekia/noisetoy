@@ -2,6 +2,11 @@
 // FAST_COMMON_GLSL. Sixteen directions as quadrant rotations of four base
 // vectors; cos(2 * atan2) replaced by (sx^2 - sy^2) / (sx^2 + sy^2).
 
+import { COMMON_GLSL } from '../noises/common.glsl.js'
+import { FAST_COMMON_GLSL } from './fast-common.glsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const VORTEX_FAST_GLSL = /* glsl */ `
 vec2 vtxFastDir(uint h) {
   uint t = (h >> 28u) & 3u;
@@ -70,3 +75,17 @@ float vortexFast3(vec3 p) {
   return n > 0.0 ? (a - b) / n : 1.0;
 }
 `
+
+/** Vortex 2D, 'fast-dirs' fast implementation — GLSL spec. */
+export const vortex2dFastGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, FAST_COMMON_GLSL, VORTEX_FAST_GLSL],
+  expr: '0.5 + 0.5 * 1.0 * vortexFast2(p)',
+}
+
+/** Vortex 3D, 'fast-dirs' fast implementation — GLSL spec. */
+export const vortex3dFastGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, FAST_COMMON_GLSL, VORTEX_FAST_GLSL],
+  expr: '0.5 + 0.5 * 1.0 * vortexFast3(p)',
+}

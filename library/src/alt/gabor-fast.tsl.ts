@@ -2,6 +2,12 @@
 // FAST_COMMON_TSL. See the GLSL file for the constant notes. Cell helpers
 // take and return the running sum, like the ripple candidate's.
 
+import { COMMON_TSL } from '../noises/common.tsl.js'
+import { GABOR2_NORM, GABOR3_NORM } from '../noises/normalization.js'
+import { FAST_COMMON_TSL } from './fast-common.tsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const GABOR_FAST_TSL = /* js */ `
 const gbrFastCell2 = Fn(([s, b, sumIn]) => {
   const sum = float(sumIn).toVar()
@@ -85,3 +91,17 @@ const gaborFast3 = Fn(([p]) => {
   return sum
 })
 `
+
+/** Gabor 2D Fast (split-bits-gated candidate) — TSL ShaderSpec, pre-clamp display expression. */
+export const gabor2dFastTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, FAST_COMMON_TSL, GABOR_FAST_TSL],
+  expr: `gaborFast2(p).mul(${0.5 * GABOR2_NORM}).add(0.5)`,
+}
+
+/** Gabor 3D Fast (split-bits-gated candidate) — TSL ShaderSpec, pre-clamp display expression. */
+export const gabor3dFastTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, FAST_COMMON_TSL, GABOR_FAST_TSL],
+  expr: `gaborFast3(p).mul(${0.5 * GABOR3_NORM}).add(0.5)`,
+}

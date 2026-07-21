@@ -4,8 +4,9 @@
 // cells' sources. Distances stay geometric (unwrapped).
 // This wrapping is deliberately kept out of the core implementation.
 
-import { hash2, hash3, hashU32, imod, to01 } from '../common'
-import { RIPPLE_FREQ, RIPPLE_RANGE } from '../ripple'
+import { hash2, hash3, hashU32, imod, to01 } from '../common.js'
+import { RIPPLE_NORM } from '../normalization.js'
+import { RIPPLE_FREQ, RIPPLE_RANGE } from '../ripple.js'
 
 const TAU = 6.283185307179586
 
@@ -61,3 +62,11 @@ export const ripple3Tileable = (x: number, y: number, z: number, px: number, py:
   }
   return sum
 }
+
+/** Ripple 2D tileable, shipping implementation — wraps every periodX / periodY lattice cells; display value, nominally [0, 1], unclamped. */
+export const ripple2dCanonicalTileable = (x: number, y: number, periodX: number, periodY: number): number =>
+  0.5 + 0.5 * RIPPLE_NORM * ripple2Tileable(x, y, periodX, periodY)
+
+/** Ripple 3D tileable, shipping implementation — wraps every periodX / periodY lattice cells; display value, nominally [0, 1], unclamped. */
+export const ripple3dCanonicalTileable = (x: number, y: number, z: number, periodX: number, periodY: number): number =>
+  0.5 + 0.5 * RIPPLE_NORM * ripple3Tileable(x, y, z, periodX, periodY)

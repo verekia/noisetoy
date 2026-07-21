@@ -1,5 +1,9 @@
 // TSL counterpart of value-tileable.ts. Requires COMMON_TSL.
 
+import { COMMON_TSL } from '../common.tsl.js'
+
+import type { ShaderSpec } from '../../spec.js'
+
 export const VALUE_TILEABLE_TSL = /* js */ `
 const value2T = Fn(([p, per]) => {
   const i = floor(p)
@@ -45,3 +49,17 @@ const value3T = Fn(([p, per]) => {
   return mix(nz0, nz1, uz)
 })
 `
+
+/** Value 2D (Canonical), tileable — TSL shader spec. */
+export const value2dCanonicalTileableTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, VALUE_TILEABLE_TSL],
+  expr: 'value2T(p, per)',
+}
+
+/** Value 3D (Canonical), tileable — TSL shader spec. */
+export const value3dCanonicalTileableTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, VALUE_TILEABLE_TSL],
+  expr: 'value3T(p, per)',
+}

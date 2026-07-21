@@ -3,6 +3,12 @@
 // inline helpers unconditionally, so the TS file's longhand caution does not
 // apply here.
 
+import { COMMON_GLSL } from '../noises/common.glsl.js'
+import { fmt, CRACKLE_NORM, RIPPLE_NORM, STARS_NORM } from '../noises/normalization.js'
+import { FAST_COMMON_GLSL } from './fast-common.glsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const CELLULAR_FAST_GLSL = /* glsl */ `
 float mosFastCell2(uint s, vec2 b, float f1, inout uint sb) {
   uint h = fibMix(s);
@@ -420,3 +426,73 @@ float rippleFast3(vec3 p) {
   return sum;
 }
 `
+
+/** Ripple 2D, 'split-bits-pruned' fast implementation — GLSL spec. */
+export const ripple2dFastGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, FAST_COMMON_GLSL, CELLULAR_FAST_GLSL],
+  expr: `0.5 + 0.5 * ${fmt(RIPPLE_NORM)} * rippleFast2(p)`,
+}
+
+/** Ripple 3D, 'split-bits-pruned' fast implementation — GLSL spec. */
+export const ripple3dFastGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, FAST_COMMON_GLSL, CELLULAR_FAST_GLSL],
+  expr: `0.5 + 0.5 * ${fmt(RIPPLE_NORM)} * rippleFast3(p)`,
+}
+
+/** Stars 2D, 'split-bits-pruned' fast implementation — GLSL spec. */
+export const stars2dFastGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, FAST_COMMON_GLSL, CELLULAR_FAST_GLSL],
+  expr: `${fmt(STARS_NORM)} * starsFast2(p)`,
+}
+
+/** Stars 3D, 'split-bits-pruned' fast implementation — GLSL spec. */
+export const stars3dFastGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, FAST_COMMON_GLSL, CELLULAR_FAST_GLSL],
+  expr: `${fmt(STARS_NORM)} * starsFast3(p)`,
+}
+
+/** Foam 2D, 'split-bits-pruned' fast implementation — GLSL spec. */
+export const foam2dFastGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, FAST_COMMON_GLSL, CELLULAR_FAST_GLSL],
+  expr: 'foamFast2(p)',
+}
+
+/** Foam 3D, 'split-bits-pruned' fast implementation — GLSL spec. */
+export const foam3dFastGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, FAST_COMMON_GLSL, CELLULAR_FAST_GLSL],
+  expr: 'foamFast3(p)',
+}
+
+/** Crackle 2D, 'split-bits-pruned' fast implementation — GLSL spec. */
+export const crackle2dFastGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, FAST_COMMON_GLSL, CELLULAR_FAST_GLSL],
+  expr: `${fmt(CRACKLE_NORM)} * crackleFast2(p)`,
+}
+
+/** Crackle 3D, 'split-bits-pruned' fast implementation — GLSL spec. */
+export const crackle3dFastGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, FAST_COMMON_GLSL, CELLULAR_FAST_GLSL],
+  expr: `${fmt(CRACKLE_NORM)} * crackleFast3(p)`,
+}
+
+/** Mosaic 2D, 'split-bits-pruned' fast implementation — GLSL spec. */
+export const mosaic2dFastGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, FAST_COMMON_GLSL, CELLULAR_FAST_GLSL],
+  expr: 'mosaicFast2(p)',
+}
+
+/** Mosaic 3D, 'split-bits-pruned' fast implementation — GLSL spec. */
+export const mosaic3dFastGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, FAST_COMMON_GLSL, CELLULAR_FAST_GLSL],
+  expr: 'mosaicFast3(p)',
+}

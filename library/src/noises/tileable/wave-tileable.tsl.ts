@@ -1,6 +1,11 @@
 // TSL counterpart of wave-tileable.ts. Requires COMMON_TSL and WAVE_TSL
 // (reuses waveCorner2/waveCorner3).
 
+import { COMMON_TSL } from '../common.tsl.js'
+import { WAVE_TSL } from '../wave.tsl.js'
+
+import type { ShaderSpec } from '../../spec.js'
+
 export const WAVE_TILEABLE_TSL = /* js */ `
 const wave2T = Fn(([p, per]) => {
   const i = floor(p)
@@ -46,3 +51,17 @@ const wave3T = Fn(([p, per]) => {
   return mix(nz0, nz1, uz)
 })
 `
+
+/** Wave 2D (Canonical), tileable — TSL shader spec. */
+export const wave2dCanonicalTileableTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, WAVE_TSL, WAVE_TILEABLE_TSL],
+  expr: 'wave2T(p, per).mul(0.5).add(0.5)',
+}
+
+/** Wave 3D (Canonical), tileable — TSL shader spec. */
+export const wave3dCanonicalTileableTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, WAVE_TSL, WAVE_TILEABLE_TSL],
+  expr: 'wave3T(p, per).mul(0.5).add(0.5)',
+}

@@ -32,7 +32,8 @@
 //
 // Output matches 2D Perlin's range, so it reuses PERLIN2_NORM.
 
-import { fade, hash2, hashU32, lerp, to01 } from './common'
+import { fade, hash2, hashU32, lerp, to01 } from './common.js'
+import { PERLIN2_NORM } from './normalization.js'
 
 const TAU = 6.283185307179586
 
@@ -61,3 +62,6 @@ export const flow3 = (x: number, y: number, z: number): number => {
   const n11 = rotGradDot2(hash2(ix + 1, iy + 1), ph, fx - 1, fy - 1)
   return lerp(lerp(n00, n10, ux), lerp(n01, n11, ux), uy)
 }
+
+/** Flow 3D, shipping implementation — display value, nominally [0, 1], unclamped. */
+export const flow3dCanonical = (x: number, y: number, z: number): number => 0.5 + 0.5 * PERLIN2_NORM * flow3(x, y, z)

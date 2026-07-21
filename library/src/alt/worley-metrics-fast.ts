@@ -27,7 +27,8 @@
 // figures. Display norms are the shipping MANHATTAN/CHEBYSHEV ones: the point
 // set distribution is unchanged, so the ranges match.
 
-import { LATTICE_HX, LATTICE_HY, LATTICE_HZ } from '../noises/common'
+import { LATTICE_HX, LATTICE_HY, LATTICE_HZ } from '../noises/common.js'
+import { CHEBYSHEV2_NORM, CHEBYSHEV3_NORM, MANHATTAN2_NORM, MANHATTAN3_NORM } from '../noises/normalization.js'
 
 /** 2^32 / phi, odd — Knuth's multiplicative hashing constant. */
 const FIB = 0x9e3779b1
@@ -316,3 +317,17 @@ export const chebyshevFast3 = (x: number, y: number, z: number): number => {
   }
   return f1
 }
+
+/** Worley (Manhattan) 2D, 'split-bits-pruned' fast implementation — display value, unclamped. */
+export const worleyManhattan2dFast = (x: number, y: number): number => MANHATTAN2_NORM * manhattanFast2(x, y)
+
+/** Worley (Manhattan) 3D, 'split-bits-pruned' fast implementation — display value, unclamped. */
+export const worleyManhattan3dFast = (x: number, y: number, z: number): number =>
+  MANHATTAN3_NORM * manhattanFast3(x, y, z)
+
+/** Worley (Chebyshev) 2D, 'split-bits-pruned' fast implementation — display value, unclamped. */
+export const worleyChebyshev2dFast = (x: number, y: number): number => CHEBYSHEV2_NORM * chebyshevFast2(x, y)
+
+/** Worley (Chebyshev) 3D, 'split-bits-pruned' fast implementation — display value, unclamped. */
+export const worleyChebyshev3dFast = (x: number, y: number, z: number): number =>
+  CHEBYSHEV3_NORM * chebyshevFast3(x, y, z)

@@ -1,6 +1,11 @@
 // GLSL counterpart of gabor.ts. Requires COMMON_GLSL.
 // 3.141592653589793 is GABOR_ENVELOPE; 12.566370614359172 is 2*pi*GABOR_FREQ.
 
+import { COMMON_GLSL } from './common.glsl.js'
+import { fmt, GABOR2_NORM, GABOR3_NORM } from './normalization.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const GABOR_GLSL = /* glsl */ `
 float gabor2(vec2 p) {
   vec2 i = floor(p);
@@ -50,3 +55,17 @@ float gabor3(vec3 p) {
   return sum;
 }
 `
+
+/** GLSL spec for Gabor 2D (shipping implementation). */
+export const gabor2dCanonicalGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, GABOR_GLSL],
+  expr: `0.5 + 0.5 * ${fmt(GABOR2_NORM)} * gabor2(p)`,
+}
+
+/** GLSL spec for Gabor 3D (shipping implementation). */
+export const gabor3dCanonicalGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, GABOR_GLSL],
+  expr: `0.5 + 0.5 * ${fmt(GABOR3_NORM)} * gabor3(p)`,
+}

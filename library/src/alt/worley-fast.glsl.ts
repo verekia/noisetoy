@@ -6,6 +6,11 @@
 // exactly the trade the TS header flags as needing its own measurement —
 // this chunk is what makes that measurement possible.
 
+import { COMMON_GLSL } from '../noises/common.glsl.js'
+import { FAST_COMMON_GLSL } from './fast-common.glsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const WORLEY_FAST_GLSL = /* glsl */ `
 float worleyFastCell2(uint s, vec2 b, float f1) {
   uint h = fibMix(s);
@@ -92,3 +97,17 @@ float worleyFast3(vec3 p) {
   return sqrt(f1);
 }
 `
+
+/** Worley 2D, 'split-bits-pruned' fast implementation — GLSL spec. */
+export const worley2dFastGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, FAST_COMMON_GLSL, WORLEY_FAST_GLSL],
+  expr: 'worleyFast2(p)',
+}
+
+/** Worley 3D, 'split-bits-pruned' fast implementation — GLSL spec. */
+export const worley3dFastGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, FAST_COMMON_GLSL, WORLEY_FAST_GLSL],
+  expr: 'worleyFast3(p)',
+}

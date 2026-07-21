@@ -1,6 +1,12 @@
 // WGSL counterpart of perlin-tileable.ts. Requires COMMON_WGSL and PERLIN_WGSL
 // (for perlinGrad2 / perlinGrad3).
 
+import { COMMON_WGSL } from '../common.wgsl.js'
+import { fmt, PERLIN2_NORM, PERLIN3_NORM } from '../normalization.js'
+import { PERLIN_WGSL } from '../perlin.wgsl.js'
+
+import type { ShaderSpec } from '../../spec.js'
+
 export const PERLIN_TILEABLE_WGSL = /* wgsl */ `
 fn perlin2T(p: vec2f, per: vec2f) -> f32 {
   let i = floor(p);
@@ -47,3 +53,17 @@ fn perlin3T(p: vec3f, per: vec2f) -> f32 {
   return mix(nz0, nz1, uz);
 }
 `
+
+/** Perlin 2D — Canonical tileable WGSL shader spec. */
+export const perlin2dCanonicalTileableWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, PERLIN_WGSL, PERLIN_TILEABLE_WGSL],
+  expr: `0.5 + 0.5 * ${fmt(PERLIN2_NORM)} * perlin2T(p, per)`,
+}
+
+/** Perlin 3D — Canonical tileable WGSL shader spec. */
+export const perlin3dCanonicalTileableWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, PERLIN_WGSL, PERLIN_TILEABLE_WGSL],
+  expr: `0.5 + 0.5 * ${fmt(PERLIN3_NORM)} * perlin3T(p, per)`,
+}

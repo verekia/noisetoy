@@ -1,5 +1,11 @@
 // TSL counterpart of simplex-fast.ts. Requires COMMON_TSL and FAST_COMMON_TSL.
 
+import { COMMON_TSL } from '../noises/common.tsl.js'
+import { SIMPLEX2_NORM, SIMPLEX3_NORM } from '../noises/normalization.js'
+import { FAST_COMMON_TSL } from './fast-common.tsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const SIMPLEX_FAST_TSL = /* js */ `
 const simplexFastContrib2 = Fn(([d, h]) => {
   const t = float(0.5).sub(dot(d, d)).toVar()
@@ -74,3 +80,17 @@ const simplexFast3 = Fn(([p]) => {
     .add(simplexFastContrib3(d3, lmfMix(h3)))
 })
 `
+
+/** Simplex 2D Fast (fast-hash candidate) — TSL ShaderSpec, pre-clamp display expression. */
+export const simplex2dFastTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, FAST_COMMON_TSL, SIMPLEX_FAST_TSL],
+  expr: `simplexFast2(p).mul(${0.5 * SIMPLEX2_NORM}).add(0.5)`,
+}
+
+/** Simplex 3D Fast (fast-hash candidate) — TSL ShaderSpec, pre-clamp display expression. */
+export const simplex3dFastTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, FAST_COMMON_TSL, SIMPLEX_FAST_TSL],
+  expr: `simplexFast3(p).mul(${0.5 * SIMPLEX3_NORM}).add(0.5)`,
+}

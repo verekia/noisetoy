@@ -1,5 +1,11 @@
 // TSL counterpart of perlin-fast.ts. Requires COMMON_TSL and FAST_COMMON_TSL.
 
+import { COMMON_TSL } from '../noises/common.tsl.js'
+import { PERLIN2_NORM, PERLIN3_NORM } from '../noises/normalization.js'
+import { FAST_COMMON_TSL } from './fast-common.tsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const PERLIN_FAST_TSL = /* js */ `
 const perlinFast2 = Fn(([p]) => {
   const i = floor(p)
@@ -51,3 +57,17 @@ const perlinFast3 = Fn(([p]) => {
   return mix(nz0, nz1, uz)
 })
 `
+
+/** Perlin 2D Fast (fib-hash candidate) — TSL ShaderSpec, pre-clamp display expression. */
+export const perlin2dFastTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, FAST_COMMON_TSL, PERLIN_FAST_TSL],
+  expr: `perlinFast2(p).mul(${0.5 * PERLIN2_NORM}).add(0.5)`,
+}
+
+/** Perlin 3D Fast (fib-hash candidate) — TSL ShaderSpec, pre-clamp display expression. */
+export const perlin3dFastTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, FAST_COMMON_TSL, PERLIN_FAST_TSL],
+  expr: `perlinFast3(p).mul(${0.5 * PERLIN3_NORM}).add(0.5)`,
+}

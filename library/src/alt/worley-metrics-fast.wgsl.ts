@@ -1,6 +1,12 @@
 // WGSL counterpart of worley-metrics-fast.ts. Requires COMMON_WGSL and
 // FAST_COMMON_WGSL. See the GLSL file for the metric-specific prune bounds.
 
+import { COMMON_WGSL } from '../noises/common.wgsl.js'
+import { CHEBYSHEV2_NORM, CHEBYSHEV3_NORM, MANHATTAN2_NORM, MANHATTAN3_NORM, fmt } from '../noises/normalization.js'
+import { FAST_COMMON_WGSL } from './fast-common.wgsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const WORLEY_METRICS_FAST_WGSL = /* wgsl */ `
 fn wmFastOffsets2(s: u32) -> vec2f {
   var h = fibMix(s);
@@ -163,3 +169,31 @@ fn chebyshevFast3(p: vec3f) -> f32 {
   return f1;
 }
 `
+
+/** Worley (Manhattan) 2D Fast (split-bits-pruned candidate) — WGSL ShaderSpec, pre-clamp display expression. */
+export const worleyManhattan2dFastWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, FAST_COMMON_WGSL, WORLEY_METRICS_FAST_WGSL],
+  expr: `${fmt(MANHATTAN2_NORM)} * manhattanFast2(p)`,
+}
+
+/** Worley (Manhattan) 3D Fast (split-bits-pruned candidate) — WGSL ShaderSpec, pre-clamp display expression. */
+export const worleyManhattan3dFastWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, FAST_COMMON_WGSL, WORLEY_METRICS_FAST_WGSL],
+  expr: `${fmt(MANHATTAN3_NORM)} * manhattanFast3(p)`,
+}
+
+/** Worley (Chebyshev) 2D Fast (split-bits-pruned candidate) — WGSL ShaderSpec, pre-clamp display expression. */
+export const worleyChebyshev2dFastWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, FAST_COMMON_WGSL, WORLEY_METRICS_FAST_WGSL],
+  expr: `${fmt(CHEBYSHEV2_NORM)} * chebyshevFast2(p)`,
+}
+
+/** Worley (Chebyshev) 3D Fast (split-bits-pruned candidate) — WGSL ShaderSpec, pre-clamp display expression. */
+export const worleyChebyshev3dFastWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, FAST_COMMON_WGSL, WORLEY_METRICS_FAST_WGSL],
+  expr: `${fmt(CHEBYSHEV3_NORM)} * chebyshevFast3(p)`,
+}

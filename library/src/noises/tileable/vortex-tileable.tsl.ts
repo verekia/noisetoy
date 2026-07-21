@@ -1,6 +1,11 @@
 // TSL counterpart of vortex-tileable.ts. Requires COMMON_TSL and VORTEX_TSL
 // (reuses vortexCorner2/vortexCorner3).
 
+import { COMMON_TSL } from '../common.tsl.js'
+import { VORTEX_TSL } from '../vortex.tsl.js'
+
+import type { ShaderSpec } from '../../spec.js'
+
 export const VORTEX_TILEABLE_TSL = /* js */ `
 const vortex2T = Fn(([p, per]) => {
   const i = floor(p)
@@ -44,3 +49,17 @@ const vortex3T = Fn(([p, per]) => {
   return cos(atan(s.y, s.x).mul(2))
 })
 `
+
+/** Vortex 2D (Canonical), tileable — TSL shader spec. */
+export const vortex2dCanonicalTileableTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, VORTEX_TSL, VORTEX_TILEABLE_TSL],
+  expr: 'vortex2T(p, per).mul(0.5).add(0.5)',
+}
+
+/** Vortex 3D (Canonical), tileable — TSL shader spec. */
+export const vortex3dCanonicalTileableTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, VORTEX_TSL, VORTEX_TILEABLE_TSL],
+  expr: 'vortex3T(p, per).mul(0.5).add(0.5)',
+}

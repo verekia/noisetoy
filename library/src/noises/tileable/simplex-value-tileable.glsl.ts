@@ -1,5 +1,10 @@
 // GLSL counterpart of simplex-value-tileable.ts. Requires COMMON_GLSL.
 
+import { COMMON_GLSL } from '../common.glsl.js'
+import { fmt, SIMPLEX_VALUE4_NORM } from '../normalization.js'
+
+import type { ShaderSpec } from '../../spec.js'
+
 export const SIMPLEX_VALUE_TILEABLE_GLSL = /* glsl */ `
 float contribV4(vec4 d, uint h) {
   float t = 0.6 - dot(d, d);
@@ -53,3 +58,10 @@ float simplexValue2T(vec2 p, vec2 per) {
   return simplexValue4(vec4(r.x * cos(a.x), r.x * sin(a.x), r.y * cos(a.y), r.y * sin(a.y)));
 }
 `
+
+/** GLSL spec for Simplex Value 2D, tileable (shipping implementation). */
+export const simplexValue2dCanonicalTileableGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, SIMPLEX_VALUE_TILEABLE_GLSL],
+  expr: `0.5 + 0.5 * ${fmt(SIMPLEX_VALUE4_NORM)} * simplexValue2T(p, per)`,
+}

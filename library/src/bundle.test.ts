@@ -1,33 +1,21 @@
 // What a consumer actually ships.
 //
-// The rule this file enforces: importing a noise from `noisetoy` must never
-// pull in the implementation inventory, nor any alternative implementation it
-// documents. Those exist to be benchmarked against, not to be shipped. The only
-// thing stopping a stray `import { IMPLEMENTATIONS } from './implementations'`
-// in the core is this test, so it bundles for real and looks.
+// The rule this file enforces: importing one noise variant from `noisetoy`
+// ships that variant and its dependency chain — nothing else. No registry, no
+// other noises, no other languages' chunk text, and never the test manifest.
+// The package relies on module-graph granularity ("sideEffects": false plus a
+// bundle-free dist), so the guarantee is checked by bundling real consumers
+// and looking at what survives.
 //
-// Note it bundles a synthetic CONSUMER rather than the entry point itself.
-// Bundling src/index.ts directly is worthless: it is nothing but re-exports, so
-// the bundler tree-shakes it to about 700 bytes and every assertion below would
-// pass vacuously — as this test did, until that was caught. The consumer has to
-// actually call the API for the bundle to contain anything.
-//
-// WHAT THIS CATCHES, precisely. It fails when core code takes a RUNTIME
-// dependency on the inventory — registry.ts importing IMPLEMENTATIONS and
-// hanging it off each NoiseDef, say, which is the version of this mistake that
-// is easy to make and expensive to ship. Verified by doing exactly that and
-// watching it fail.
-//
-// It deliberately does NOT fail on a bare `export { IMPLEMENTATIONS } from
-// './implementations'` added to index.ts, because that is harmless: no consumer
-// imports it, so it tree-shakes away (helped by "sideEffects": false in
-// package.json). Re-exporting is a taste question; depending on it is a bug.
+// Note it bundles synthetic CONSUMERS rather than the entry point itself.
+// Bundling src/index.ts directly is worthless: it is nothing but re-exports,
+// so the bundler tree-shakes it to almost nothing and every assertion below
+// would pass vacuously. The consumer has to actually use what it imports.
 
 import { afterAll, expect, test } from 'bun:test'
 
 const DIR = `${import.meta.dir}/../.bundle-test`
 const ENTRY = `${import.meta.dir}/index.ts`
-const IMPLS = `${import.meta.dir}/implementations.ts`
 
 const bundleConsumer = async (name: string, source: string): Promise<string> => {
   const path = `${DIR}/${name}.js`
@@ -43,64 +31,90 @@ afterAll(async () => {
   await Bun.$`rm -rf ${DIR}`.quiet().nothrow()
 })
 
-/**
- * Strings that appear only in the inventory. Deliberately drawn from its data,
- * not from identifiers: a bundler can rename `IMPLEMENTATIONS`, but it cannot
- * rewrite the contents of a string literal it decided to keep.
- *
- * Chosen carefully. 'Gustavson' looks like an obvious marker and is useless —
- * it legitimately appears in the registry's `license` fields, so it reports a
- * leak on a clean tree. Anything from IMPLEMENTATION_KIND_LABEL is useless too:
- * it is a separate const, so it tree-shakes away even in a consumer that does
- * use the inventory. These four are prose or ids that exist nowhere else.
- */
-const INVENTORY_MARKERS = [
-  'branchless boolean algebra',
-  'spaceship hulls',
-  'one-point-per-cell',
-  'kernel-weighted-values',
-]
-
-/** A consumer doing the most ordinary thing: one noise, sampled and compiled. */
-const TYPICAL_CONSUMER = `
-  import { createEffect } from ${JSON.stringify(ENTRY)}
-  const e = createEffect({ layers: [{ noise: 'perlin', octaves: 5 }] })
-  globalThis.out = [e.sample(0.5, 0.5), e.glsl().length, e.wgsl().length]
-`
-
-// Sanity check on the markers themselves. If this ever fails, the markers have
-// drifted out of the inventory prose and every guard below is passing vacuously.
-test('the inventory markers really are in the inventory', async () => {
+// Sanity check on the markers themselves: a consumer that uses everything
+// must contain every marker the guards below assert the ABSENCE of. If this
+// fails, a marker drifted out of the sources and a guard is passing vacuously.
+test('the markers really exist in the full catalog', async () => {
   const code = await bundleConsumer(
-    'uses-inventory',
+    'uses-everything',
     `
-      import { IMPLEMENTATIONS } from ${JSON.stringify(IMPLS)}
-      globalThis.out = Object.keys(IMPLEMENTATIONS).length + JSON.stringify(IMPLEMENTATIONS).length
+      import * as lib from ${JSON.stringify(ENTRY)}
+      globalThis.out = Object.values(lib)
+        .map(v => (typeof v === 'function' ? v(0.3, 0.7, 0.5) : JSON.stringify(v)))
+        .join('|').length
     `,
   )
-  for (const marker of INVENTORY_MARKERS) expect(code).toContain(marker)
+  for (const marker of [
+    'fn worley3', // Worley WGSL
+    'float worley3', // Worley GLSL
+    'fn perlin3', // Perlin WGSL
+    'float perlinFast3', // fast Perlin GLSL
+    'gaborFast3(p)', // fast Gabor expr
+    'truchet2(p)', // Truchet expr
+  ]) {
+    expect(code).toContain(marker)
+  }
 })
 
-test('a typical consumer does not ship the implementation inventory', async () => {
-  const code = await bundleConsumer('typical', TYPICAL_CONSUMER)
-  expect(INVENTORY_MARKERS.filter(m => code.includes(m))).toEqual([])
-})
-
-test('a consumer pulling the whole registry still does not ship the inventory', async () => {
+test('a WGSL-only Worley consumer ships only the Worley WGSL chain', async () => {
   const code = await bundleConsumer(
-    'whole-registry',
+    'worley-wgsl',
     `
-      import { NOISES, createEffect } from ${JSON.stringify(ENTRY)}
-      globalThis.out = NOISES.map(n => createEffect({ layers: [{ noise: n.id }] }).glsl().length)
+      import { composeWgsl, wgslNoiseFn, worley3dCanonicalWgsl } from ${JSON.stringify(ENTRY)}
+      globalThis.out = composeWgsl(worley3dCanonicalWgsl) + wgslNoiseFn('worley', worley3dCanonicalWgsl)
     `,
   )
-  expect(INVENTORY_MARKERS.filter(m => code.includes(m))).toEqual([])
+  expect(code).toContain('fn worley3')
+  // No other noise rides along...
+  for (const other of ['perlin', 'gabor', 'simplex', 'truchet', 'vortex']) {
+    expect(code.toLowerCase()).not.toContain(other)
+  }
+  // ...and no other language's text does either (GLSL worley defines
+  // `float worley3(vec2|vec3 ...)`; WGSL never emits that shape).
+  expect(code).not.toContain('float worley3')
+  expect(code).not.toContain('.mul(') // TSL chunk text
+  const kb = code.length / 1024
+  expect(kb).toBeGreaterThan(0.5) // guards the guard: a vacuous ~0KB bundle fails here
+  expect(kb).toBeLessThan(24)
+})
+
+test('a CPU-only fast Perlin consumer ships no shader text at all', async () => {
+  const code = await bundleConsumer(
+    'perlin-cpu',
+    `
+      import { perlin3dFast } from ${JSON.stringify(ENTRY)}
+      globalThis.out = perlin3dFast(0.3, 0.7, 0.5)
+    `,
+  )
+  expect(code).not.toContain('fn perlinFast') // WGSL
+  expect(code).not.toContain('float perlinFast') // GLSL
+  expect(code).not.toContain('vec3f') // any WGSL chunk
+  for (const other of ['worley', 'gabor', 'simplex', 'truchet']) {
+    expect(code.toLowerCase()).not.toContain(other)
+  }
+  const kb = code.length / 1024
+  expect(kb).toBeGreaterThan(0.3)
+  expect(kb).toBeLessThan(24)
+})
+
+test('canonical and fast are independent: importing one never ships the other', async () => {
+  const code = await bundleConsumer(
+    'worley-canonical-cpu',
+    `
+      import { worley3dCanonical } from ${JSON.stringify(ENTRY)}
+      globalThis.out = worley3dCanonical(0.3, 0.7, 0.5)
+    `,
+  )
+  // The fast implementation lives in its own modules; 'Fast' identifiers and
+  // its split-bit hash text must not appear.
+  expect(code).not.toContain('worleyFast')
+  expect(code).not.toContain('fib1')
 })
 
 /**
  * Modules reachable from an entry point by following relative imports. A static
  * walk rather than a bundler question: what matters is whether the graph can
- * touch src/alt at all, not whether a minifier happened to drop it this time.
+ * touch src/testing at all, not whether a minifier happened to drop it.
  */
 const reachableFrom = async (entry: string): Promise<string[]> => {
   const seen = new Set<string>()
@@ -124,43 +138,26 @@ const reachableFrom = async (entry: string): Promise<string[]> => {
         if (part === '..') resolved.pop()
         else resolved.push(part)
       }
-      queue.push(`/${resolved.join('/')}.ts`)
+      // Source imports carry the emitted .js extension; the files are .ts.
+      const path = `/${resolved.join('/')}`.replace(/\.js$/, '')
+      queue.push(path.endsWith('.ts') ? path : `${path}.ts`)
     }
   }
   return [...seen]
 }
 
-// Archived implementations are the whole reason src/alt exists. They must be
-// reachable from the benchmark and from nothing a consumer imports.
-test('no archived implementation is reachable from the default entry', async () => {
-  const reached = await reachableFrom(`${import.meta.dir}/index.ts`)
-  expect(reached.filter(f => f.includes('/src/alt/'))).toEqual([])
+// The test manifest imports the whole catalog at once; it exists for the test
+// suite and must never be reachable from anything a consumer imports.
+test('the test manifest is not reachable from the entry point', async () => {
+  const reached = await reachableFrom(ENTRY)
+  expect(reached.filter(f => f.includes('/src/testing/'))).toEqual([])
 })
 
-test('no archived implementation is reachable from the three.js entry', async () => {
-  const reached = await reachableFrom(`${import.meta.dir}/three.ts`)
-  expect(reached.filter(f => f.includes('/src/alt/'))).toEqual([])
-})
-
-// Guards the guard: if the walk silently resolved nothing, the two tests above
+// Guards the guard: if the walk silently resolved nothing, the test above
 // would pass on an empty set and mean nothing.
 test('the reachability walk actually traverses the graph', async () => {
-  const reached = await reachableFrom(`${import.meta.dir}/index.ts`)
-  expect(reached.length).toBeGreaterThan(40)
+  const reached = await reachableFrom(ENTRY)
+  expect(reached.length).toBeGreaterThan(80)
   expect(reached.some(f => f.endsWith('/noises/perlin.ts'))).toBe(true)
-  // ...and it does reach src/alt from the benchmark, which is where it belongs.
-  const fromBench = await reachableFrom(`${import.meta.dir}/alt/bench.ts`)
-  expect(fromBench.some(f => f.includes('/src/alt/perlin-fast.ts'))).toBe(true)
-})
-
-// Not a correctness property, but a number worth keeping in front of us while
-// implementations get added: the core resolves noises by string id out of one
-// NOISES array, so nothing in it tree-shakes and a consumer using a single
-// noise still pays for all variants across all four languages. This ceiling is
-// here to catch an inventory (or a set of alternatives) silently landing in the
-// core. It is not an endorsement of the current size.
-test('a single-noise consumer stays under its size ceiling', async () => {
-  const kb = (await bundleConsumer('typical-size', TYPICAL_CONSUMER)).length / 1024
-  expect(kb).toBeGreaterThan(50) // guards the guard: a vacuous ~0KB bundle fails here
-  expect(kb).toBeLessThan(260)
+  expect(reached.some(f => f.endsWith('/alt/worley-fast.wgsl.ts'))).toBe(true)
 })

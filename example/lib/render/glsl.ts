@@ -4,7 +4,6 @@
 // fold bottom-to-top with Photoshop-style blends; the 'warp' blend displaces a
 // layer's uv by the accumulated value beneath it.
 
-import { COMMON_GLSL } from '../noises/common.glsl'
 import {
   FRACTAL_GAIN,
   fractalAmpSum,
@@ -21,9 +20,17 @@ import {
   Z_SPEED,
 } from './types'
 
+import type { ShaderSpec } from 'noisetoy'
+
 import type { BlendMode, LayerConfig, RenderConfig } from './types'
 
 const f = (n: number): string => (Number.isInteger(n) ? `${n}.0` : `${n}`)
+
+const requireGlsl = (L: LayerConfig, i: number): ShaderSpec => {
+  const spec = L.noise.glsl
+  if (!spec) throw new Error(`layer ${i} has no GLSL spec: set \`glsl\` on its noise from the ...Glsl exports`)
+  return spec
+}
 
 /** GLSL matrix constructors are column-major; the shared matrices are row-major. */
 const rotMat = (dim: 2 | 3): string => {
@@ -55,8 +62,8 @@ const blendExpr = (mode: BlendMode, a: string, v: string): string => {
 
 const layerFunctions = (L: LayerConfig, i: number, tiled: boolean): string => {
   const rotated = L.rotate && L.octaves > 1
-  const lTiled = tiled && L.variant.glslTileable !== null && !rotated
-  const shaderSpec = lTiled && L.variant.glslTileable ? L.variant.glslTileable : L.variant.glsl
+  const lTiled = tiled && L.noise.glslTileable != null && !rotated
+  const shaderSpec = lTiled && L.noise.glslTileable ? L.noise.glslTileable : requireGlsl(L, i)
   const vec = `vec${shaderSpec.dim}`
   const value = lTiled
     ? `float lv${i}(${vec} p, vec2 per) { return ${shaderSpec.expr}; }`
@@ -122,13 +129,15 @@ export const buildGlslFragment = (cfg: RenderConfig): string => {
   const be = band ? Math.min(cfg.bandSmoothing ?? BAND_SMOOTHING, band.width / 2) : 0
   const bandLo = band ? band.center - band.width / 2 : 0
   const bandHi = band ? band.center + band.width / 2 : 0
-  const chunks: string[] = [COMMON_GLSL]
-  const seen = new Set<string>(chunks)
+  // Specs carry their full dependency chains (common chunk included), so the
+  // build is just an ordered dedupe across layers.
+  const chunks: string[] = []
+  const seen = new Set<string>()
   const fns: string[] = []
   const mainLines: string[] = []
   layers.forEach((L, i) => {
-    const lTiled = tiled && L.variant.glslTileable !== null
-    const shaderSpec = lTiled && L.variant.glslTileable ? L.variant.glslTileable : L.variant.glsl
+    const lTiled = tiled && L.noise.glslTileable != null
+    const shaderSpec = lTiled && L.noise.glslTileable ? L.noise.glslTileable : requireGlsl(L, i)
     for (const dep of shaderSpec.deps) {
       if (!seen.has(dep)) {
         seen.add(dep)

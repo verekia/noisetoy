@@ -1,7 +1,7 @@
 // Value noise: random values on an integer lattice, quintic-smoothed interpolation.
 // Original implementation (MIT). Output is naturally in [0, 1].
 
-import { fade, hash2, hash3, lerp, to01 } from './common'
+import { fade, hash2, hash3, lerp, to01 } from './common.js'
 
 export const value2 = (x: number, y: number): number => {
   const ix = Math.floor(x)
@@ -39,3 +39,9 @@ export const value3 = (x: number, y: number, z: number): number => {
   const nz1 = lerp(lerp(n001, n101, ux), lerp(n011, n111, ux), uy)
   return lerp(nz0, nz1, uz)
 }
+
+/** Value 2D, shipping implementation — display value, nominally [0, 1], unclamped. */
+export const value2dCanonical = value2
+
+/** Value 3D, shipping implementation — display value, nominally [0, 1], unclamped. */
+export const value3dCanonical = value3

@@ -23,7 +23,7 @@
 // cost depends on position (the pruned Worley candidate) would drift between
 // batches for reasons that have nothing to do with the implementation.
 
-import type { NoiseVariant } from 'noisetoy'
+import type { NoiseVariant } from '#/lib/registry'
 
 export type BenchResult = {
   /** Median milliseconds per size x size frame. */

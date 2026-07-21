@@ -2,7 +2,7 @@
 // x/y before hashing, same blending as vortex.ts.
 // Kept out of the core implementation.
 
-import { fade, hash2, hash3, hashU32, imod, to01 } from '../common'
+import { fade, hash2, hash3, hashU32, imod, to01 } from '../common.js'
 
 const TAU = 6.283185307179586
 
@@ -48,3 +48,11 @@ export const vortex3Tileable = (x: number, y: number, z: number, px: number, py:
   }
   return Math.cos(2 * Math.atan2(sy, sx))
 }
+
+/** Vortex 2D tileable, shipping implementation — wraps every periodX / periodY lattice cells; display value, nominally [0, 1], unclamped. */
+export const vortex2dCanonicalTileable = (x: number, y: number, periodX: number, periodY: number): number =>
+  0.5 + 0.5 * vortex2Tileable(x, y, periodX, periodY)
+
+/** Vortex 3D tileable, shipping implementation — wraps every periodX / periodY lattice cells; display value, nominally [0, 1], unclamped. */
+export const vortex3dCanonicalTileable = (x: number, y: number, z: number, periodX: number, periodY: number): number =>
+  0.5 + 0.5 * vortex3Tileable(x, y, z, periodX, periodY)

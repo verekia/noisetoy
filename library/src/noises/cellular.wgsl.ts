@@ -1,5 +1,10 @@
 // WGSL counterpart of cellular.ts. Requires COMMON_WGSL.
 
+import { COMMON_WGSL } from './common.wgsl.js'
+import { CRACKLE_NORM, fmt, STARS_NORM } from './normalization.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const CELLULAR_WGSL = /* wgsl */ `
 fn mosaic2(p: vec2f) -> f32 {
   let i = floor(p);
@@ -159,3 +164,59 @@ fn stars3(p: vec3f) -> f32 {
   return sum;
 }
 `
+
+/** Mosaic 2D — Canonical WGSL shader spec. */
+export const mosaic2dCanonicalWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, CELLULAR_WGSL],
+  expr: 'mosaic2(p)',
+}
+
+/** Mosaic 3D — Canonical WGSL shader spec. */
+export const mosaic3dCanonicalWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, CELLULAR_WGSL],
+  expr: 'mosaic3(p)',
+}
+
+/** Crackle 2D — Canonical WGSL shader spec. */
+export const crackle2dCanonicalWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, CELLULAR_WGSL],
+  expr: `${fmt(CRACKLE_NORM)} * crackle2(p)`,
+}
+
+/** Crackle 3D — Canonical WGSL shader spec. */
+export const crackle3dCanonicalWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, CELLULAR_WGSL],
+  expr: `${fmt(CRACKLE_NORM)} * crackle3(p)`,
+}
+
+/** Foam 2D — Canonical WGSL shader spec. */
+export const foam2dCanonicalWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, CELLULAR_WGSL],
+  expr: 'foam2(p)',
+}
+
+/** Foam 3D — Canonical WGSL shader spec. */
+export const foam3dCanonicalWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, CELLULAR_WGSL],
+  expr: 'foam3(p)',
+}
+
+/** Stars 2D — Canonical WGSL shader spec. */
+export const stars2dCanonicalWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, CELLULAR_WGSL],
+  expr: `${fmt(STARS_NORM)} * stars2(p)`,
+}
+
+/** Stars 3D — Canonical WGSL shader spec. */
+export const stars3dCanonicalWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, CELLULAR_WGSL],
+  expr: `${fmt(STARS_NORM)} * stars3(p)`,
+}

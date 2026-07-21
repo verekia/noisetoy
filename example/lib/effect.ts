@@ -1,27 +1,39 @@
 // The public composition API: a declarative layer stack that can be sampled on
 // the CPU or emitted as GLSL, WGSL, or TSL — all from one description, over
 // one shared domain.
+//
+// A layer's noise is a NoiseSource the caller assembles from this package's
+// per-variant exports, so an effect ships exactly the backends it uses:
+//
+// ```ts
+// import { createEffect, perlin3dCanonical, perlin3dCanonicalWgsl } from 'noisetoy'
+//
+// const effect = createEffect({
+//   layers: [{ noise: { dim: 3, sample: perlin3dCanonical, wgsl: perlin3dCanonicalWgsl }, octaves: 5 }],
+// })
+// effect.sample(0.5, 0.5) // CPU
+// effect.wgsl()           // shader source; effect.glsl() would throw — no GLSL spec was provided
+// ```
 
-import { estimateCost } from './cost'
-import { defaultVariant, getNoise, getVariant, NOISES } from './registry'
 import { buildGlslFragment } from './render/glsl'
 import { createSampler, createSolidSampler } from './render/sampler'
 import { buildTslBody, buildTslModule } from './render/tsl'
 import { BAND_SMOOTHING, BLEND_MODES, STEP_SMOOTHING } from './render/types'
 import { buildWgslShader } from './render/wgsl'
 
-import type { CostEstimate } from './cost'
-import type { NoiseDef, NoiseVariant } from './registry'
+import type { NoiseSource } from 'noisetoy'
+
 import type { BlendMode, FractalStyle, LayerConfig, SampleDomain } from './render/types'
 
 /** One layer of an effect. Only `noise` is required. */
 export type LayerSpec = {
-  /** Noise id, e.g. 'perlin' (see `NOISES`). */
-  noise: string
-  /** Variant id, e.g. 'perlin-2d'. Takes precedence over `dim`. */
-  variant?: string
-  /** Convenience selector: pick the 2D or 3D variant. Defaults to 3D when available. */
-  dim?: 2 | 3
+  /**
+   * The layer's noise, assembled from the per-variant exports: `sample` /
+   * `sampleTileable` for CPU sampling, `glsl` / `wgsl` / `tsl` (and their
+   * `...Tileable` counterparts) for the shader composers. Only the backends
+   * you call need to be present.
+   */
+  noise: NoiseSource
   /**
    * Fractal octaves, 1-6 — classic fBm: lacunarity 2, gain 0.5,
    * variance-preserving normalization. Default 1. Capped at 6 because at gain
@@ -40,7 +52,12 @@ export type LayerSpec = {
   rotate?: boolean
   /** Per-octave shaping. Default 'basic'. */
   style?: FractalStyle
-  /** Multiplies the noise's base lattice scale (finer detail above 1). Default 1. */
+  /**
+   * Lattice cells across the canvas — also the layer's tiling period, which
+   * is rounded to a whole number of cells when tiling. Default 8. (Each
+   * noise reads best at its own density: the explorer uses 6 for Gabor,
+   * Wave, Ripple and Contour, 256 for White, 8 for everything else.)
+   */
   scale?: number
   /** How this layer combines with the layers below. Ignored on the first layer. Default 'normal'. */
   blend?: BlendMode
@@ -66,7 +83,7 @@ export type EffectSpec = {
   domain?: SampleDomain
   /**
    * Repeat one tile in a grid through the tileable code paths. Only
-   * possible when every layer's variant is tileable (see `isTileable`).
+   * possible when every layer's noise is tileable (see `tileable`).
    */
   tiled?: boolean
   /**
@@ -103,16 +120,29 @@ export type EffectSpec = {
   bandSmoothing?: number
 }
 
+/** The resolved, defaulted form of an EffectSpec. */
+export type ResolvedEffectSpec = {
+  layers: LayerConfig[]
+  domain: SampleDomain
+  tiled: boolean
+  steps: number
+  stepSmoothing: number
+  band: { center: number; width: number } | null
+  bandSmoothing: number
+}
+
 export type Effect = {
-  readonly spec: Required<EffectSpec>
-  /** Resolved per-layer render config (variants, absolute scales). */
+  readonly spec: ResolvedEffectSpec
+  /** Resolved per-layer render config (defaults applied, tiled scales rounded). */
   readonly layers: LayerConfig[]
   readonly tiled: boolean
-  /** True when every layer has a tileable code path. */
+  /** True when every layer has a tileable code path (on any backend). */
   readonly tileable: boolean
   /**
    * Samples the stack on the CPU. `u`/`v` are normalized; `time` is elapsed
-   * seconds and drives both the z slice of 3D variants and layer translation.
+   * seconds and drives both the z slice of 3D noises and layer translation.
+   * Requires each layer's noise to carry `sample` (and `sampleTileable` when
+   * tiling); throws otherwise.
    */
   sample: (u: number, v: number, time?: number) => number
   /**
@@ -121,31 +151,25 @@ export type Effect = {
    */
   sampleAt: (x: number, y: number, z: number, time?: number) => number
   readonly domain: SampleDomain
-  /** Complete GLSL ES 3.00 fragment shader (uniforms: `u_res`, `u_t`). */
+  /** Complete GLSL ES 3.00 fragment shader (uniforms: `u_res`, `u_t`). Requires `glsl` specs. */
   glsl: () => string
-  /** Complete WGSL module with `vs`/`fs` entry points (uniforms: res, t). */
+  /** Complete WGSL module with `vs`/`fs` entry points (uniforms: res, t). Requires `wgsl` specs. */
   wgsl: () => string
-  /** Standalone TSL module source exporting an `effect(uv, time)` function. */
+  /** Standalone TSL module source exporting an `effect(uv, time)` function. Requires `tsl` specs. */
   tsl: () => string
   /** TSL source without the import header, for embedding or evaluation. */
   tslBody: () => string
-  /** Static cost estimate for this stack; see cost.ts for the calibration. */
-  cost: () => CostEstimate
-  toJSON: () => Required<EffectSpec>
 }
 
 const STYLES: FractalStyle[] = ['basic', 'billow', 'ridged']
 
-const resolveVariant = (noise: NoiseDef, spec: LayerSpec): NoiseVariant => {
-  if (spec.variant) return getVariant(noise, spec.variant)
-  if (spec.dim) return noise.variants.find(v => v.dim === spec.dim) ?? defaultVariant(noise)
-  return defaultVariant(noise)
-}
+/** Default lattice cells across the canvas when a layer gives no `scale`. */
+export const DEFAULT_LAYER_SCALE = 8
 
-const normalizeLayer = (spec: LayerSpec, index: number): Required<LayerSpec> => {
-  const noise = getNoise(spec.noise)
-  if (!noise) throw new Error(`Unknown noise "${spec.noise}". Known ids: ${NOISES.map(n => n.id).join(', ')}`)
-  const variant = resolveVariant(noise, spec)
+const normalizeLayer = (spec: LayerSpec, index: number): LayerConfig => {
+  if (!spec.noise || (spec.noise.dim !== 2 && spec.noise.dim !== 3)) {
+    throw new Error(`layer ${index}: \`noise\` must be a NoiseSource with dim 2 or 3`)
+  }
   const octaves = Math.min(6, Math.max(1, Math.round(spec.octaves ?? 1)))
   const rotate = Boolean(spec.rotate)
   const style = spec.style && STYLES.includes(spec.style) ? spec.style : 'basic'
@@ -154,23 +178,20 @@ const normalizeLayer = (spec: LayerSpec, index: number): Required<LayerSpec> => 
       ? 'normal'
       : ((spec.blend && BLEND_MODES.some(m => m.id === spec.blend) ? spec.blend : 'normal') as BlendMode)
   const opacity = Math.min(1, Math.max(0, spec.opacity ?? 1))
-  const scale = spec.scale && spec.scale > 0 ? spec.scale : 1
+  const scale = spec.scale && spec.scale > 0 ? spec.scale : DEFAULT_LAYER_SCALE
   const speed = Number.isFinite(spec.speed) ? Math.max(0, spec.speed as number) : 0
   const angle = Number.isFinite(spec.angle) ? (((spec.angle as number) % 360) + 360) % 360 : 0
-  return {
-    noise: noise.id,
-    variant: variant.id,
-    dim: variant.dim,
-    octaves,
-    rotate,
-    style,
-    scale,
-    blend,
-    opacity,
-    speed,
-    angle,
-  }
+  return { noise: spec.noise, octaves, rotate, style, scale, blend, opacity, speed, angle }
 }
+
+/** True when the layer can take a tileable code path on some backend. */
+const layerTileable = (l: LayerConfig): boolean =>
+  (l.noise.sampleTileable != null ||
+    l.noise.glslTileable != null ||
+    l.noise.wgslTileable != null ||
+    l.noise.tslTileable != null) &&
+  // Rotated octaves have no period; rotate is inert at 1 octave.
+  !(l.rotate && l.octaves > 1)
 
 /**
  * Creates an effect from a declarative spec.
@@ -178,8 +199,8 @@ const normalizeLayer = (spec: LayerSpec, index: number): Required<LayerSpec> => 
  * ```ts
  * const effect = createEffect({
  *   layers: [
- *     { noise: 'perlin', octaves: 5 },
- *     { noise: 'worley', style: 'ridged', blend: 'multiply', opacity: 0.6 },
+ *     { noise: { dim: 3, sample: perlin3dCanonical, wgsl: perlin3dCanonicalWgsl }, octaves: 5 },
+ *     { noise: { dim: 3, sample: worley3dCanonical, wgsl: worley3dCanonicalWgsl }, style: 'ridged', blend: 'multiply' },
  *   ],
  * })
  * effect.sample(0.5, 0.5)  // -> 0..1
@@ -189,29 +210,13 @@ const normalizeLayer = (spec: LayerSpec, index: number): Required<LayerSpec> => 
 export const createEffect = (spec: EffectSpec): Effect => {
   if (!spec.layers || spec.layers.length === 0) throw new Error('An effect needs at least one layer')
   const normalized = spec.layers.map(normalizeLayer)
-  const tileable = normalized.every(l => {
-    const noise = getNoise(l.noise) as NoiseDef
-    // Rotated octaves have no period; rotate is inert at 1 octave.
-    return getVariant(noise, l.variant).sampleTileable !== null && !(l.rotate && l.octaves > 1)
-  })
+  const tileable = normalized.every(layerTileable)
   const tiled = Boolean(spec.tiled) && tileable
 
-  const layers: LayerConfig[] = normalized.map(l => {
-    const noise = getNoise(l.noise) as NoiseDef
-    // The tiling period must stay a whole number of lattice cells.
-    const raw = noise.scale * l.scale
-    return {
-      variant: getVariant(noise, l.variant),
-      scale: tiled ? Math.max(1, Math.round(raw)) : raw,
-      octaves: l.octaves,
-      rotate: l.rotate,
-      style: l.style,
-      blend: l.blend,
-      opacity: l.opacity,
-      speed: l.speed,
-      angle: l.angle,
-    }
-  })
+  // The tiling period must stay a whole number of lattice cells.
+  const layers: LayerConfig[] = tiled
+    ? normalized.map(l => ({ ...l, scale: Math.max(1, Math.round(l.scale)) }))
+    : normalized
 
   const domain: SampleDomain = spec.domain === 'position' ? 'position' : 'uv'
   const steps = spec.steps && spec.steps >= 2 ? Math.min(32, Math.round(spec.steps)) : 0
@@ -229,8 +234,8 @@ export const createEffect = (spec: EffectSpec): Effect => {
     ? Math.min(0.5, Math.max(0.001, spec.bandSmoothing as number))
     : BAND_SMOOTHING
   const cfg = { layers, tiled, size: 1, domain, steps, stepSmoothing, band: band ?? undefined, bandSmoothing }
-  const resolvedSpec: Required<EffectSpec> = {
-    layers: normalized,
+  const resolvedSpec: ResolvedEffectSpec = {
+    layers,
     tiled,
     domain,
     steps,
@@ -251,7 +256,5 @@ export const createEffect = (spec: EffectSpec): Effect => {
     wgsl: () => buildWgslShader(cfg),
     tsl: () => buildTslModule(cfg),
     tslBody: () => buildTslBody(cfg),
-    cost: () => estimateCost(layers),
-    toJSON: () => resolvedSpec,
   }
 }

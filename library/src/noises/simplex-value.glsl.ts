@@ -1,5 +1,10 @@
 // GLSL counterpart of simplex-value.ts. Requires COMMON_GLSL.
 
+import { COMMON_GLSL } from './common.glsl.js'
+import { fmt, SIMPLEX_VALUE_NORM } from './normalization.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const SIMPLEX_VALUE_GLSL = /* glsl */ `
 float contribV2(vec2 d, uint h) {
   float t = 0.5 - dot(d, d);
@@ -57,3 +62,17 @@ float simplexValue3(vec3 p) {
     contribV3(d2, hash3u(i + i2, j + j2, k + k2)) + contribV3(d3, hash3u(i + 1, j + 1, k + 1));
 }
 `
+
+/** GLSL spec for Simplex Value 2D (shipping implementation). */
+export const simplexValue2dCanonicalGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, SIMPLEX_VALUE_GLSL],
+  expr: `0.5 + 0.5 * ${fmt(SIMPLEX_VALUE_NORM)} * simplexValue2(p)`,
+}
+
+/** GLSL spec for Simplex Value 3D (shipping implementation). */
+export const simplexValue3dCanonicalGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, SIMPLEX_VALUE_GLSL],
+  expr: `0.5 + 0.5 * ${fmt(SIMPLEX_VALUE_NORM)} * simplexValue3(p)`,
+}

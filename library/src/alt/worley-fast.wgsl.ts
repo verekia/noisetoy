@@ -2,6 +2,11 @@
 // FAST_COMMON_WGSL. See the GLSL file for the divergence caveat on the
 // pruning branches.
 
+import { COMMON_WGSL } from '../noises/common.wgsl.js'
+import { FAST_COMMON_WGSL } from './fast-common.wgsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const WORLEY_FAST_WGSL = /* wgsl */ `
 fn worleyFastCell2(s: u32, b: vec2f, f1: f32) -> f32 {
   var h = fibMix(s);
@@ -87,3 +92,17 @@ fn worleyFast3(p: vec3f) -> f32 {
   return sqrt(f1);
 }
 `
+
+/** Worley 2D Fast (split-bits-pruned candidate) — WGSL ShaderSpec, pre-clamp display expression. */
+export const worley2dFastWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, FAST_COMMON_WGSL, WORLEY_FAST_WGSL],
+  expr: 'worleyFast2(p)',
+}
+
+/** Worley 3D Fast (split-bits-pruned candidate) — WGSL ShaderSpec, pre-clamp display expression. */
+export const worley3dFastWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, FAST_COMMON_WGSL, WORLEY_FAST_WGSL],
+  expr: 'worleyFast3(p)',
+}

@@ -1,6 +1,11 @@
 // WGSL counterpart of value-fast.ts. Requires COMMON_WGSL and
 // FAST_COMMON_WGSL.
 
+import { COMMON_WGSL } from '../noises/common.wgsl.js'
+import { FAST_COMMON_WGSL } from './fast-common.wgsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const VALUE_FAST_WGSL = /* wgsl */ `
 fn valFastCorner2(s: u32) -> f32 {
   var h = fibMix(s);
@@ -53,3 +58,17 @@ fn valueFast3(p: vec3f) -> f32 {
   return mix(nz0, nz1, uz);
 }
 `
+
+/** Value 2D Fast (fib-hash candidate) — WGSL ShaderSpec, pre-clamp display expression. */
+export const value2dFastWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, FAST_COMMON_WGSL, VALUE_FAST_WGSL],
+  expr: 'valueFast2(p)',
+}
+
+/** Value 3D Fast (fib-hash candidate) — WGSL ShaderSpec, pre-clamp display expression. */
+export const value3dFastWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, FAST_COMMON_WGSL, VALUE_FAST_WGSL],
+  expr: 'valueFast3(p)',
+}

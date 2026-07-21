@@ -16,15 +16,16 @@
 //      and carry the spread so unstable cells are visible.
 
 import { BENCH_BATCH_MS, BENCH_BATCHES, BENCH_WARMUP_MS, BENCH_Z_CYCLE, summarizeBatches } from '#/lib/bench'
+import { createEffect } from '#/lib/effect'
 import { createThreeRenderer } from '#/lib/render/three'
 import { createWebglRenderer } from '#/lib/render/webgl'
 import { createWebgpuRenderer } from '#/lib/render/webgpu'
-import { createEffect } from 'noisetoy'
 
 import type { BenchResult } from '#/lib/bench'
+import type { EffectSpec } from '#/lib/effect'
+import type { AltVariant } from '#/lib/implementations'
+import type { NoiseVariant } from '#/lib/registry'
 import type { Renderer, RenderOptions } from '#/lib/render/types'
-import type { EffectSpec, NoiseVariant } from 'noisetoy'
-import type { AltVariant } from 'noisetoy/implementations'
 
 /** Frames per synced warmup/probe chunk — keeps the submit queue bounded. */
 const CHUNK = 8
@@ -69,17 +70,11 @@ type Create = (canvas: HTMLCanvasElement, options: RenderOptions) => Renderer | 
  * single variants. This is what the cost model in the library is calibrated
  * against.
  */
-export const benchEffect = async (
-  create: Create,
-  spec: EffectSpec,
-  size: number,
-  patch?: (effect: ReturnType<typeof createEffect>) => void,
-): Promise<BenchResult> => {
+export const benchEffect = async (create: Create, spec: EffectSpec, size: number): Promise<BenchResult> => {
   const canvas = document.createElement('canvas')
   canvas.width = size
   canvas.height = size
   const effect = createEffect(spec)
-  patch?.(effect)
   const renderer = await create(canvas, { effect, width: size, height: size })
   try {
     return await timeRenderer(renderer, size * size)
@@ -88,42 +83,24 @@ export const benchEffect = async (
   }
 }
 
-const benchGpu = (create: Create, variant: NoiseVariant, noiseId: string, size: number): Promise<BenchResult> =>
-  benchEffect(create, { layers: [{ noise: noiseId, variant: variant.id }] }, size)
+const benchGpu = (create: Create, variant: NoiseVariant, scale: number, size: number): Promise<BenchResult> =>
+  benchEffect(create, { layers: [{ noise: variant.source, scale }] }, size)
 
 /**
- * Times a non-shipping implementation: the effect is built from the registry
- * variant the AltVariant stands in for, then the layer's variant is swapped
- * for the alt samplers and shader specs before the renderer compiles — the
- * same patch the viewer applies.
+ * Times a non-shipping implementation through its AltVariant's NoiseSource —
+ * the same layer the viewer renders it with.
  */
-const benchGpuAlt = (create: Create, alt: AltVariant, size: number): Promise<BenchResult> =>
-  benchEffect(create, { layers: [{ noise: alt.noiseId, variant: alt.variantId }] }, size, effect => {
-    const layer = effect.layers[0]
-    if (!layer) return
-    layer.variant = {
-      ...layer.variant,
-      sample: alt.sample,
-      sampleRaw: alt.sampleRaw,
-      glsl: alt.glsl,
-      wgsl: alt.wgsl,
-      tsl: alt.tsl,
-      sampleTileable: null,
-      sampleRawTileable: null,
-      glslTileable: null,
-      wgslTileable: null,
-      tslTileable: null,
-    }
-  })
+const benchGpuAlt = (create: Create, alt: AltVariant, scale: number, size: number): Promise<BenchResult> =>
+  benchEffect(create, { layers: [{ noise: alt.source, scale }] }, size)
 
-export const benchWebglAlt = (alt: AltVariant, size: number): Promise<BenchResult> =>
-  benchGpuAlt(createWebglRenderer, alt, size)
+export const benchWebglAlt = (alt: AltVariant, scale: number, size: number): Promise<BenchResult> =>
+  benchGpuAlt(createWebglRenderer, alt, scale, size)
 
-export const benchWebgpuAlt = (alt: AltVariant, size: number): Promise<BenchResult> =>
-  benchGpuAlt(createWebgpuRenderer, alt, size)
+export const benchWebgpuAlt = (alt: AltVariant, scale: number, size: number): Promise<BenchResult> =>
+  benchGpuAlt(createWebgpuRenderer, alt, scale, size)
 
-export const benchThreeAlt = (alt: AltVariant, size: number): Promise<BenchResult> =>
-  benchGpuAlt(createThreeRenderer, alt, size)
+export const benchThreeAlt = (alt: AltVariant, scale: number, size: number): Promise<BenchResult> =>
+  benchGpuAlt(createThreeRenderer, alt, scale, size)
 
 export const benchWebglEffect = (spec: EffectSpec, size: number): Promise<BenchResult> =>
   benchEffect(createWebglRenderer, spec, size)
@@ -134,11 +111,11 @@ export const benchWebgpuEffect = (spec: EffectSpec, size: number): Promise<Bench
 export const benchThreeEffect = (spec: EffectSpec, size: number): Promise<BenchResult> =>
   benchEffect(createThreeRenderer, spec, size)
 
-export const benchWebglVariant = (variant: NoiseVariant, noiseId: string, size: number): Promise<BenchResult> =>
-  benchGpu(createWebglRenderer, variant, noiseId, size)
+export const benchWebglVariant = (variant: NoiseVariant, scale: number, size: number): Promise<BenchResult> =>
+  benchGpu(createWebglRenderer, variant, scale, size)
 
-export const benchWebgpuVariant = (variant: NoiseVariant, noiseId: string, size: number): Promise<BenchResult> =>
-  benchGpu(createWebgpuRenderer, variant, noiseId, size)
+export const benchWebgpuVariant = (variant: NoiseVariant, scale: number, size: number): Promise<BenchResult> =>
+  benchGpu(createWebgpuRenderer, variant, scale, size)
 
-export const benchThreeVariant = (variant: NoiseVariant, noiseId: string, size: number): Promise<BenchResult> =>
-  benchGpu(createThreeRenderer, variant, noiseId, size)
+export const benchThreeVariant = (variant: NoiseVariant, scale: number, size: number): Promise<BenchResult> =>
+  benchGpu(createThreeRenderer, variant, scale, size)

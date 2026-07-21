@@ -15,7 +15,8 @@
 // contribution replacing gradients appears to be original.
 // Original implementation (MIT).
 
-import { hash2, hash3, to01 } from './common'
+import { hash2, hash3, to01 } from './common.js'
+import { SIMPLEX_VALUE_NORM } from './normalization.js'
 
 const F2 = 0.3660254037844386 // (sqrt(3) - 1) / 2
 const G2 = 0.21132486540518713 // (3 - sqrt(3)) / 6
@@ -114,3 +115,11 @@ export const simplexValue3 = (x: number, y: number, z: number): number => {
     contribV3(x3, y3, z3, hash3(i + 1, j + 1, k + 1))
   )
 }
+
+/** Simplex Value 2D, shipping implementation — display value, nominally [0, 1], unclamped. */
+export const simplexValue2dCanonical = (x: number, y: number): number =>
+  0.5 + 0.5 * SIMPLEX_VALUE_NORM * simplexValue2(x, y)
+
+/** Simplex Value 3D, shipping implementation — display value, nominally [0, 1], unclamped. */
+export const simplexValue3dCanonical = (x: number, y: number, z: number): number =>
+  0.5 + 0.5 * SIMPLEX_VALUE_NORM * simplexValue3(x, y, z)

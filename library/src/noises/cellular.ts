@@ -16,7 +16,8 @@
 //
 // MIT. No trigonometric identity or code is taken from any implementation.
 
-import { hash2, hash3, hashU32, to01 } from './common'
+import { hash2, hash3, hashU32, to01 } from './common.js'
+import { CRACKLE_NORM, STARS_NORM } from './normalization.js'
 
 export const FOAM_R = 1.1
 export const STARS_SHARP = 18
@@ -225,3 +226,27 @@ export const stars3 = (x: number, y: number, z: number): number => {
   }
   return sum
 }
+
+/** Mosaic 2D, shipping implementation — display value, nominally [0, 1], unclamped. */
+export const mosaic2dCanonical = mosaic2
+
+/** Mosaic 3D, shipping implementation — display value, nominally [0, 1], unclamped. */
+export const mosaic3dCanonical = mosaic3
+
+/** Crackle 2D, shipping implementation — display value, nominally [0, 1], unclamped. */
+export const crackle2dCanonical = (x: number, y: number): number => CRACKLE_NORM * crackle2(x, y)
+
+/** Crackle 3D, shipping implementation — display value, nominally [0, 1], unclamped. */
+export const crackle3dCanonical = (x: number, y: number, z: number): number => CRACKLE_NORM * crackle3(x, y, z)
+
+/** Foam 2D, shipping implementation — display value, nominally [0, 1], unclamped. */
+export const foam2dCanonical = foam2
+
+/** Foam 3D, shipping implementation — display value, nominally [0, 1], unclamped. */
+export const foam3dCanonical = foam3
+
+/** Stars 2D, shipping implementation — display value, nominally [0, 1], unclamped. */
+export const stars2dCanonical = (x: number, y: number): number => STARS_NORM * stars2(x, y)
+
+/** Stars 3D, shipping implementation — display value, nominally [0, 1], unclamped. */
+export const stars3dCanonical = (x: number, y: number, z: number): number => STARS_NORM * stars3(x, y, z)

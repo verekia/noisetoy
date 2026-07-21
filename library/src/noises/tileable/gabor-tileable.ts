@@ -3,8 +3,9 @@
 // geometry stays unwrapped, so the sum is unchanged away from the seam.
 // This wrapping is deliberately kept out of the core implementation.
 
-import { gradDot2, gradDot3, hash2, hash3, hashU32, imod, to01 } from '../common'
-import { GABOR_ENVELOPE, GABOR_FREQ } from '../gabor'
+import { gradDot2, gradDot3, hash2, hash3, hashU32, imod, to01 } from '../common.js'
+import { GABOR_ENVELOPE, GABOR_FREQ } from '../gabor.js'
+import { GABOR2_NORM, GABOR3_NORM } from '../normalization.js'
 
 const TAU = 6.283185307179586
 
@@ -61,3 +62,11 @@ export const gabor3Tileable = (x: number, y: number, z: number, px: number, py: 
   }
   return sum
 }
+
+/** Gabor 2D tileable, shipping implementation — wraps every periodX / periodY lattice cells; display value, nominally [0, 1], unclamped. */
+export const gabor2dCanonicalTileable = (x: number, y: number, periodX: number, periodY: number): number =>
+  0.5 + 0.5 * GABOR2_NORM * gabor2Tileable(x, y, periodX, periodY)
+
+/** Gabor 3D tileable, shipping implementation — wraps every periodX / periodY lattice cells; display value, nominally [0, 1], unclamped. */
+export const gabor3dCanonicalTileable = (x: number, y: number, z: number, periodX: number, periodY: number): number =>
+  0.5 + 0.5 * GABOR3_NORM * gabor3Tileable(x, y, z, periodX, periodY)

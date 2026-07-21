@@ -1,6 +1,11 @@
 // WGSL counterpart of gabor.ts. Requires COMMON_WGSL.
 // 3.141592653589793 is GABOR_ENVELOPE; 12.566370614359172 is 2*pi*GABOR_FREQ.
 
+import { COMMON_WGSL } from './common.wgsl.js'
+import { fmt, GABOR2_NORM, GABOR3_NORM } from './normalization.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const GABOR_WGSL = /* wgsl */ `
 fn gabor2(p: vec2f) -> f32 {
   let i = floor(p);
@@ -50,3 +55,17 @@ fn gabor3(p: vec3f) -> f32 {
   return sum;
 }
 `
+
+/** Gabor 2D — Canonical WGSL shader spec. */
+export const gabor2dCanonicalWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, GABOR_WGSL],
+  expr: `0.5 + 0.5 * ${fmt(GABOR2_NORM)} * gabor2(p)`,
+}
+
+/** Gabor 3D — Canonical WGSL shader spec. */
+export const gabor3dCanonicalWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, GABOR_WGSL],
+  expr: `0.5 + 0.5 * ${fmt(GABOR3_NORM)} * gabor3(p)`,
+}

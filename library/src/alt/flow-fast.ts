@@ -52,7 +52,8 @@
 // Output matches noises/flow.ts's range (unit gradients), so the same
 // PERLIN2_NORM display mapping applies.
 
-import { fade, LATTICE_HX, LATTICE_HY, lerp } from '../noises/common'
+import { fade, LATTICE_HX, LATTICE_HY, lerp } from '../noises/common.js'
+import { PERLIN2_NORM } from '../noises/normalization.js'
 
 /** 2^32 / phi, odd — Knuth's multiplicative hashing constant. */
 const FIB = 0x9e3779b1
@@ -135,3 +136,6 @@ export const flowFast3 = (x: number, y: number, z: number): number => {
   }
   return lerp(lerp(n00, n10, ux), lerp(n01, n11, ux), uy)
 }
+
+/** Flow 3D, 'fast-rot' fast implementation — display value, unclamped. */
+export const flow3dFast = (x: number, y: number, z: number): number => 0.5 + 0.5 * PERLIN2_NORM * flowFast3(x, y, z)

@@ -3,11 +3,12 @@
 // and the same time input (elapsed seconds).
 //
 // The fractal operator is classic fBm: each octave folds the noise's
-// pre-clamp display value (sampleRaw) at doubled frequency plus a
+// pre-clamp display value (the layer's `sample`) at doubled frequency plus a
 // decorrelation offset, the sum is normalized variance-preserving (see
 // fractalRms), and the result is clamped once at the end.
 
-import { clamp01 } from '../noises/normalization'
+import { clamp01 } from 'noisetoy'
+
 import {
   applyBlend,
   BAND_SMOOTHING,
@@ -70,6 +71,33 @@ const [R3A, R3B, R3C, R3D, R3E, R3F, R3G, R3H, R3I] = OCTAVE_ROT3 as [
   number,
 ]
 
+type RawFn = (x: number, y: number, z: number) => number
+type RawTileableFn = (x: number, y: number, z: number, px: number, py: number) => number
+
+/** A layer's noise adapted to the fold's uniform (x, y, z[, px, py]) shape. */
+type LayerSamplers = { raw: RawFn; rawT: RawTileableFn | null }
+
+/**
+ * Adapts a layer's noise to the fold. `sample`/`sampleTileable` are optional
+ * on a NoiseSource (a consumer rendering only shaders never provides them),
+ * so a missing sampler throws when first sampled, not at build time.
+ */
+const layerSamplers = (L: LayerConfig, index: number): LayerSamplers => {
+  const n = L.noise
+  const missing = (): never => {
+    throw new Error(`layer ${index} has no CPU sampler: set \`sample\` on its noise from the sampler exports`)
+  }
+  if (n.dim === 2) {
+    const { sample, sampleTileable } = n
+    return {
+      raw: sample ? (x, y) => sample(x, y) : missing,
+      rawT: sampleTileable ? (x, y, _z, px, py) => sampleTileable(x, y, px, py) : null,
+    }
+  }
+  const { sample, sampleTileable } = n
+  return { raw: sample ?? missing, rawT: sampleTileable ?? null }
+}
+
 /**
  * Folds `sample(octave)` through the layer's style and normalizes. The caller
  * owns how the sample position advances between octaves (offset or rotate).
@@ -93,14 +121,14 @@ const foldOctaves = (L: LayerConfig, sample: (o: number) => number): number => {
   return clamp01(L.style === 'basic' ? 0.5 + acc / fractalRms(L.octaves) : acc / fractalAmpSum(L.octaves))
 }
 
-/** Rotated-octave sampler over the layer's raw variant, starting at (x, y, z). */
-const rotatedSampler = (L: LayerConfig, x: number, y: number, z: number): (() => number) => {
+/** Rotated-octave sampler over the layer's raw noise, starting at (x, y, z). */
+const rotatedSampler = (L: LayerConfig, S: LayerSamplers, x: number, y: number, z: number): (() => number) => {
   let qx = x
   let qy = y
   let qz = z
-  if (L.variant.dim === 3) {
+  if (L.noise.dim === 3) {
     return () => {
-      const nv = L.variant.sampleRaw(qx, qy, qz)
+      const nv = S.raw(qx, qy, qz)
       const rx = R3A * qx + R3B * qy + R3C * qz
       const ry = R3D * qx + R3E * qy + R3F * qz
       const rz = R3G * qx + R3H * qy + R3I * qz
@@ -111,7 +139,7 @@ const rotatedSampler = (L: LayerConfig, x: number, y: number, z: number): (() =>
     }
   }
   return () => {
-    const nv = L.variant.sampleRaw(qx, qy, 0)
+    const nv = S.raw(qx, qy, 0)
     const rx = R2A * qx + R2B * qy
     const ry = R2C * qx + R2D * qy
     qx = rx
@@ -122,6 +150,7 @@ const rotatedSampler = (L: LayerConfig, x: number, y: number, z: number): (() =>
 
 const layerValue = (
   L: LayerConfig,
+  S: LayerSamplers,
   lTiled: boolean,
   u: number,
   v: number,
@@ -130,22 +159,22 @@ const layerValue = (
   vy: number,
 ): number => {
   const s = L.scale
-  const z = L.variant.dim === 3 ? time * Z_SPEED : 0
+  const z = L.noise.dim === 3 ? time * Z_SPEED : 0
   // Translation is applied in lattice cells, after the scale.
   const ox = vx * time
   const oy = vy * time
   const one = (freq: number, o: number): number =>
-    lTiled && L.variant.sampleRawTileable
-      ? L.variant.sampleRawTileable(
+    lTiled && S.rawT
+      ? S.rawT(
           (u * s + ox) * freq + o * OFF_X,
           (v * s + oy) * freq + o * OFF_Y,
           z * freq + o * OFF_Z,
           s * freq,
           s * freq,
         )
-      : L.variant.sampleRaw((u * s + ox) * freq + o * OFF_X, (v * s + oy) * freq + o * OFF_Y, z * freq + o * OFF_Z)
+      : S.raw((u * s + ox) * freq + o * OFF_X, (v * s + oy) * freq + o * OFF_Y, z * freq + o * OFF_Z)
   if (L.octaves === 1 && L.style === 'basic') return clamp01(one(1, 0))
-  if (L.rotate) return foldOctaves(L, rotatedSampler(L, u * s + ox, v * s + oy, z))
+  if (L.rotate) return foldOctaves(L, rotatedSampler(L, S, u * s + ox, v * s + oy, z))
   let freq = 1
   return foldOctaves(L, o => {
     const nv = one(freq, o)
@@ -157,7 +186,7 @@ const layerValue = (
 /**
  * Builds a `(x, y, z, time) => value in [0, 1]` sampler that reads the stack in
  * 3D space rather than on a plane — the CPU counterpart of the 'position'
- * domain. Seamless on any surface; 2D-only variants fall back to the xy plane.
+ * domain. Seamless on any surface; 2D-only noises fall back to the xy plane.
  */
 export const createSolidSampler = (cfg: RenderConfig): ((x: number, y: number, z: number, time?: number) => number) => {
   const { layers } = cfg
@@ -165,11 +194,13 @@ export const createSolidSampler = (cfg: RenderConfig): ((x: number, y: number, z
   const smoothing = cfg.stepSmoothing ?? STEP_SMOOTHING
   const band = cfg.band ?? null
   const bandSmoothing = cfg.bandSmoothing ?? BAND_SMOOTHING
+  const samplers = layers.map(layerSamplers)
   const velocities = layers.map(l => translationVelocity(l.speed, l.angle, l.scale))
   return (x, y, z, time = 0) => {
     let acc = 0
     for (let i = 0; i < layers.length; i++) {
       const L = layers[i] as LayerConfig
+      const S = samplers[i] as LayerSamplers
       const [vx, vy] = velocities[i] as [number, number]
       let px = x
       let py = y
@@ -183,18 +214,14 @@ export const createSolidSampler = (cfg: RenderConfig): ((x: number, y: number, z
       const oy = vy * time
       const oz = Z_SPEED * time
       const one = (freq: number, o: number): number =>
-        L.variant.dim === 3
-          ? L.variant.sampleRaw(
-              (px * s + ox) * freq + o * OFF_X,
-              (py * s + oy) * freq + o * OFF_Y,
-              (z * s + oz) * freq + o * OFF_Z,
-            )
-          : L.variant.sampleRaw((px * s + ox) * freq + o * OFF_X, (py * s + oy) * freq + o * OFF_Y, 0)
+        L.noise.dim === 3
+          ? S.raw((px * s + ox) * freq + o * OFF_X, (py * s + oy) * freq + o * OFF_Y, (z * s + oz) * freq + o * OFF_Z)
+          : S.raw((px * s + ox) * freq + o * OFF_X, (py * s + oy) * freq + o * OFF_Y, 0)
       let val: number
       if (L.octaves === 1 && L.style === 'basic') {
         val = clamp01(one(1, 0))
       } else if (L.rotate) {
-        val = foldOctaves(L, rotatedSampler(L, px * s + ox, py * s + oy, L.variant.dim === 3 ? z * s + oz : 0))
+        val = foldOctaves(L, rotatedSampler(L, S, px * s + ox, py * s + oy, L.noise.dim === 3 ? z * s + oz : 0))
       } else {
         let freq = 1
         val = foldOctaves(L, o => {
@@ -214,7 +241,7 @@ export const createSolidSampler = (cfg: RenderConfig): ((x: number, y: number, z
 /**
  * Builds a `(u, v, time) => value in [0, 1]` sampler for a layer stack. `u`/`v`
  * are normalized coordinates and `time` is elapsed seconds, which drives both
- * the z slice of 3D variants and any layer translation.
+ * the z slice of 3D noises and any layer translation.
  */
 export const createSampler = (cfg: RenderConfig): ((u: number, v: number, time?: number) => number) => {
   const { layers, tiled } = cfg
@@ -222,7 +249,8 @@ export const createSampler = (cfg: RenderConfig): ((u: number, v: number, time?:
   const smoothing = cfg.stepSmoothing ?? STEP_SMOOTHING
   const band = cfg.band ?? null
   const bandSmoothing = cfg.bandSmoothing ?? BAND_SMOOTHING
-  const tiledFlags = layers.map(l => tiled && l.variant.sampleTileable !== null)
+  const samplers = layers.map(layerSamplers)
+  const tiledFlags = samplers.map(S => tiled && S.rawT !== null)
   const velocities = layers.map(l => translationVelocity(l.speed, l.angle, l.scale))
   return (u, v, time = 0) => {
     let su = u
@@ -234,6 +262,7 @@ export const createSampler = (cfg: RenderConfig): ((u: number, v: number, time?:
     let acc = 0
     for (let i = 0; i < layers.length; i++) {
       const L = layers[i] as LayerConfig
+      const S = samplers[i] as LayerSamplers
       let lu = su
       let lv = sv
       if (L.blend === 'warp') {
@@ -242,7 +271,7 @@ export const createSampler = (cfg: RenderConfig): ((u: number, v: number, time?:
         lv -= d
       }
       const [vx, vy] = velocities[i] as [number, number]
-      const val = layerValue(L, tiledFlags[i] === true, lu, lv, time, vx, vy)
+      const val = layerValue(L, S, tiledFlags[i] === true, lu, lv, time, vx, vy)
       const b = applyBlend(L.blend, acc, val)
       acc += (b - acc) * L.opacity
     }

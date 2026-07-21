@@ -1,5 +1,10 @@
 // WGSL counterpart of flow.ts. Requires COMMON_WGSL.
 
+import { COMMON_WGSL } from './common.wgsl.js'
+import { fmt, PERLIN2_NORM } from './normalization.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const FLOW_WGSL = /* wgsl */ `
 fn rotGradDot2(h: u32, phase: f32, d: vec2f) -> f32 {
   let b = lowbias32(h) & 3u;
@@ -23,3 +28,10 @@ fn flow3(p: vec3f) -> f32 {
   return mix(mix(g00, g10, ux), mix(g01, g11, ux), uy);
 }
 `
+
+/** Flow 3D — Canonical WGSL shader spec. */
+export const flow3dCanonicalWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, FLOW_WGSL],
+  expr: `0.5 + 0.5 * ${fmt(PERLIN2_NORM)} * flow3(p)`,
+}

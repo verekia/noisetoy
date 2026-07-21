@@ -11,7 +11,7 @@
 // gradient noise. Output is a blend of cosines, so it is bounded in [-1, 1]
 // with no empirical calibration needed. Original implementation (MIT).
 
-import { fade, hash2, hash3, hashU32, lerp, to01 } from './common'
+import { fade, hash2, hash3, hashU32, lerp, to01 } from './common.js'
 
 const TAU = 6.283185307179586
 
@@ -69,3 +69,9 @@ export const wave3 = (x: number, y: number, z: number): number => {
   const nz1 = lerp(lerp(s001, s101, ux), lerp(s011, s111, ux), uy)
   return lerp(nz0, nz1, uz)
 }
+
+/** Wave 2D, shipping implementation — display value, nominally [0, 1], unclamped. */
+export const wave2dCanonical = (x: number, y: number): number => 0.5 + 0.5 * wave2(x, y)
+
+/** Wave 3D, shipping implementation — display value, nominally [0, 1], unclamped. */
+export const wave3dCanonical = (x: number, y: number, z: number): number => 0.5 + 0.5 * wave3(x, y, z)

@@ -1,5 +1,9 @@
 // GLSL counterpart of vortex.ts. Requires COMMON_GLSL.
 
+import { COMMON_GLSL } from './common.glsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const VORTEX_GLSL = /* glsl */ `
 float vortex2(vec2 p) {
   vec2 i = floor(p);
@@ -44,3 +48,17 @@ float vortex3(vec3 p) {
   return cos(2.0 * atan(s.y, s.x));
 }
 `
+
+/** GLSL spec for Vortex 2D (shipping implementation). */
+export const vortex2dCanonicalGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, VORTEX_GLSL],
+  expr: '0.5 + 0.5 * vortex2(p)',
+}
+
+/** GLSL spec for Vortex 3D (shipping implementation). */
+export const vortex3dCanonicalGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, VORTEX_GLSL],
+  expr: '0.5 + 0.5 * vortex3(p)',
+}

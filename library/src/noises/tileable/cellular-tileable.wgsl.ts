@@ -1,5 +1,10 @@
 // WGSL counterpart of cellular-tileable.ts. Requires COMMON_WGSL.
 
+import { COMMON_WGSL } from '../common.wgsl.js'
+import { CRACKLE_NORM, fmt, STARS_NORM } from '../normalization.js'
+
+import type { ShaderSpec } from '../../spec.js'
+
 export const CELLULAR_TILEABLE_WGSL = /* wgsl */ `
 fn mosaic2T(p: vec2f, per: vec2f) -> f32 {
   let i = floor(p);
@@ -175,3 +180,59 @@ fn stars3T(p: vec3f, per: vec2f) -> f32 {
   return sum;
 }
 `
+
+/** Mosaic 2D — Canonical tileable WGSL shader spec. */
+export const mosaic2dCanonicalTileableWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, CELLULAR_TILEABLE_WGSL],
+  expr: 'mosaic2T(p, per)',
+}
+
+/** Mosaic 3D — Canonical tileable WGSL shader spec. */
+export const mosaic3dCanonicalTileableWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, CELLULAR_TILEABLE_WGSL],
+  expr: 'mosaic3T(p, per)',
+}
+
+/** Crackle 2D — Canonical tileable WGSL shader spec. */
+export const crackle2dCanonicalTileableWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, CELLULAR_TILEABLE_WGSL],
+  expr: `${fmt(CRACKLE_NORM)} * crackle2T(p, per)`,
+}
+
+/** Crackle 3D — Canonical tileable WGSL shader spec. */
+export const crackle3dCanonicalTileableWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, CELLULAR_TILEABLE_WGSL],
+  expr: `${fmt(CRACKLE_NORM)} * crackle3T(p, per)`,
+}
+
+/** Foam 2D — Canonical tileable WGSL shader spec. */
+export const foam2dCanonicalTileableWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, CELLULAR_TILEABLE_WGSL],
+  expr: 'foam2T(p, per)',
+}
+
+/** Foam 3D — Canonical tileable WGSL shader spec. */
+export const foam3dCanonicalTileableWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, CELLULAR_TILEABLE_WGSL],
+  expr: 'foam3T(p, per)',
+}
+
+/** Stars 2D — Canonical tileable WGSL shader spec. */
+export const stars2dCanonicalTileableWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, CELLULAR_TILEABLE_WGSL],
+  expr: `${fmt(STARS_NORM)} * stars2T(p, per)`,
+}
+
+/** Stars 3D — Canonical tileable WGSL shader spec. */
+export const stars3dCanonicalTileableWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, CELLULAR_TILEABLE_WGSL],
+  expr: `${fmt(STARS_NORM)} * stars3T(p, per)`,
+}

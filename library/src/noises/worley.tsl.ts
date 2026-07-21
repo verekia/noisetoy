@@ -1,5 +1,9 @@
 // TSL counterpart of worley.ts. Requires COMMON_TSL.
 
+import { COMMON_TSL } from './common.tsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const WORLEY_TSL = /* js */ `
 const worley2 = Fn(([p]) => {
   const i = floor(p)
@@ -39,3 +43,17 @@ const worley3 = Fn(([p]) => {
   return sqrt(f1)
 })
 `
+
+/** Worley 2D (Canonical) — TSL shader spec. */
+export const worley2dCanonicalTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, WORLEY_TSL],
+  expr: 'worley2(p)',
+}
+
+/** Worley 3D (Canonical) — TSL shader spec. */
+export const worley3dCanonicalTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, WORLEY_TSL],
+  expr: 'worley3(p)',
+}

@@ -5,7 +5,8 @@
 // composed without the gradient-based simplex4 sources.
 // This trickery is deliberately kept out of the core implementation.
 
-import { hash4, to01 } from '../common'
+import { hash4, to01 } from '../common.js'
+import { SIMPLEX_VALUE4_NORM } from '../normalization.js'
 
 const TAU = 6.283185307179586
 const F4 = 0.30901699437494745 // (sqrt(5) - 1) / 4
@@ -85,3 +86,7 @@ export const simplexValue2TileableTorus = (x: number, y: number, px: number, py:
   const ry = py / TAU
   return simplexValue4(rx * Math.cos(ax), rx * Math.sin(ax), ry * Math.cos(ay), ry * Math.sin(ay))
 }
+
+/** Simplex Value 2D tileable (torus embedding), shipping implementation — wraps every periodX / periodY lattice cells; display value, nominally [0, 1], unclamped. */
+export const simplexValue2dCanonicalTileable = (x: number, y: number, periodX: number, periodY: number): number =>
+  0.5 + 0.5 * SIMPLEX_VALUE4_NORM * simplexValue2TileableTorus(x, y, periodX, periodY)

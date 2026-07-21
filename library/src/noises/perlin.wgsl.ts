@@ -1,6 +1,11 @@
 // WGSL counterpart of perlin.ts. Requires COMMON_WGSL.
 // Note WGSL's select(falseValue, trueValue, condition) argument order.
 
+import { COMMON_WGSL } from './common.wgsl.js'
+import { fmt, PERLIN2_NORM, PERLIN3_NORM } from './normalization.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const PERLIN_WGSL = /* wgsl */ `
 fn perlin2(p: vec2f) -> f32 {
   let i = floor(p);
@@ -43,3 +48,17 @@ fn perlin3(p: vec3f) -> f32 {
   return mix(nz0, nz1, uz);
 }
 `
+
+/** Perlin 2D — Canonical WGSL shader spec. */
+export const perlin2dCanonicalWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, PERLIN_WGSL],
+  expr: `0.5 + 0.5 * ${fmt(PERLIN2_NORM)} * perlin2(p)`,
+}
+
+/** Perlin 3D — Canonical WGSL shader spec. */
+export const perlin3dCanonicalWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, PERLIN_WGSL],
+  expr: `0.5 + 0.5 * ${fmt(PERLIN3_NORM)} * perlin3(p)`,
+}

@@ -1,5 +1,9 @@
 // WGSL counterpart of worley.ts. Requires COMMON_WGSL.
 
+import { COMMON_WGSL } from './common.wgsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const WORLEY_WGSL = /* wgsl */ `
 fn worley2(p: vec2f) -> f32 {
   let i = floor(p);
@@ -41,3 +45,17 @@ fn worley3(p: vec3f) -> f32 {
   return sqrt(f1);
 }
 `
+
+/** Worley 2D — Canonical WGSL shader spec. */
+export const worley2dCanonicalWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, WORLEY_WGSL],
+  expr: 'worley2(p)',
+}
+
+/** Worley 3D — Canonical WGSL shader spec. */
+export const worley3dCanonicalWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, WORLEY_WGSL],
+  expr: 'worley3(p)',
+}

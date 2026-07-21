@@ -1,5 +1,10 @@
 // GLSL counterpart of flow.ts. Requires COMMON_GLSL.
 
+import { COMMON_GLSL } from './common.glsl.js'
+import { fmt, PERLIN2_NORM } from './normalization.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const FLOW_GLSL = /* glsl */ `
 float rotGradDot2(uint h, float phase, vec2 d) {
   uint b = lowbias32(h) & 3u;
@@ -23,3 +28,10 @@ float flow3(vec3 p) {
   return mix(mix(g00, g10, ux), mix(g01, g11, ux), uy);
 }
 `
+
+/** GLSL spec for Flow 3D (shipping implementation). */
+export const flow3dCanonicalGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, FLOW_GLSL],
+  expr: `0.5 + 0.5 * ${fmt(PERLIN2_NORM)} * flow3(p)`,
+}

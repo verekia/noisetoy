@@ -1,5 +1,10 @@
 // TSL counterpart of worley-metrics.ts. Requires COMMON_TSL.
 
+import { COMMON_TSL } from './common.tsl.js'
+import { CHEBYSHEV2_NORM, CHEBYSHEV3_NORM, MANHATTAN2_NORM, MANHATTAN3_NORM } from './normalization.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const WORLEY_METRICS_TSL = /* js */ `
 const manhattan2 = Fn(([p]) => {
   const i = floor(p)
@@ -77,3 +82,31 @@ const chebyshev3 = Fn(([p]) => {
   return f1
 })
 `
+
+/** Worley (Manhattan) 2D (Canonical) — TSL shader spec. */
+export const worleyManhattan2dCanonicalTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, WORLEY_METRICS_TSL],
+  expr: `manhattan2(p).mul(${MANHATTAN2_NORM})`,
+}
+
+/** Worley (Manhattan) 3D (Canonical) — TSL shader spec. */
+export const worleyManhattan3dCanonicalTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, WORLEY_METRICS_TSL],
+  expr: `manhattan3(p).mul(${MANHATTAN3_NORM})`,
+}
+
+/** Worley (Chebyshev) 2D (Canonical) — TSL shader spec. */
+export const worleyChebyshev2dCanonicalTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, WORLEY_METRICS_TSL],
+  expr: `chebyshev2(p).mul(${CHEBYSHEV2_NORM})`,
+}
+
+/** Worley (Chebyshev) 3D (Canonical) — TSL shader spec. */
+export const worleyChebyshev3dCanonicalTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, WORLEY_METRICS_TSL],
+  expr: `chebyshev3(p).mul(${CHEBYSHEV3_NORM})`,
+}

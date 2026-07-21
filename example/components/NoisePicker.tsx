@@ -3,10 +3,11 @@ import { useEffect, useMemo, useState } from 'react'
 import CostBadge from '#/components/CostBadge'
 import NoiseCanvas from '#/components/NoiseCanvas'
 import Segmented from '#/components/Segmented'
-import { createEffect, defaultVariant, getNoise, getVariant, NOISES, variantCost } from 'noisetoy'
-// The implementation inventory is a separate entry point on purpose: it is
-// reference material for benchmarking, and consumers of the library never ship
-// it. The explorer is exactly the consumer that should.
+import { variantCost } from '#/lib/cost'
+import { createEffect } from '#/lib/effect'
+// The implementation inventory is reference material for benchmarking;
+// library consumers never ship it. The explorer is exactly the app that
+// should.
 import {
   altVariantsFor,
   EVIDENCE_LABEL,
@@ -16,10 +17,13 @@ import {
   IMPLEMENTATION_STATUS_LABEL,
   implementationOf,
   IMPLEMENTATIONS,
-} from 'noisetoy/implementations'
+} from '#/lib/implementations'
+import { defaultVariant, getNoise, getVariant, NOISES } from '#/lib/registry'
 
-import type { Backend, BlendMode, FractalStyle, LayerSpec, NoiseDef } from 'noisetoy'
-import type { ImplementationKind } from 'noisetoy/implementations'
+import type { LayerSpec } from '#/lib/effect'
+import type { ImplementationKind } from '#/lib/implementations'
+import type { Backend, NoiseDef } from '#/lib/registry'
+import type { BlendMode, FractalStyle } from '#/lib/render/types'
 
 /** The per-layer settings the picker edits (blend and opacity stay in the sidebar). */
 export type PickerDraft = {
@@ -132,52 +136,29 @@ const NoisePicker = ({
     ? (altVariantsFor(noise.id, implementation.id).find(v => v.dim === variant.dim) ?? null)
     : null
 
+  // A non-shipping implementation renders through its AltVariant's
+  // NoiseSource; the whole pipeline (octaves, styles, blending) applies to it
+  // unchanged on every backend — only the tileable paths are missing.
   const draftLayer: LayerSpec = {
-    noise: draft.noiseId,
-    variant: draft.variantId,
+    noise: altPreview ? altPreview.source : variant.source,
     octaves: draft.octaves,
     rotate: draft.rotate,
     style: draft.style,
-    scale: draft.scaleMul,
+    scale: noise.scale * draft.scaleMul,
     speed: draft.speed,
     angle: draft.angle,
   }
   const asLayer = preview === 'layer' && stack !== null
-  // Serialized so the memo keys on the stack's contents rather than on an
-  // object identity the parent rebuilds every render.
-  const stackKey = stack ? JSON.stringify(stack) : ''
 
   const previewEffect = useMemo(() => {
-    const effect = createEffect({
+    return createEffect({
       layers:
         asLayer && stack
           ? [...stack.below, { ...draftLayer, blend: stack.blend, opacity: stack.opacity }, ...stack.above]
           : [draftLayer],
     })
-    // Swap the draft layer's variant for the non-shipping implementation's
-    // stand-in: TS samplers for the CPU backend, shader specs for the GPU
-    // ones. The whole pipeline (octaves, styles, blending) applies to it
-    // unchanged on every backend; only the tileable paths are missing.
-    if (altPreview) {
-      const layer = effect.layers[asLayer && stack ? stack.below.length : 0]
-      if (layer) {
-        layer.variant = {
-          ...layer.variant,
-          sample: altPreview.sample,
-          sampleRaw: altPreview.sampleRaw,
-          glsl: altPreview.glsl,
-          wgsl: altPreview.wgsl,
-          tsl: altPreview.tsl,
-          sampleTileable: null,
-          sampleRawTileable: null,
-          glslTileable: null,
-          wgslTileable: null,
-          tslTileable: null,
-        }
-      }
-    }
-    return effect
-    // draftLayer and stack are rebuilt each render, so key on their contents.
+    // draftLayer is rebuilt each render, so key on its contents; the parent
+    // memoizes `stack`, so its identity is a usable key.
     // oxlint-disable-next-line exhaustive-deps
   }, [
     draft.noiseId,
@@ -189,7 +170,7 @@ const NoisePicker = ({
     draft.speed,
     draft.angle,
     asLayer,
-    stackKey,
+    stack,
     altPreview,
   ])
 

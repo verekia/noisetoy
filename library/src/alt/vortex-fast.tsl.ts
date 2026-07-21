@@ -1,6 +1,11 @@
 // TSL counterpart of vortex-fast.ts. Requires COMMON_TSL and
 // FAST_COMMON_TSL.
 
+import { COMMON_TSL } from '../noises/common.tsl.js'
+import { FAST_COMMON_TSL } from './fast-common.tsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const VORTEX_FAST_TSL = /* js */ `
 const vtxFastDir = Fn(([h]) => {
   const t = uint(h).shiftRight(uint(28)).bitAnd(uint(3)).toVar()
@@ -81,3 +86,17 @@ const vortexFast3 = Fn(([p]) => {
   return select(n.greaterThan(0), a.sub(b).div(n), float(1))
 })
 `
+
+/** Vortex 2D Fast (fast-dirs candidate) — TSL ShaderSpec, pre-clamp display expression. */
+export const vortex2dFastTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, FAST_COMMON_TSL, VORTEX_FAST_TSL],
+  expr: 'vortexFast2(p).mul(0.5).add(0.5)',
+}
+
+/** Vortex 3D Fast (fast-dirs candidate) — TSL ShaderSpec, pre-clamp display expression. */
+export const vortex3dFastTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, FAST_COMMON_TSL, VORTEX_FAST_TSL],
+  expr: 'vortexFast3(p).mul(0.5).add(0.5)',
+}

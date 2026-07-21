@@ -10,7 +10,8 @@
 // A sparse-convolution noise with a radial cosine kernel; related to Worley
 // (point set) and Gabor noise (kernel sum). Original implementation (MIT).
 
-import { hash2, hash3, hashU32, to01 } from './common'
+import { hash2, hash3, hashU32, to01 } from './common.js'
+import { RIPPLE_NORM } from './normalization.js'
 
 const TAU = 6.283185307179586
 
@@ -71,3 +72,9 @@ export const ripple3 = (x: number, y: number, z: number): number => {
   }
   return sum
 }
+
+/** Ripple 2D, shipping implementation — display value, nominally [0, 1], unclamped. */
+export const ripple2dCanonical = (x: number, y: number): number => 0.5 + 0.5 * RIPPLE_NORM * ripple2(x, y)
+
+/** Ripple 3D, shipping implementation — display value, nominally [0, 1], unclamped. */
+export const ripple3dCanonical = (x: number, y: number, z: number): number => 0.5 + 0.5 * RIPPLE_NORM * ripple3(x, y, z)

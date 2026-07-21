@@ -1,5 +1,9 @@
 // GLSL counterpart of wave.ts. Requires COMMON_GLSL.
 
+import { COMMON_GLSL } from './common.glsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const WAVE_GLSL = /* glsl */ `
 float waveCorner2(uint h, vec2 d) {
   float a = to01(h) * 6.283185307179586;
@@ -52,3 +56,17 @@ float wave3(vec3 p) {
   return mix(nz0, nz1, uz);
 }
 `
+
+/** GLSL spec for Wave 2D (shipping implementation). */
+export const wave2dCanonicalGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, WAVE_GLSL],
+  expr: '0.5 + 0.5 * wave2(p)',
+}
+
+/** GLSL spec for Wave 3D (shipping implementation). */
+export const wave3dCanonicalGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, WAVE_GLSL],
+  expr: '0.5 + 0.5 * wave3(p)',
+}

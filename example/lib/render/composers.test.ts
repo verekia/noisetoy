@@ -15,7 +15,7 @@ const marble3d = marble.variants.find(v => v.dim === 3)
 if (!perlin3d || !marble3d) throw new Error('expected variants missing')
 
 const layer = (over?: Partial<LayerConfig>): LayerConfig => ({
-  variant: perlin3d,
+  noise: perlin3d.source,
   scale: perlin.scale,
   octaves: 1,
   rotate: false,
@@ -88,7 +88,7 @@ test('tiled octaves scale the period with the frequency', () => {
 
 test('multi-layer build dedupes shared dependency chunks and folds blends', () => {
   const cfg = {
-    layers: [layer(), layer({ variant: marble3d, scale: marble.scale, blend: 'multiply', opacity: 0.5 })],
+    layers: [layer(), layer({ noise: marble3d.source, scale: marble.scale, blend: 'multiply', opacity: 0.5 })],
     tiled: false,
     size: 512,
   }

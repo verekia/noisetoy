@@ -1,6 +1,12 @@
 // TSL counterpart of perlin-tileable.ts. Requires COMMON_TSL and PERLIN_TSL
 // (for perlinGrad2 / perlinGrad3).
 
+import { COMMON_TSL } from '../common.tsl.js'
+import { PERLIN2_NORM, PERLIN3_NORM } from '../normalization.js'
+import { PERLIN_TSL } from '../perlin.tsl.js'
+
+import type { ShaderSpec } from '../../spec.js'
+
 export const PERLIN_TILEABLE_TSL = /* js */ `
 const perlin2T = Fn(([p, per]) => {
   const i = floor(p)
@@ -47,3 +53,17 @@ const perlin3T = Fn(([p, per]) => {
   return mix(nz0, nz1, uz)
 })
 `
+
+/** Perlin 2D (Canonical), tileable — TSL shader spec. */
+export const perlin2dCanonicalTileableTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, PERLIN_TSL, PERLIN_TILEABLE_TSL],
+  expr: `perlin2T(p, per).mul(${0.5 * PERLIN2_NORM}).add(0.5)`,
+}
+
+/** Perlin 3D (Canonical), tileable — TSL shader spec. */
+export const perlin3dCanonicalTileableTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, PERLIN_TSL, PERLIN_TILEABLE_TSL],
+  expr: `perlin3T(p, per).mul(${0.5 * PERLIN3_NORM}).add(0.5)`,
+}

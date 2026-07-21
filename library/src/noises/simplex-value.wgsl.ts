@@ -1,5 +1,10 @@
 // WGSL counterpart of simplex-value.ts. Requires COMMON_WGSL.
 
+import { COMMON_WGSL } from './common.wgsl.js'
+import { fmt, SIMPLEX_VALUE_NORM } from './normalization.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const SIMPLEX_VALUE_WGSL = /* wgsl */ `
 fn contribV2(d: vec2f, h: u32) -> f32 {
   var t = 0.5 - dot(d, d);
@@ -58,3 +63,17 @@ fn simplexValue3(p: vec3f) -> f32 {
     contribV3(d2, hash3u(i + i2, j + j2, k + k2)) + contribV3(d3, hash3u(i + 1, j + 1, k + 1));
 }
 `
+
+/** Simplex Value 2D — Canonical WGSL shader spec. */
+export const simplexValue2dCanonicalWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, SIMPLEX_VALUE_WGSL],
+  expr: `0.5 + 0.5 * ${fmt(SIMPLEX_VALUE_NORM)} * simplexValue2(p)`,
+}
+
+/** Simplex Value 3D — Canonical WGSL shader spec. */
+export const simplexValue3dCanonicalWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, SIMPLEX_VALUE_WGSL],
+  expr: `0.5 + 0.5 * ${fmt(SIMPLEX_VALUE_NORM)} * simplexValue3(p)`,
+}

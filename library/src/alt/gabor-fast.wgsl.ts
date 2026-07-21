@@ -1,6 +1,12 @@
 // WGSL counterpart of gabor-fast.ts. Requires COMMON_WGSL and
 // FAST_COMMON_WGSL. See the GLSL file for the constant notes.
 
+import { COMMON_WGSL } from '../noises/common.wgsl.js'
+import { GABOR2_NORM, GABOR3_NORM, fmt } from '../noises/normalization.js'
+import { FAST_COMMON_WGSL } from './fast-common.wgsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const GABOR_FAST_WGSL = /* wgsl */ `
 fn gaborFast2(p: vec2f) -> f32 {
   let i = floor(p);
@@ -62,3 +68,17 @@ fn gaborFast3(p: vec3f) -> f32 {
   return sum;
 }
 `
+
+/** Gabor 2D Fast (split-bits-gated candidate) — WGSL ShaderSpec, pre-clamp display expression. */
+export const gabor2dFastWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, FAST_COMMON_WGSL, GABOR_FAST_WGSL],
+  expr: `0.5 + 0.5 * ${fmt(GABOR2_NORM)} * gaborFast2(p)`,
+}
+
+/** Gabor 3D Fast (split-bits-gated candidate) — WGSL ShaderSpec, pre-clamp display expression. */
+export const gabor3dFastWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, FAST_COMMON_WGSL, GABOR_FAST_WGSL],
+  expr: `0.5 + 0.5 * ${fmt(GABOR3_NORM)} * gaborFast3(p)`,
+}

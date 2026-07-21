@@ -22,7 +22,7 @@
 // value3 on the CPU; value2 reads ~1.35x in the full suite and ~1.65x
 // isolated (the megamorphic-harness caveat in bench.ts).
 
-import { fade, LATTICE_HX, LATTICE_HY, LATTICE_HZ, lerp } from '../noises/common'
+import { fade, LATTICE_HX, LATTICE_HY, LATTICE_HZ, lerp } from '../noises/common.js'
 
 /** 2^32 / phi, odd — Knuth's multiplicative hashing constant. */
 const FIB = 0x9e3779b1
@@ -85,3 +85,9 @@ export const valueFast3 = (x: number, y: number, z: number): number => {
   const nz1 = lerp(lerp(n001, n101, ux), lerp(n011, n111, ux), uy)
   return lerp(nz0, nz1, uz)
 }
+
+/** Value 2D, 'fib-hash' fast implementation — display value, unclamped. */
+export const value2dFast = valueFast2
+
+/** Value 3D, 'fib-hash' fast implementation — display value, unclamped. */
+export const value3dFast = valueFast3

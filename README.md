@@ -1,11 +1,15 @@
 # noisetoy
 
-Noise functions implemented with parity in **TypeScript**, **GLSL** (WebGL2), **WGSL** (WebGPU), and **Three.js TSL**, plus a layer compositor that emits any of them from a single description.
+Noise functions implemented with parity in **TypeScript**, **GLSL** (WebGL2), **WGSL** (WebGPU), and **Three.js TSL** — published as individual, tree-shakeable functions. You import exactly the variant and backend you ship, and nothing else rides along:
+
+```ts
+import { worley3dFastWgsl } from 'noisetoy' // ~6 KB minified, nothing but Worley
+```
 
 This repository is a monorepo:
 
-- **`library/`** — the `noisetoy` package: noises, composition/blending, and Three.js bindings under `noisetoy/three`.
-- **`example/`** — the explorer app (Next.js) used to compare visual results and performance across backends.
+- **`library/`** — the `noisetoy` package: the noise functions themselves, one export per variant per backend, plus small helpers for composing shader specs.
+- **`example/`** — the explorer app (Next.js): the layer compositor (blending, fBm, effects), the noise registry and metadata, the implementation inventory, the cost model, the Three.js bindings, and benchmarks across all four backends. Everything opinionated lives here, not in the package.
 
 ```bash
 bun install
@@ -15,76 +19,76 @@ bun run all     # format:check + lint + typecheck + warden + test
 
 ## Quick start
 
-```ts
-import { createEffect } from 'noisetoy'
+Every export follows one naming grammar:
 
-const effect = createEffect({
-  layers: [
-    { noise: 'perlin', octaves: 5 },
-    { noise: 'worley', style: 'ridged', blend: 'multiply', opacity: 0.6, scale: 2 },
-  ],
-})
-
-effect.sample(0.5, 0.5, 0) // CPU value in [0, 1]
-effect.glsl() // GLSL ES 3.00 fragment shader
-effect.wgsl() // WGSL module (vs/fs entry points)
-effect.tsl() // Three.js TSL module
+```
+<noise><2d|3d><Qualifier>[Tileable][Glsl|Wgsl|Tsl]
 ```
 
-One description, four languages, one domain: `sample(u, v, z)` and the shaders read the same field, so a CPU-baked texture matches what the GPU draws.
+- **Qualifier** names the implementation: `Canonical` is the reference implementation of the noise; `Fast` is a cheaper alternative implementation where one exists. The two are different draws of the same statistics — swapping changes the concrete pattern, not the look. Unqualified aliases will land once a winner is picked per noise.
+- **No backend suffix** = the CPU sampler. `Glsl` / `Wgsl` / `Tsl` = a composable `ShaderSpec` for that language.
+- **`Tileable`** = the seamlessly wrapping code path, where the noise has one.
 
-### Layers
+```ts
+import { perlin3dCanonical, worley3dFast } from 'noisetoy'
 
-Layers apply bottom to top with a blend mode and opacity, Photoshop-style. Every per-noise setting is per layer.
+perlin3dCanonical(x, y, z) // display-mapped, nominally [0, 1], unclamped
+worley3dFast(x, y, z) // the faster Worley implementation
 
-| Field             | Default           | Notes                                                                                       |
-| ----------------- | ----------------- | ------------------------------------------------------------------------------------------- |
-| `noise`           | —                 | Noise id, e.g. `'perlin'` (see `NOISES`)                                                    |
-| `variant` / `dim` | 3D when available | `variant: 'perlin-2d'` or `dim: 2`                                                          |
-| `octaves`         | `1`               | 1–6 fBm octaves: lacunarity 2, gain 0.5, decorrelation offsets, variance-preserving         |
-| `rotate`          | `false`           | Rotate octaves (classic fBm construction, iq matrices, lacunarity 2.02); breaks tiling      |
-| `style`           | `'basic'`         | `'basic'` (fBm), `'billow'`, `'ridged'` (Musgrave-style spectral feedback)                  |
-| `scale`           | `1`               | Multiplies the noise's base lattice scale                                                   |
-| `blend`           | `'normal'`        | `normal`, `add`, `multiply`, `screen`, `overlay`, `difference`, `darken`, `lighten`, `warp` |
-| `opacity`         | `1`               | Mixes the blended result with the layers below                                              |
+// 2D variants and tileable paths use natural arities:
+import { perlin2dCanonical, perlin2dCanonicalTileable } from 'noisetoy'
+perlin2dCanonical(x, y)
+perlin2dCanonicalTileable(x, y, periodX, periodY) // wraps every periodX/periodY cells
+```
 
-`warp` is the noise-native blend: instead of pixel math, the accumulated result beneath the layer displaces that layer's sampling coordinates, which produces structure neither noise contains on its own.
+### Shaders
+
+A shader export is a `ShaderSpec`: `{ dim, deps, expr }` — the dependency chunks it needs (self-contained, shared hash library included) and a display expression over `p` (and `per` when tileable). `composeGlsl` / `composeWgsl` / `composeTsl` concatenate any number of specs with shared chunks deduplicated, and `glslNoiseFn` / `wgslNoiseFn` / `tslNoiseFn` wrap a spec's expression as a named function:
+
+```ts
+import { composeWgsl, wgslNoiseFn, worley3dFastWgsl, perlin3dCanonicalWgsl } from 'noisetoy'
+
+const shader = /* wgsl */ `
+${composeWgsl(worley3dFastWgsl, perlin3dCanonicalWgsl)}
+${wgslNoiseFn('worleyF', worley3dFastWgsl)}
+${wgslNoiseFn('perlin', perlin3dCanonicalWgsl)}
+
+@fragment fn fs(@builtin(position) pos: vec4f) -> @location(0) vec4f {
+  let v = worleyF(pos.xyz / 64.0) * perlin(pos.xyz / 32.0);
+  return vec4f(v, v, v, 1.0);
+}
+`
+```
+
+The TSL specs are JavaScript source over the `three/tsl` namespace. Evaluate them with `TSL_IMPORTS` in scope:
+
+```ts
+import { composeTsl, tslNoiseFn, TSL_IMPORTS, worley3dCanonicalTsl } from 'noisetoy'
+import * as TSL from 'three/tsl'
+
+const src = `${composeTsl(worley3dCanonicalTsl)}\n${tslNoiseFn('worley', worley3dCanonicalTsl)}\nreturn worley`
+const worley = new Function('TSL', `const { ${TSL_IMPORTS.join(', ')} } = TSL\n${src}`)(TSL)
+material.colorNode = worley(TSL.positionLocal.mul(8)) // -> float node
+```
+
+The package never imports `three` itself — the TSL exports are strings.
+
+One field, four languages: the CPU sampler and the shader specs of a variant read the same integer-hash lattice, so a CPU-baked texture matches what the GPU draws (f64 vs f32 rounding aside).
+
+### Values and clamping
+
+Samplers and shader expressions return the **display mapping** of the raw field — nominally `[0, 1]`, centered at 0.5 for signed noises, **unclamped** so the rare extremes survive if you want to fold octaves yourself. Clamp at display (`clamp01` is exported).
 
 ### Tiling
 
-Set `tiled: true` to sample through the separate tileable code paths (kept out of the core algorithms), which repeats one tile in a `TILE_REPEAT`-square grid. It only takes effect when every layer's variant is tileable — check `effect.tileable`.
-
-### Sampling domain
-
-`domain: 'uv'` (the default) walks a 2D plane. `domain: 'position'` samples the stack in 3D space instead, which is seamless on closed surfaces — no uv wrap seam and no pole pinching on a sphere. Use `effect.sampleAt(x, y, z, time)` on the CPU, or pass a `position` node to `effectNode`. Tiling does not apply to the solid domain.
-
-### Three.js
-
-```ts
-import { createEffect } from 'noisetoy'
-import { effectNode, effectNormalNode } from 'noisetoy/three'
-import { positionLocal, uniform, vec3 } from 'three/tsl'
-import { MeshBasicNodeMaterial } from 'three/webgpu'
-
-const effect = createEffect({ layers: [{ noise: 'perlin', octaves: 6 }] })
-const z = uniform(0) // animate 3D variants
-
-const material = new MeshBasicNodeMaterial()
-material.colorNode = vec3(effectNode(effect, { z }))
-
-// Displace a plane and shade it with the matching surface normal:
-material.positionNode = positionLocal.add(vec3(0, 0, effectNode(effect, { z }).mul(0.32)))
-const normal = effectNormalNode(effect, { z })
-```
-
-`noisetoy/three` requires a `WebGPURenderer`; `three` is an optional peer dependency, so the core entry never imports it.
+`...Tileable` exports wrap seamlessly every `periodX` / `periodY` lattice cells (kept as separate code paths so the core algorithms stay branch-free). For lattice-wrapping noises the tileable field is bit-identical to the core away from the seam; Simplex and Simplex Value tile via a 4D torus instead, which is exactly periodic but a different pattern than the core. Simplex 3D, Simplex Loop, and Simplex Value 3D have no tileable path. The `Fast` Perlin tileable is special: its period is baked at 8 cells.
 
 ## Noises
 
 | Noise              | Variants | Tileable | Notes                                                                                   |
 | ------------------ | -------- | -------- | --------------------------------------------------------------------------------------- |
 | Value              | 2D, 3D   | yes      | Lattice values, quintic interpolation                                                   |
-| White              | 2D, 3D   | yes      | One hashed value per cell, uninterpolated; flat spectrum. Grain at the default 256      |
+| White              | 2D, 3D   | yes      | One hashed value per cell, uninterpolated; flat spectrum. Grain at the explorer's 256   |
 | Perlin             | 2D, 3D   | yes      | Gradient noise, quintic fade, Perlin's 12 cube-edge gradients                           |
 | Flow               | 3D       | yes      | Perlin & Neyret (2001): gradients rotate with z, so the field churns rather than slides |
 | Simplex            | 2D, 3D   | 2D only  | Simplex-grid gradient noise, 12 cube-edge gradients; 2D tiles via the 4D torus trick    |
@@ -96,11 +100,11 @@ const normal = effectNormalNode(effect, { z })
 
 #### Time rather than depth
 
-Flow and Simplex Loop are the two noises whose third input is a **phase, not a third spatial axis**, and both return exactly to their starting state every 1 unit — four seconds at the default z speed. They are therefore the only ones whose animation can be looped rather than cut. Flow gets there by rotating each lattice gradient at its own integer rate — which is a deliberate departure from Perlin & Neyret, who rotate every gradient by one shared angle precisely to keep the gradients decorrelated; see the Flow entry in the implementation inventory. Their pseudo-advection is not implemented either, as it needs state a self-contained basis function does not have. Simplex Loop gets there by walking a circle through 4D — the same torus trick the tileable simplex path uses for space. Flow still tiles in space; Simplex Loop cannot, since both spare dimensions are already spent on the time circle.
+Flow and Simplex Loop are the two noises whose third input is a **phase, not a third spatial axis**, and both return exactly to their starting state every 1 unit. They are therefore the only ones whose animation can be looped rather than cut. Flow gets there by rotating each lattice gradient at its own integer rate — which is a deliberate departure from Perlin & Neyret, who rotate every gradient by one shared angle precisely to keep the gradients decorrelated; see the Flow entry in the implementation inventory. Their pseudo-advection is not implemented either, as it needs state a self-contained basis function does not have. Simplex Loop gets there by walking a circle through 4D — the same torus trick the tileable simplex path uses for space. Flow still tiles in space; Simplex Loop cannot, since both spare dimensions are already spent on the time circle.
 
 #### Band-limiting
 
-Gabor is the only basis here whose spectrum is a parameter rather than a consequence: the Gaussian envelope width and the harmonic frequency set the bandwidth and centre frequency directly, which is what allows Gabor noise to be filtered analytically. Wave (below) reaches a superficially similar oriented-interference look far more cheaply, but its spectrum is whatever the lattice gives it. Gabor is also the most expensive noise in the repo by a wide margin — roughly 9 hashes per cell against Worley's 3, plus an `exp` and a `cos`. Note that this implements the paper's kernel and spectral parameterisation, but not its sampling strategy (one impulse per cell here, against a Poisson-distributed 25–100 per kernel in the paper) nor its analytic filtering.
+Gabor is the only basis here whose spectrum is a parameter rather than a consequence: the Gaussian envelope width and the harmonic frequency set the bandwidth and centre frequency directly, which is what allows Gabor noise to be filtered analytically. Wave (below) reaches a superficially similar oriented-interference look far more cheaply, but its spectrum is whatever the lattice gives it. Gabor is also the most expensive noise in the repo by a wide margin. Note that this implements the paper's kernel and spectral parameterisation, but not its sampling strategy (one impulse per cell here, against a Poisson-distributed 25–100 per kernel in the paper) nor its analytic filtering.
 
 ### Experiments and derived noises
 
@@ -122,55 +126,24 @@ Noises created for this repo (MIT). Every entry below is an original implementat
 
 Patent note: the only patent known to touch any algorithm in this repo is Ken Perlin's US 6,867,776 (simplex noise in 3D+), which expired in January 2022; it is relevant to Simplex, Simplex Value, Simplex Loop, and the 4D-torus tileable paths. All other listed bases (Perlin classic/improved noise, flow noise, Worley cellular noise and its distance-metric variants, Gabor noise, phasor-style waves, Truchet tilings) have, to our knowledge, no patents; this is a good-faith disclosure, not legal advice.
 
-Findings (Apple Silicon, this repo's benchmarks): Simplex Value 3D is ~3× faster than Perlin 3D and ~2.3× faster than Simplex 3D on the CPU, and ~1.8× faster than either on WebGL — avoiding per-corner trig and halving the hash count is what pays. Plain value noise is still the raw CPU champion (branch-free lerp chain), but it interpolates in a hypercube, while Simplex Value is the cheapest _simplex-lattice_ (isotropy-friendlier) noise here. Wave and Ripple sit at Worley-like GPU cost and are the most visually distinctive.
+## Canonical and Fast
 
-Ten variants — White, Flow, Simplex Loop, the two Worley metrics and Gabor — have **not** been through the GPU benchmark yet. Their cost-model entries are listed in `PENDING_GPU_CALIBRATION` and were derived from hand-counted instructions plus a timing transferred from a benchmarked variant of the same code shape; treat their ordering against the measured noises as provisional. Gabor 3D is the one to re-measure first: the op count puts it at ~1.9× Ripple 3D, while the CPU benchmark makes it ~4.7×, and the two backends charge very differently for `exp` and `cos`.
+A noise is an idea; an implementation is one way of computing it. Two implementations of the same noise can differ severalfold in cost while producing an equivalent-looking field, so this repo tracks them separately, keeps the losers around to be re-measured, and — now that every function is an independent export — ships the challengers too, at zero cost to anyone who does not import them.
 
-## Implementations
+- **`Canonical`** exports are the reference implementations: the ones whose relationship to the published algorithms is documented and tested.
+- **`Fast`** exports are alternative implementations that measured faster on at least one backend (details per noise in the inventory): the split-bit pruned Worley family (~2–3.4× on CPU, up to 2× on GPU), the Fibonacci-hash Perlin and Value, the shared-phase Flow (~2.1× CPU), the gated split-bit Gabor (~2.7–3.4× CPU, 1.4–1.6× GPU), and others. A Fast field has the same display statistics as its Canonical counterpart (tested) but is a **different draw** — switching changes the pattern.
 
-A noise is an idea; an implementation is one way of computing it. Two implementations of the same noise can differ severalfold in cost while producing an equivalent-looking field, so the repo tracks them separately and keeps the losers around to be re-measured.
+The naming qualifier is coarser than the inventory's own classification (`canonical` / `alternative` / `conventional` / `novel`, each paired with the evidence backing the claim). The full inventory — what each implementation follows, every deviation, and why — lives in `example/lib/implementations.ts` and is surfaced in the explorer's noise picker.
 
-Every implementation is classified against the algorithm it implements:
+**The one decision that spans the whole repo** is `gradDot2`/`gradDot3` in `noises/common.ts`, which builds gradients with trigonometry. Wave, Vortex and Gabor inherit it, and no reference algorithm does it that way — they index small tables of `{-1,0,1}` vectors. The case for it is real: continuous unit gradients were Perlin's _original_ 1985 design, and Gustavson & McEwan's peer-reviewed psrdnoise (JCGT 2022) chooses the same hashed-angle construction deliberately, arguing hardware `sin`/`cos` now beat table indexing on modern GPUs. Perlin and Simplex instead use the cube-edge gradient set and a folded lattice hash; measured against the published reference implementations, both are a dead heat (Perlin 1.007×, Simplex 0.99×) — neither is an improvement on the published algorithm, and what they have over the references is the absence of a 256-cell period and the ability to run in GLSL, WGSL and TSL.
 
-| Kind                  | Meaning                                                                            |
-| --------------------- | ---------------------------------------------------------------------------------- |
-| **Canonical**         | Follows the reference formulation. Any deviations are incidental                   |
-| **Known alternative** | Implements the published algorithm by a documented route that is not the reference |
-| **Novel**             | No known precedent for computing it this way                                       |
+### Tree-shaking is the contract
 
-Current inventory — 16 canonical variants, 11 known-alternative, 12 novel:
+The package is built as one ES module per source module with `"sideEffects": false` — no bundling, no registry, no string-id lookups. A bundle test builds real consumers and asserts the guarantees: importing one variant's WGSL spec ships only that variant's WGSL chain (no other noises, no other languages); importing a CPU sampler ships no shader text at all; Canonical and Fast never drag each other in. A single-noise WGSL consumer lands around 6 KB minified, against ~212 KB for any consumer under the old registry design.
 
-| Noise                                            | Kind              | Implementation               | Headline deviation from the reference                                 |
-| ------------------------------------------------ | ----------------- | ---------------------------- | --------------------------------------------------------------------- |
-| Value, White, Contour                            | Canonical         | the obvious one              | —                                                                     |
-| Marble, Mosaic, Crackle, Truchet                 | Canonical         | published formula            | retuned constants only                                                |
-| Simplex Loop                                     | Canonical         | 4D simplex on a time circle  | reference 32-vector 4D gradient set                                   |
-| Perlin                                           | Canonical         | Table gradients, folded hash | folded lattice hash instead of a permutation table                    |
-| **Simplex**                                      | Known alternative | Table gradients, folded hash | a 3D kernel radius belonging to neither published lineage             |
-| **Worley** (+ both metrics)                      | Known alternative | One point per cell           | the paper draws a variable Poisson count per cube                     |
-| **Gabor**                                        | Known alternative | One impulse per cell         | 1–2 orders of magnitude sparser than the paper; no analytic filtering |
-| **Flow**                                         | Known alternative | Per-corner rotation rates    | both references rotate every gradient by one shared angle             |
-| Simplex Value, Wave, Ripple, Foam, Stars, Vortex | Novel             | —                            | noises invented here                                                  |
+## Composition
 
-The full per-implementation detail — what each one follows, every deviation, and why — lives in `library/src/implementations.ts` and is surfaced in the explorer's noise picker.
-
-**The one decision that spans the whole repo** is `gradDot2`/`gradDot3` in `noises/common.ts`, which builds gradients with trigonometry. Wave, Vortex and Gabor inherit it, and no reference algorithm does it that way — they index small tables of `{-1,0,1}` vectors. The case for it is real: continuous unit gradients were Perlin's _original_ 1985 design, and Gustavson & McEwan's peer-reviewed psrdnoise (JCGT 2022) chooses the same hashed-angle construction deliberately, arguing hardware `sin`/`cos` now beat table indexing on modern GPUs.
-
-**Perlin and Simplex instead use** the cube-edge gradient set and a folded lattice hash.
-
-**Measured against the published reference implementations, both are a dead heat** — Perlin 1.007x, Simplex 0.99x. Neither is an improvement on the published algorithm and neither should be described as one. What they have over the references is the absence of a 256-cell period, and the ability to run in GLSL, WGSL and TSL, where a 512-entry lookup table cannot.
-
-Those two figures are recorded rather than re-runnable, because the reference baselines are not kept in the repo: both need Perlin's 256-entry permutation table, and although Gustavson's public-domain file carries that table, he could only dedicate what he owned — the table is Perlin's. The risk is slight — 256 integers, reproduced everywhere for two decades, never asserted — but it is the one provenance question that cannot be closed by argument, so the table is simply not here. GPU performance is unmeasured throughout.
-
-Caveat worth keeping in view: psrdnoise's argument was about _GPUs_, where trigonometry is far cheaper relative to integer work, and the op-count model predicts smaller wins there (~2.6x for Perlin). That comparison has not been run. Wave, Vortex and Gabor still use the trigonometric gradients and are the remaining candidates.
-
-### Consumers never ship the inventory
-
-`noisetoy` exports only the current fastest implementation of each noise. The inventory and (in time) the alternative implementations live behind `noisetoy/implementations`, which the core entry never imports — enforced by a bundle test that fails if core code takes a runtime dependency on it.
-
-When a faster implementation is found it is promoted into `src/noises/**`, the previous champion moves to `src/alt/**`, and both stay listed in the inventory with the loser marked `superseded`.
-
-> **Known issue, unrelated to implementations.** The core entry is not tree-shakeable today: `createEffect` resolves noises by string id out of one `NOISES` array, so a consumer using a single noise on the CPU still bundles all 39 variants across all four shader languages — about 212 KB minified. Splitting implementations out does not fix that; making the registry per-noise and lazily composed would. The bundle test pins the current size so it cannot quietly get worse.
+The package deliberately ships **no compositor** — no layers, no blending, no fBm operator. Those are opinions about how to use noise, and they live in the example app (`example/lib/effect.ts` and `example/lib/render/*`): a declarative layer stack (`createEffect`) that folds octaves, blends Photoshop-style, posterizes, band-passes, tiles, and emits the same stack as a CPU sampler, a GLSL fragment shader, a WGSL module, or a TSL module, plus Three.js node-material bindings (`example/lib/three.ts`). If you need that machinery, it is MIT — copy it.
 
 ## The explorer app
 
@@ -183,15 +156,16 @@ The `example/` app renders any layer stack with four interchangeable backends �
 
 ## Architecture
 
-- `library/src/noises/*.ts` — core TS implementations; `*.glsl.ts` / `*.wgsl.ts` / `*.tsl.ts` hold the line-for-line counterparts as template strings. TSL sources are JavaScript using the `three/tsl` API: the same text is evaluated at runtime by `noisetoy/three` and exported verbatim by `effect.tsl()`.
+- `library/src/noises/*.ts` — core TS implementations; `*.glsl.ts` / `*.wgsl.ts` / `*.tsl.ts` hold the line-for-line counterparts as template strings, plus each variant's qualified spec exports. TSL sources are JavaScript using the `three/tsl` API.
 - `library/src/noises/common.*` — shared primitives (integer hash, fade, gradients) used by every lattice noise, so all four languages produce the same patterns from the same integer math.
 - `library/src/noises/tileable/*` — **separate code paths** for tileability, intentionally kept out of the core implementations. Two strategies:
   - _Lattice wrapping_: lattice coordinates are wrapped `mod` period in x/y before hashing. Away from the wrap seam a tileable variant is bit-identical to its core counterpart (covered by tests).
   - _4D torus trick_ (simplex and simplex value, 2D only): the tile domain is mapped onto a torus in 4D (x and y each become a circle, radius = period / 2π so feature size is preserved) and 4D noise is sampled there. Exactly periodic, but a different pattern than the core 2D noise.
-- `library/src/registry.ts` — the noise registry: metadata, CPU samplers, and composable shader specs per variant.
-- `library/src/render/{glsl,wgsl,tsl,sampler}.ts` — the composers. Each turns a layer stack into one program in its language, deduplicating shader chunks shared between layers.
-- `library/src/effect.ts` — the public `createEffect` API.
-- `library/src/three.ts` — `noisetoy/three`: TSL nodes for node materials.
+- `library/src/alt/*` — the Fast implementations (same file layout as `noises/`), plus the CPU benchmark harness (`bun run bench:impl` from `library/`).
+- `library/src/spec.ts` — `ShaderSpec` / `NoiseSource` types, the compose helpers, and `TSL_IMPORTS`.
+- `example/lib/registry.ts` — the explorer's noise registry: metadata, descriptions, licenses, per-variant `NoiseSource`s assembled from the package exports.
+- `example/lib/effect.ts`, `example/lib/render/*` — the layer compositor and per-language composers.
+- `example/lib/implementations.ts` — the implementation inventory; `example/lib/cost.ts` — the calibrated cost model.
 
 Cross-language parity notes: all lattice randomness derives from the same u32 hash (`lowbias32`), evaluated with exact integer semantics in every language (`Math.imul`/`>>>` in TS, `uint` in GLSL, `u32` in WGSL/TSL). Float math differs between f64 (JS) and f32 (GPU), so outputs are visually identical but not bit-identical across backends.
 

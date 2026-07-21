@@ -1,5 +1,10 @@
 // TSL counterpart of cellular-tileable.ts. Requires COMMON_TSL.
 
+import { COMMON_TSL } from '../common.tsl.js'
+import { CRACKLE_NORM, STARS_NORM } from '../normalization.js'
+
+import type { ShaderSpec } from '../../spec.js'
+
 export const CELLULAR_TILEABLE_TSL = /* js */ `
 const mosaic2T = Fn(([p, per]) => {
   const i = floor(p)
@@ -193,3 +198,59 @@ const stars3T = Fn(([p, per]) => {
   return sum
 })
 `
+
+/** Mosaic 2D (Canonical), tileable — TSL shader spec. */
+export const mosaic2dCanonicalTileableTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, CELLULAR_TILEABLE_TSL],
+  expr: 'mosaic2T(p, per)',
+}
+
+/** Mosaic 3D (Canonical), tileable — TSL shader spec. */
+export const mosaic3dCanonicalTileableTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, CELLULAR_TILEABLE_TSL],
+  expr: 'mosaic3T(p, per)',
+}
+
+/** Crackle 2D (Canonical), tileable — TSL shader spec. */
+export const crackle2dCanonicalTileableTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, CELLULAR_TILEABLE_TSL],
+  expr: `crackle2T(p, per).mul(${CRACKLE_NORM})`,
+}
+
+/** Crackle 3D (Canonical), tileable — TSL shader spec. */
+export const crackle3dCanonicalTileableTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, CELLULAR_TILEABLE_TSL],
+  expr: `crackle3T(p, per).mul(${CRACKLE_NORM})`,
+}
+
+/** Foam 2D (Canonical), tileable — TSL shader spec. */
+export const foam2dCanonicalTileableTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, CELLULAR_TILEABLE_TSL],
+  expr: 'foam2T(p, per)',
+}
+
+/** Foam 3D (Canonical), tileable — TSL shader spec. */
+export const foam3dCanonicalTileableTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, CELLULAR_TILEABLE_TSL],
+  expr: 'foam3T(p, per)',
+}
+
+/** Stars 2D (Canonical), tileable — TSL shader spec. */
+export const stars2dCanonicalTileableTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, CELLULAR_TILEABLE_TSL],
+  expr: `stars2T(p, per).mul(${STARS_NORM})`,
+}
+
+/** Stars 3D (Canonical), tileable — TSL shader spec. */
+export const stars3dCanonicalTileableTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, CELLULAR_TILEABLE_TSL],
+  expr: `stars3T(p, per).mul(${STARS_NORM})`,
+}

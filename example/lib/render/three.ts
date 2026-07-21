@@ -1,4 +1,4 @@
-// Three.js renderer: builds TSL nodes with noisetoy/three and renders them
+// Three.js renderer: builds TSL nodes with #/lib/three and renders them
 // with WebGPURenderer. WebGPU only — no WebGL fallback (forceWebGL is never
 // set; init fails without WebGPU).
 //
@@ -46,7 +46,7 @@ export const createThreeRenderer = async (
   if (!('gpu' in navigator)) throw new Error('The Three.js backend requires WebGPU')
   const THREE = await import('three/webgpu')
   const TSL = await import('three/tsl')
-  const { effectNode, effectNormalNode, DISPLACEMENT, PLANE_SEGMENTS } = await import('noisetoy/three')
+  const { effectNode, effectNormalNode, DISPLACEMENT, PLANE_SEGMENTS } = await import('#/lib/three')
 
   const is3d = view !== '2d'
   const renderer = new THREE.WebGPURenderer({ canvas, antialias: is3d })

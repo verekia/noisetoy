@@ -1,5 +1,10 @@
 // TSL counterpart of simplex-value.ts. Requires COMMON_TSL.
 
+import { COMMON_TSL } from './common.tsl.js'
+import { SIMPLEX_VALUE_NORM } from './normalization.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const SIMPLEX_VALUE_TSL = /* js */ `
 const contribV2 = Fn(([d, h]) => {
   const t = float(0.5).sub(dot(d, d)).toVar()
@@ -92,3 +97,17 @@ const simplexValue3 = Fn(([p]) => {
     .add(contribV3(d3, hash3u(i.add(1), j.add(1), k.add(1))))
 })
 `
+
+/** Simplex Value 2D (Canonical) — TSL shader spec. */
+export const simplexValue2dCanonicalTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, SIMPLEX_VALUE_TSL],
+  expr: `simplexValue2(p).mul(${0.5 * SIMPLEX_VALUE_NORM}).add(0.5)`,
+}
+
+/** Simplex Value 3D (Canonical) — TSL shader spec. */
+export const simplexValue3dCanonicalTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, SIMPLEX_VALUE_TSL],
+  expr: `simplexValue3(p).mul(${0.5 * SIMPLEX_VALUE_NORM}).add(0.5)`,
+}

@@ -1,5 +1,9 @@
 // TSL counterpart of value.ts. Requires COMMON_TSL.
 
+import { COMMON_TSL } from './common.tsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const VALUE_TSL = /* js */ `
 const value2 = Fn(([p]) => {
   const i = floor(p)
@@ -37,3 +41,17 @@ const value3 = Fn(([p]) => {
   return mix(nz0, nz1, uz)
 })
 `
+
+/** Value 2D (Canonical) — TSL shader spec. */
+export const value2dCanonicalTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, VALUE_TSL],
+  expr: 'value2(p)',
+}
+
+/** Value 3D (Canonical) — TSL shader spec. */
+export const value3dCanonicalTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, VALUE_TSL],
+  expr: 'value3(p)',
+}

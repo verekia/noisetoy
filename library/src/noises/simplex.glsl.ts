@@ -1,5 +1,10 @@
 // GLSL counterpart of simplex.ts. Requires COMMON_GLSL.
 
+import { COMMON_GLSL } from './common.glsl.js'
+import { fmt, SIMPLEX2_NORM, SIMPLEX3_NORM } from './normalization.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const SIMPLEX_GLSL = /* glsl */ `
 float simplex2(vec2 p) {
   const float F2 = 0.3660254037844386;
@@ -103,3 +108,17 @@ float simplex3(vec3 p) {
   return n;
 }
 `
+
+/** GLSL spec for Simplex 2D (shipping implementation). */
+export const simplex2dCanonicalGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, SIMPLEX_GLSL],
+  expr: `0.5 + 0.5 * ${fmt(SIMPLEX2_NORM)} * simplex2(p)`,
+}
+
+/** GLSL spec for Simplex 3D (shipping implementation). */
+export const simplex3dCanonicalGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, SIMPLEX_GLSL],
+  expr: `0.5 + 0.5 * ${fmt(SIMPLEX3_NORM)} * simplex3(p)`,
+}

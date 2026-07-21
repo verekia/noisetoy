@@ -2,6 +2,12 @@
 // A corner helper is fine here — shader compilers inline unconditionally, so
 // the JIT fragility that forced the TS version longhand does not apply.
 
+import { COMMON_GLSL } from '../noises/common.glsl.js'
+import { fmt, PERLIN2_NORM } from '../noises/normalization.js'
+import { FAST_COMMON_GLSL } from './fast-common.glsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const FLOW_FAST_GLSL = /* glsl */ `
 float flowFastCorner(uint h, vec2 d, float c1, float s1, float c2, float s2) {
   uint dir = h >> 29u;
@@ -38,3 +44,10 @@ float flowFast3(vec3 p) {
   return mix(mix(n00, n10, ux), mix(n01, n11, ux), uy);
 }
 `
+
+/** Flow 3D, 'fast-rot' fast implementation — GLSL spec. */
+export const flow3dFastGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, FAST_COMMON_GLSL, FLOW_FAST_GLSL],
+  expr: `0.5 + 0.5 * ${fmt(PERLIN2_NORM)} * flowFast3(p)`,
+}

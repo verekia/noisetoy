@@ -24,7 +24,8 @@
 // against Worley's 3, plus an exp and a cos. That is inherent to sparse
 // convolution and is why the paper leans on precomputation.
 
-import { gradDot2, gradDot3, hash2, hash3, hashU32, to01 } from './common'
+import { gradDot2, gradDot3, hash2, hash3, hashU32, to01 } from './common.js'
+import { GABOR2_NORM, GABOR3_NORM } from './normalization.js'
 
 const TAU = 6.283185307179586
 
@@ -91,3 +92,9 @@ export const gabor3 = (x: number, y: number, z: number): number => {
   }
   return sum
 }
+
+/** Gabor 2D, shipping implementation — display value, nominally [0, 1], unclamped. */
+export const gabor2dCanonical = (x: number, y: number): number => 0.5 + 0.5 * GABOR2_NORM * gabor2(x, y)
+
+/** Gabor 3D, shipping implementation — display value, nominally [0, 1], unclamped. */
+export const gabor3dCanonical = (x: number, y: number, z: number): number => 0.5 + 0.5 * GABOR3_NORM * gabor3(x, y, z)

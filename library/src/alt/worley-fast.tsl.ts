@@ -1,6 +1,11 @@
 // TSL counterpart of worley-fast.ts. Requires COMMON_TSL and FAST_COMMON_TSL.
 // See the GLSL file for the divergence caveat on the pruning branches.
 
+import { COMMON_TSL } from '../noises/common.tsl.js'
+import { FAST_COMMON_TSL } from './fast-common.tsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const WORLEY_FAST_TSL = /* js */ `
 const worleyFastCell2 = Fn(([s, b, f1]) => {
   const h = fibMix(s).toVar()
@@ -92,3 +97,17 @@ const worleyFast3 = Fn(([p]) => {
   return sqrt(f1)
 })
 `
+
+/** Worley 2D Fast (split-bits-pruned candidate) — TSL ShaderSpec, pre-clamp display expression. */
+export const worley2dFastTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, FAST_COMMON_TSL, WORLEY_FAST_TSL],
+  expr: 'worleyFast2(p)',
+}
+
+/** Worley 3D Fast (split-bits-pruned candidate) — TSL ShaderSpec, pre-clamp display expression. */
+export const worley3dFastTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, FAST_COMMON_TSL, WORLEY_FAST_TSL],
+  expr: 'worleyFast3(p)',
+}

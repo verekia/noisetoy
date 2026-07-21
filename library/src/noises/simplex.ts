@@ -27,7 +27,8 @@
 // alone here deliberately: this change is about speed, and moving the kernel
 // would alter the look on top of it. Worth revisiting separately.
 
-import { gradTable2, gradTable3, hashU32, LATTICE_HX, LATTICE_HY, LATTICE_HZ } from './common'
+import { gradTable2, gradTable3, hashU32, LATTICE_HX, LATTICE_HY, LATTICE_HZ } from './common.js'
+import { SIMPLEX2_NORM, SIMPLEX3_NORM } from './normalization.js'
 
 const F2 = 0.3660254037844386 // (sqrt(3) - 1) / 2
 const G2 = 0.21132486540518713 // (3 - sqrt(3)) / 6
@@ -154,3 +155,10 @@ export const simplex3 = (x: number, y: number, z: number): number => {
   }
   return n
 }
+
+/** Simplex 2D, shipping implementation — display value, nominally [0, 1], unclamped. */
+export const simplex2dCanonical = (x: number, y: number): number => 0.5 + 0.5 * SIMPLEX2_NORM * simplex2(x, y)
+
+/** Simplex 3D, shipping implementation — display value, nominally [0, 1], unclamped. */
+export const simplex3dCanonical = (x: number, y: number, z: number): number =>
+  0.5 + 0.5 * SIMPLEX3_NORM * simplex3(x, y, z)

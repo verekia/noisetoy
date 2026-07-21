@@ -12,9 +12,10 @@
 //
 // Longhand for the same fragile-JIT-inlining reason as worley-fast.ts.
 
-import { FOAM_R, STARS_SHARP } from '../noises/cellular'
-import { LATTICE_HX, LATTICE_HY, LATTICE_HZ } from '../noises/common'
-import { RIPPLE_FREQ, RIPPLE_RANGE } from '../noises/ripple'
+import { FOAM_R, STARS_SHARP } from '../noises/cellular.js'
+import { LATTICE_HX, LATTICE_HY, LATTICE_HZ } from '../noises/common.js'
+import { CRACKLE_NORM, RIPPLE_NORM, STARS_NORM } from '../noises/normalization.js'
+import { RIPPLE_FREQ, RIPPLE_RANGE } from '../noises/ripple.js'
 
 /** 2^32 / phi, odd — Knuth's multiplicative hashing constant. */
 const FIB = 0x9e3779b1
@@ -2403,3 +2404,33 @@ export const rippleFast3 = (x: number, y: number, z: number): number => {
   }
   return sum
 }
+
+/** Ripple 2D, 'split-bits-pruned' fast implementation — display value, unclamped. */
+export const ripple2dFast = (x: number, y: number): number => 0.5 + 0.5 * RIPPLE_NORM * rippleFast2(x, y)
+
+/** Ripple 3D, 'split-bits-pruned' fast implementation — display value, unclamped. */
+export const ripple3dFast = (x: number, y: number, z: number): number => 0.5 + 0.5 * RIPPLE_NORM * rippleFast3(x, y, z)
+
+/** Stars 2D, 'split-bits-pruned' fast implementation — display value, unclamped. */
+export const stars2dFast = (x: number, y: number): number => STARS_NORM * starsFast2(x, y)
+
+/** Stars 3D, 'split-bits-pruned' fast implementation — display value, unclamped. */
+export const stars3dFast = (x: number, y: number, z: number): number => STARS_NORM * starsFast3(x, y, z)
+
+/** Foam 2D, 'split-bits-pruned' fast implementation — display value, unclamped. */
+export const foam2dFast = foamFast2
+
+/** Foam 3D, 'split-bits-pruned' fast implementation — display value, unclamped. */
+export const foam3dFast = foamFast3
+
+/** Crackle 2D, 'split-bits-pruned' fast implementation — display value, unclamped. */
+export const crackle2dFast = (x: number, y: number): number => CRACKLE_NORM * crackleFast2(x, y)
+
+/** Crackle 3D, 'split-bits-pruned' fast implementation — display value, unclamped. */
+export const crackle3dFast = (x: number, y: number, z: number): number => CRACKLE_NORM * crackleFast3(x, y, z)
+
+/** Mosaic 2D, 'split-bits-pruned' fast implementation — display value, unclamped. */
+export const mosaic2dFast = mosaicFast2
+
+/** Mosaic 3D, 'split-bits-pruned' fast implementation — display value, unclamped. */
+export const mosaic3dFast = mosaicFast3

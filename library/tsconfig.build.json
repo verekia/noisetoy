@@ -1,0 +1,16 @@
+{
+  // Emits the publishable dist: one ESM module per source module (plus .d.ts),
+  // so consumer bundlers tree-shake at module granularity. No bundler — the
+  // package IS the module graph, and "sideEffects": false lets unused modules
+  // drop out entirely.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "allowImportingTsExtensions": false
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "dist", "src/**/*.test.ts", "src/testing", "src/alt/bench.ts"]
+}

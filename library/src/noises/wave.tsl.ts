@@ -1,5 +1,9 @@
 // TSL counterpart of wave.ts. Requires COMMON_TSL.
 
+import { COMMON_TSL } from './common.tsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const WAVE_TSL = /* js */ `
 const waveCorner2 = Fn(([h, d]) => {
   const a = to01(h).mul(6.283185307179586)
@@ -52,3 +56,17 @@ const wave3 = Fn(([p]) => {
   return mix(nz0, nz1, uz)
 })
 `
+
+/** Wave 2D (Canonical) — TSL shader spec. */
+export const wave2dCanonicalTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, WAVE_TSL],
+  expr: 'wave2(p).mul(0.5).add(0.5)',
+}
+
+/** Wave 3D (Canonical) — TSL shader spec. */
+export const wave3dCanonicalTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, WAVE_TSL],
+  expr: 'wave3(p).mul(0.5).add(0.5)',
+}

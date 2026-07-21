@@ -4,6 +4,12 @@
 // 3.141592653589793 is GABOR_ENVELOPE; 12.566370614359172 is 2*pi*GABOR_FREQ;
 // 0.09817477042468103 is 2*pi/64; 0.02454369260617026 is 2*pi/256.
 
+import { COMMON_GLSL } from '../noises/common.glsl.js'
+import { fmt, GABOR2_NORM, GABOR3_NORM } from '../noises/normalization.js'
+import { FAST_COMMON_GLSL } from './fast-common.glsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const GABOR_FAST_GLSL = /* glsl */ `
 float gaborFast2(vec2 p) {
   vec2 i = floor(p);
@@ -65,3 +71,17 @@ float gaborFast3(vec3 p) {
   return sum;
 }
 `
+
+/** Gabor 2D, 'split-bits-gated' fast implementation — GLSL spec. */
+export const gabor2dFastGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, FAST_COMMON_GLSL, GABOR_FAST_GLSL],
+  expr: `0.5 + 0.5 * ${fmt(GABOR2_NORM)} * gaborFast2(p)`,
+}
+
+/** Gabor 3D, 'split-bits-gated' fast implementation — GLSL spec. */
+export const gabor3dFastGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, FAST_COMMON_GLSL, GABOR_FAST_GLSL],
+  expr: `0.5 + 0.5 * ${fmt(GABOR3_NORM)} * gaborFast3(p)`,
+}

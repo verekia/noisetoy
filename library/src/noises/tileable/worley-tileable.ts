@@ -4,7 +4,7 @@
 // points. Distances stay geometric (unwrapped).
 // This wrapping is deliberately kept out of the core implementation.
 
-import { hash2, hash3, hashU32, imod, to01 } from '../common'
+import { hash2, hash3, hashU32, imod, to01 } from '../common.js'
 
 export const worley2Tileable = (x: number, y: number, px: number, py: number): number => {
   const ix = Math.floor(x)
@@ -52,3 +52,9 @@ export const worley3Tileable = (x: number, y: number, z: number, px: number, py:
   }
   return Math.sqrt(f1)
 }
+
+/** Worley 2D tileable, shipping implementation — wraps every periodX / periodY lattice cells; display value, nominally [0, 1], unclamped. */
+export const worley2dCanonicalTileable = worley2Tileable
+
+/** Worley 3D tileable, shipping implementation — wraps every periodX / periodY lattice cells; display value, nominally [0, 1], unclamped. */
+export const worley3dCanonicalTileable = worley3Tileable

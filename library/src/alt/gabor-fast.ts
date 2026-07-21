@@ -34,8 +34,9 @@
 // Measured with `bun run bench:impl`: ~2.7x the shipping gabor2 and ~3.4x
 // gabor3 on the CPU.
 
-import { LATTICE_HX, LATTICE_HY, LATTICE_HZ } from '../noises/common'
-import { GABOR_ENVELOPE, GABOR_FREQ } from '../noises/gabor'
+import { LATTICE_HX, LATTICE_HY, LATTICE_HZ } from '../noises/common.js'
+import { GABOR_ENVELOPE, GABOR_FREQ } from '../noises/gabor.js'
+import { GABOR2_NORM, GABOR3_NORM } from '../noises/normalization.js'
 
 /** 2^32 / phi, odd — Knuth's multiplicative hashing constant. */
 const FIB = 0x9e3779b1
@@ -127,3 +128,9 @@ export const gaborFast3 = (x: number, y: number, z: number): number => {
   }
   return sum
 }
+
+/** Gabor 2D, 'split-bits-gated' fast implementation — display value, unclamped. */
+export const gabor2dFast = (x: number, y: number): number => 0.5 + 0.5 * GABOR2_NORM * gaborFast2(x, y)
+
+/** Gabor 3D, 'split-bits-gated' fast implementation — display value, unclamped. */
+export const gabor3dFast = (x: number, y: number, z: number): number => 0.5 + 0.5 * GABOR3_NORM * gaborFast3(x, y, z)

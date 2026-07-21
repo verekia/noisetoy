@@ -12,7 +12,7 @@ import {
   IMPLEMENTATIONS,
   implementationOf,
 } from './implementations'
-import { getNoise, getVariant, NOISES } from './registry'
+import { getNoise, NOISES } from './registry'
 import { buildGlslFragment } from './render/glsl'
 import { buildTslBody, TSL_IMPORTS } from './render/tsl'
 import { buildWgslShader } from './render/wgsl'
@@ -21,28 +21,14 @@ import type { AltVariant } from './implementations'
 import type { LayerConfig } from './render/types'
 
 /**
- * A LayerConfig whose variant is the registry one with the alt
- * implementation's samplers and shader specs swapped in — exactly the patch
- * the explorer applies to render a non-shipping implementation.
+ * A LayerConfig over the alt implementation's NoiseSource — exactly the layer
+ * the explorer builds to render a non-shipping implementation.
  */
 const altLayer = (alt: AltVariant): LayerConfig => {
   const noise = getNoise(alt.noiseId)
   if (!noise) throw new Error(`no noise ${alt.noiseId}`)
-  const variant = getVariant(noise, alt.variantId)
   return {
-    variant: {
-      ...variant,
-      sample: alt.sample,
-      sampleRaw: alt.sampleRaw,
-      glsl: alt.glsl,
-      wgsl: alt.wgsl,
-      tsl: alt.tsl,
-      sampleTileable: null,
-      sampleRawTileable: null,
-      glslTileable: null,
-      wgslTileable: null,
-      tslTileable: null,
-    },
+    noise: alt.source,
     scale: noise.scale,
     octaves: 2,
     rotate: false,
@@ -224,7 +210,7 @@ test('every inRepo path actually exists', async () => {
   for (const { noiseId, implementation } of allImplementations()) {
     const rel = implementation.reference?.inRepo
     if (!rel) continue
-    const abs = `${import.meta.dir}/../${rel}`
+    const abs = `${import.meta.dir}/../../library/${rel}`
     expect({ noiseId, rel, exists: await Bun.file(abs).exists() }).toEqual({ noiseId, rel, exists: true })
   }
 })
@@ -234,7 +220,7 @@ test('every archivedAt path actually exists', async () => {
   for (const { noiseId, implementation } of allImplementations()) {
     const rel = implementation.archivedAt
     if (!rel) continue
-    const abs = `${import.meta.dir}/../${rel}`
+    const abs = `${import.meta.dir}/../../library/${rel}`
     expect({ noiseId, rel, exists: await Bun.file(abs).exists() }).toEqual({ noiseId, rel, exists: true })
   }
 })

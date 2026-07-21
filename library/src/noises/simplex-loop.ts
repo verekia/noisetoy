@@ -14,7 +14,8 @@
 // circle, so also wrapping x and y would need 6D noise, where the simplex
 // kernel quality degrades.
 
-import { simplex4 } from './simplex4'
+import { SIMPLEX4_NORM } from './normalization.js'
+import { simplex4 } from './simplex4.js'
 
 const TAU = 6.283185307179586
 
@@ -29,3 +30,7 @@ export const simplexLoop3 = (x: number, y: number, z: number): number => {
   const a = z * TAU
   return simplex4(x, y, LOOP_RADIUS * Math.cos(a), LOOP_RADIUS * Math.sin(a))
 }
+
+/** Simplex Loop 3D, shipping implementation — display value, nominally [0, 1], unclamped. */
+export const simplexLoop3dCanonical = (x: number, y: number, z: number): number =>
+  0.5 + 0.5 * SIMPLEX4_NORM * simplexLoop3(x, y, z)

@@ -10,7 +10,7 @@
 // radius is used, trading exact C1 continuity for coverage as in Gustavson's
 // reference implementation.
 
-import { hash4 } from './common'
+import { hash4 } from './common.js'
 
 const F4 = 0.30901699437494745 // (sqrt(5) - 1) / 4
 const G4 = 0.1381966011250105 // (5 - sqrt(5)) / 20

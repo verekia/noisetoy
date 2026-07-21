@@ -2,6 +2,12 @@
 // FAST_COMMON_TSL. Period baked at 8 cells; the wrap is bitAnd(7) on the
 // signed lattice coordinate.
 
+import { COMMON_TSL } from '../noises/common.tsl.js'
+import { PERLIN2_NORM, PERLIN3_NORM } from '../noises/normalization.js'
+import { FAST_COMMON_TSL } from './fast-common.tsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const PERLIN_FAST_TILEABLE_TSL = /* js */ `
 const perlinFastT2 = Fn(([p]) => {
   const i = floor(p)
@@ -53,3 +59,17 @@ const perlinFastT3 = Fn(([p]) => {
   return mix(nz0, nz1, uz)
 })
 `
+
+/** Perlin 2D Fast, tileable at a baked period of 8 cells (fib-hash-tileable candidate) — TSL ShaderSpec, pre-clamp display expression. */
+export const perlin2dFastTileableTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, FAST_COMMON_TSL, PERLIN_FAST_TILEABLE_TSL],
+  expr: `perlinFastT2(p).mul(${0.5 * PERLIN2_NORM}).add(0.5)`,
+}
+
+/** Perlin 3D Fast, x/y tileable at a baked period of 8 cells (fib-hash-tileable candidate) — TSL ShaderSpec, pre-clamp display expression. */
+export const perlin3dFastTileableTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, FAST_COMMON_TSL, PERLIN_FAST_TILEABLE_TSL],
+  expr: `perlinFastT3(p).mul(${0.5 * PERLIN3_NORM}).add(0.5)`,
+}

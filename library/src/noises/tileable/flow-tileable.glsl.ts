@@ -1,6 +1,12 @@
 // GLSL counterpart of flow-tileable.ts. Requires COMMON_GLSL and FLOW_GLSL
 // (for rotGradDot2).
 
+import { COMMON_GLSL } from '../common.glsl.js'
+import { FLOW_GLSL } from '../flow.glsl.js'
+import { fmt, PERLIN2_NORM } from '../normalization.js'
+
+import type { ShaderSpec } from '../../spec.js'
+
 export const FLOW_TILEABLE_GLSL = /* glsl */ `
 float flow3T(vec3 p, vec2 per) {
   vec2 i = floor(p.xy);
@@ -21,3 +27,10 @@ float flow3T(vec3 p, vec2 per) {
   return mix(mix(g00, g10, ux), mix(g01, g11, ux), uy);
 }
 `
+
+/** GLSL spec for Flow 3D, tileable (shipping implementation). */
+export const flow3dCanonicalTileableGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, FLOW_GLSL, FLOW_TILEABLE_GLSL],
+  expr: `0.5 + 0.5 * ${fmt(PERLIN2_NORM)} * flow3T(p, per)`,
+}

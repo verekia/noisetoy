@@ -1,5 +1,10 @@
 // TSL counterpart of gabor-tileable.ts. Requires COMMON_TSL.
 
+import { COMMON_TSL } from '../common.tsl.js'
+import { GABOR2_NORM, GABOR3_NORM } from '../normalization.js'
+
+import type { ShaderSpec } from '../../spec.js'
+
 export const GABOR_TILEABLE_TSL = /* js */ `
 const gabor2T = Fn(([p, per]) => {
   const i = floor(p)
@@ -53,3 +58,17 @@ const gabor3T = Fn(([p, per]) => {
   return sum
 })
 `
+
+/** Gabor 2D (Canonical), tileable — TSL shader spec. */
+export const gabor2dCanonicalTileableTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, GABOR_TILEABLE_TSL],
+  expr: `gabor2T(p, per).mul(${0.5 * GABOR2_NORM}).add(0.5)`,
+}
+
+/** Gabor 3D (Canonical), tileable — TSL shader spec. */
+export const gabor3dCanonicalTileableTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, GABOR_TILEABLE_TSL],
+  expr: `gabor3T(p, per).mul(${0.5 * GABOR3_NORM}).add(0.5)`,
+}

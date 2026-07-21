@@ -1,5 +1,9 @@
 // GLSL counterpart of worley-tileable.ts. Requires COMMON_GLSL.
 
+import { COMMON_GLSL } from '../common.glsl.js'
+
+import type { ShaderSpec } from '../../spec.js'
+
 export const WORLEY_TILEABLE_GLSL = /* glsl */ `
 float worley2T(vec2 p, vec2 per) {
   vec2 i = floor(p);
@@ -45,3 +49,17 @@ float worley3T(vec3 p, vec2 per) {
   return sqrt(f1);
 }
 `
+
+/** GLSL spec for Worley 2D, tileable (shipping implementation). */
+export const worley2dCanonicalTileableGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, WORLEY_TILEABLE_GLSL],
+  expr: 'worley2T(p, per)',
+}
+
+/** GLSL spec for Worley 3D, tileable (shipping implementation). */
+export const worley3dCanonicalTileableGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, WORLEY_TILEABLE_GLSL],
+  expr: 'worley3T(p, per)',
+}

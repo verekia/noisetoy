@@ -3,8 +3,9 @@
 // x/y (Worley-style). Distances and offsets stay geometric.
 // Kept out of the core implementation.
 
-import { FOAM_R, STARS_SHARP } from '../cellular'
-import { hash2, hash3, hashU32, imod, to01 } from '../common'
+import { FOAM_R, STARS_SHARP } from '../cellular.js'
+import { hash2, hash3, hashU32, imod, to01 } from '../common.js'
+import { CRACKLE_NORM, STARS_NORM } from '../normalization.js'
 
 type Best2 = { d2: number; vx: number; vy: number; h: number }
 
@@ -212,3 +213,31 @@ export const stars3Tileable = (x: number, y: number, z: number, px: number, py: 
   }
   return sum
 }
+
+/** Mosaic 2D tileable, shipping implementation — wraps every periodX / periodY lattice cells; display value, nominally [0, 1], unclamped. */
+export const mosaic2dCanonicalTileable = mosaic2Tileable
+
+/** Mosaic 3D tileable, shipping implementation — wraps every periodX / periodY lattice cells; display value, nominally [0, 1], unclamped. */
+export const mosaic3dCanonicalTileable = mosaic3Tileable
+
+/** Crackle 2D tileable, shipping implementation — wraps every periodX / periodY lattice cells; display value, nominally [0, 1], unclamped. */
+export const crackle2dCanonicalTileable = (x: number, y: number, periodX: number, periodY: number): number =>
+  CRACKLE_NORM * crackle2Tileable(x, y, periodX, periodY)
+
+/** Crackle 3D tileable, shipping implementation — wraps every periodX / periodY lattice cells; display value, nominally [0, 1], unclamped. */
+export const crackle3dCanonicalTileable = (x: number, y: number, z: number, periodX: number, periodY: number): number =>
+  CRACKLE_NORM * crackle3Tileable(x, y, z, periodX, periodY)
+
+/** Foam 2D tileable, shipping implementation — wraps every periodX / periodY lattice cells; display value, nominally [0, 1], unclamped. */
+export const foam2dCanonicalTileable = foam2Tileable
+
+/** Foam 3D tileable, shipping implementation — wraps every periodX / periodY lattice cells; display value, nominally [0, 1], unclamped. */
+export const foam3dCanonicalTileable = foam3Tileable
+
+/** Stars 2D tileable, shipping implementation — wraps every periodX / periodY lattice cells; display value, nominally [0, 1], unclamped. */
+export const stars2dCanonicalTileable = (x: number, y: number, periodX: number, periodY: number): number =>
+  STARS_NORM * stars2Tileable(x, y, periodX, periodY)
+
+/** Stars 3D tileable, shipping implementation — wraps every periodX / periodY lattice cells; display value, nominally [0, 1], unclamped. */
+export const stars3dCanonicalTileable = (x: number, y: number, z: number, periodX: number, periodY: number): number =>
+  STARS_NORM * stars3Tileable(x, y, z, periodX, periodY)

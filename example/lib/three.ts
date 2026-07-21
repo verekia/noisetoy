@@ -1,4 +1,4 @@
-// noisetoy/three — Three.js TSL bindings.
+// Three.js TSL bindings for the explorer (formerly the noisetoy/three entry).
 //
 // Turns an Effect into TSL nodes for node materials on a WebGPURenderer. The
 // composed TSL source (the same text `effect.tsl()` returns) is evaluated

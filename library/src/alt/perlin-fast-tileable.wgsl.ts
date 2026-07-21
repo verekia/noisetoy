@@ -2,6 +2,12 @@
 // FAST_COMMON_WGSL. Period baked at 8 cells; `& 7` on the signed lattice
 // coordinate is two's-complement AND, defined for negatives in WGSL.
 
+import { COMMON_WGSL } from '../noises/common.wgsl.js'
+import { PERLIN2_NORM, PERLIN3_NORM, fmt } from '../noises/normalization.js'
+import { FAST_COMMON_WGSL } from './fast-common.wgsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const PERLIN_FAST_TILEABLE_WGSL = /* wgsl */ `
 fn perlinFastT2(p: vec2f) -> f32 {
   let i = floor(p);
@@ -53,3 +59,17 @@ fn perlinFastT3(p: vec3f) -> f32 {
   return mix(nz0, nz1, uz);
 }
 `
+
+/** Perlin 2D Fast, tileable at a baked period of 8 cells (fib-hash-tileable candidate) — WGSL ShaderSpec, pre-clamp display expression. */
+export const perlin2dFastTileableWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, FAST_COMMON_WGSL, PERLIN_FAST_TILEABLE_WGSL],
+  expr: `0.5 + 0.5 * ${fmt(PERLIN2_NORM)} * perlinFastT2(p)`,
+}
+
+/** Perlin 3D Fast, x/y tileable at a baked period of 8 cells (fib-hash-tileable candidate) — WGSL ShaderSpec, pre-clamp display expression. */
+export const perlin3dFastTileableWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, FAST_COMMON_WGSL, PERLIN_FAST_TILEABLE_WGSL],
+  expr: `0.5 + 0.5 * ${fmt(PERLIN3_NORM)} * perlinFastT3(p)`,
+}

@@ -23,8 +23,8 @@
 // ~2.0x wave3 on the CPU. Output is a blend of cosines in [-1, 1], as
 // shipping.
 
-import { fade, LATTICE_HX, LATTICE_HY, LATTICE_HZ, lerp } from '../noises/common'
-import { WAVE_FREQ } from '../noises/wave'
+import { fade, LATTICE_HX, LATTICE_HY, LATTICE_HZ, lerp } from '../noises/common.js'
+import { WAVE_FREQ } from '../noises/wave.js'
 
 /** 2^32 / phi, odd — Knuth's multiplicative hashing constant. */
 const FIB = 0x9e3779b1
@@ -124,3 +124,9 @@ export const waveFast3 = (x: number, y: number, z: number): number => {
   const nz1 = lerp(lerp(s001, s101, ux), lerp(s011, s111, ux), uy)
   return lerp(nz0, nz1, uz)
 }
+
+/** Wave 2D, 'fast-dirs' fast implementation — display value, unclamped. */
+export const wave2dFast = (x: number, y: number): number => 0.5 + 0.5 * waveFast2(x, y)
+
+/** Wave 3D, 'fast-dirs' fast implementation — display value, unclamped. */
+export const wave3dFast = (x: number, y: number, z: number): number => 0.5 + 0.5 * waveFast3(x, y, z)

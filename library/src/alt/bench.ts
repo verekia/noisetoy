@@ -30,17 +30,17 @@
 // width, which a GPU also prices differently. Treat this as a strong hint,
 // not a settled answer.
 
-import { crackle2, crackle3, foam2, foam3, mosaic2, mosaic3, stars2, stars3 } from '../noises/cellular'
-import { flow3 } from '../noises/flow'
-import { gabor2, gabor3 } from '../noises/gabor'
-import { perlin2, perlin3 } from '../noises/perlin'
-import { ripple2, ripple3 } from '../noises/ripple'
-import { simplex2 as simplexTable2, simplex3 as simplexTable3 } from '../noises/simplex'
-import { value2, value3 } from '../noises/value'
-import { vortex2, vortex3 } from '../noises/vortex'
-import { wave2, wave3 } from '../noises/wave'
-import { worley2, worley3 } from '../noises/worley'
-import { chebyshev2, chebyshev3, manhattan2, manhattan3 } from '../noises/worley-metrics'
+import { crackle2, crackle3, foam2, foam3, mosaic2, mosaic3, stars2, stars3 } from '../noises/cellular.js'
+import { flow3 } from '../noises/flow.js'
+import { gabor2, gabor3 } from '../noises/gabor.js'
+import { perlin2, perlin3 } from '../noises/perlin.js'
+import { ripple2, ripple3 } from '../noises/ripple.js'
+import { simplex2 as simplexTable2, simplex3 as simplexTable3 } from '../noises/simplex.js'
+import { value2, value3 } from '../noises/value.js'
+import { vortex2, vortex3 } from '../noises/vortex.js'
+import { wave2, wave3 } from '../noises/wave.js'
+import { chebyshev2, chebyshev3, manhattan2, manhattan3 } from '../noises/worley-metrics.js'
+import { worley2, worley3 } from '../noises/worley.js'
 import {
   crackleFast2,
   crackleFast3,
@@ -52,17 +52,17 @@ import {
   rippleFast3,
   starsFast2,
   starsFast3,
-} from './cellular-fast'
-import { flowFast3 } from './flow-fast'
-import { gaborFast2, gaborFast3 } from './gabor-fast'
-import { perlinFast2, perlinFast3 } from './perlin-fast'
-import { perlinFastTileable2, perlinFastTileable3 } from './perlin-fast-tileable'
-import { simplexFast2, simplexFast3 } from './simplex-fast'
-import { valueFast2, valueFast3 } from './value-fast'
-import { vortexFast2, vortexFast3 } from './vortex-fast'
-import { waveFast2, waveFast3 } from './wave-fast'
-import { worleyFast2, worleyFast3 } from './worley-fast'
-import { chebyshevFast2, chebyshevFast3, manhattanFast2, manhattanFast3 } from './worley-metrics-fast'
+} from './cellular-fast.js'
+import { flowFast3 } from './flow-fast.js'
+import { gaborFast2, gaborFast3 } from './gabor-fast.js'
+import { perlinFastTileable2, perlinFastTileable3 } from './perlin-fast-tileable.js'
+import { perlinFast2, perlinFast3 } from './perlin-fast.js'
+import { simplexFast2, simplexFast3 } from './simplex-fast.js'
+import { valueFast2, valueFast3 } from './value-fast.js'
+import { vortexFast2, vortexFast3 } from './vortex-fast.js'
+import { waveFast2, waveFast3 } from './wave-fast.js'
+import { worleyFast2, worleyFast3 } from './worley-fast.js'
+import { chebyshevFast2, chebyshevFast3, manhattanFast2, manhattanFast3 } from './worley-metrics-fast.js'
 
 type Fn3 = (x: number, y: number, z: number) => number
 

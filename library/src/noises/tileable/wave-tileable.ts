@@ -4,8 +4,8 @@
 // they are translation-invariant and the pattern repeats seamlessly.
 // This wrapping is deliberately kept out of the core implementation.
 
-import { fade, hash2, hash3, hashU32, imod, lerp, to01 } from '../common'
-import { WAVE_FREQ } from '../wave'
+import { fade, hash2, hash3, hashU32, imod, lerp, to01 } from '../common.js'
+import { WAVE_FREQ } from '../wave.js'
 
 const TAU = 6.283185307179586
 
@@ -68,3 +68,11 @@ export const wave3Tileable = (x: number, y: number, z: number, px: number, py: n
   const nz1 = lerp(lerp(s001, s101, ux), lerp(s011, s111, ux), uy)
   return lerp(nz0, nz1, uz)
 }
+
+/** Wave 2D tileable, shipping implementation — wraps every periodX / periodY lattice cells; display value, nominally [0, 1], unclamped. */
+export const wave2dCanonicalTileable = (x: number, y: number, periodX: number, periodY: number): number =>
+  0.5 + 0.5 * wave2Tileable(x, y, periodX, periodY)
+
+/** Wave 3D tileable, shipping implementation — wraps every periodX / periodY lattice cells; display value, nominally [0, 1], unclamped. */
+export const wave3dCanonicalTileable = (x: number, y: number, z: number, periodX: number, periodY: number): number =>
+  0.5 + 0.5 * wave3Tileable(x, y, z, periodX, periodY)

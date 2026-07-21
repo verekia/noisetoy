@@ -1,6 +1,12 @@
 // WGSL counterpart of cellular-fast.ts. Requires COMMON_WGSL and
 // FAST_COMMON_WGSL. Winner tracking via ptr<function> parameters.
 
+import { COMMON_WGSL } from '../noises/common.wgsl.js'
+import { CRACKLE_NORM, RIPPLE_NORM, STARS_NORM, fmt } from '../noises/normalization.js'
+import { FAST_COMMON_WGSL } from './fast-common.wgsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const CELLULAR_FAST_WGSL = /* wgsl */ `
 fn mosFastCell2(s: u32, b: vec2f, f1: f32, sb: ptr<function, u32>) -> f32 {
   var h = fibMix(s);
@@ -418,3 +424,73 @@ fn rippleFast3(p: vec3f) -> f32 {
   return sum;
 }
 `
+
+/** Ripple 2D Fast (split-bits-pruned candidate) — WGSL ShaderSpec, pre-clamp display expression. */
+export const ripple2dFastWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, FAST_COMMON_WGSL, CELLULAR_FAST_WGSL],
+  expr: `0.5 + 0.5 * ${fmt(RIPPLE_NORM)} * rippleFast2(p)`,
+}
+
+/** Ripple 3D Fast (split-bits-pruned candidate) — WGSL ShaderSpec, pre-clamp display expression. */
+export const ripple3dFastWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, FAST_COMMON_WGSL, CELLULAR_FAST_WGSL],
+  expr: `0.5 + 0.5 * ${fmt(RIPPLE_NORM)} * rippleFast3(p)`,
+}
+
+/** Stars 2D Fast (split-bits-pruned candidate) — WGSL ShaderSpec, pre-clamp display expression. */
+export const stars2dFastWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, FAST_COMMON_WGSL, CELLULAR_FAST_WGSL],
+  expr: `${fmt(STARS_NORM)} * starsFast2(p)`,
+}
+
+/** Stars 3D Fast (split-bits-pruned candidate) — WGSL ShaderSpec, pre-clamp display expression. */
+export const stars3dFastWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, FAST_COMMON_WGSL, CELLULAR_FAST_WGSL],
+  expr: `${fmt(STARS_NORM)} * starsFast3(p)`,
+}
+
+/** Foam 2D Fast (split-bits-pruned candidate) — WGSL ShaderSpec, pre-clamp display expression. */
+export const foam2dFastWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, FAST_COMMON_WGSL, CELLULAR_FAST_WGSL],
+  expr: 'foamFast2(p)',
+}
+
+/** Foam 3D Fast (split-bits-pruned candidate) — WGSL ShaderSpec, pre-clamp display expression. */
+export const foam3dFastWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, FAST_COMMON_WGSL, CELLULAR_FAST_WGSL],
+  expr: 'foamFast3(p)',
+}
+
+/** Crackle 2D Fast (split-bits-pruned candidate) — WGSL ShaderSpec, pre-clamp display expression. */
+export const crackle2dFastWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, FAST_COMMON_WGSL, CELLULAR_FAST_WGSL],
+  expr: `${fmt(CRACKLE_NORM)} * crackleFast2(p)`,
+}
+
+/** Crackle 3D Fast (split-bits-pruned candidate) — WGSL ShaderSpec, pre-clamp display expression. */
+export const crackle3dFastWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, FAST_COMMON_WGSL, CELLULAR_FAST_WGSL],
+  expr: `${fmt(CRACKLE_NORM)} * crackleFast3(p)`,
+}
+
+/** Mosaic 2D Fast (split-bits-pruned candidate) — WGSL ShaderSpec, pre-clamp display expression. */
+export const mosaic2dFastWgsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_WGSL, FAST_COMMON_WGSL, CELLULAR_FAST_WGSL],
+  expr: 'mosaicFast2(p)',
+}
+
+/** Mosaic 3D Fast (split-bits-pruned candidate) — WGSL ShaderSpec, pre-clamp display expression. */
+export const mosaic3dFastWgsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_WGSL, FAST_COMMON_WGSL, CELLULAR_FAST_WGSL],
+  expr: 'mosaicFast3(p)',
+}

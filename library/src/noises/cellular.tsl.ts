@@ -1,6 +1,11 @@
 // TSL counterpart of cellular.ts (Mosaic, Crackle, Foam, Stars).
 // Requires COMMON_TSL.
 
+import { COMMON_TSL } from './common.tsl.js'
+import { CRACKLE_NORM, STARS_NORM } from './normalization.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const CELLULAR_TSL = /* js */ `
 const mosaic2 = Fn(([p]) => {
   const i = floor(p)
@@ -178,3 +183,59 @@ const stars3 = Fn(([p]) => {
   return sum
 })
 `
+
+/** Mosaic 2D (Canonical) — TSL shader spec. */
+export const mosaic2dCanonicalTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, CELLULAR_TSL],
+  expr: 'mosaic2(p)',
+}
+
+/** Mosaic 3D (Canonical) — TSL shader spec. */
+export const mosaic3dCanonicalTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, CELLULAR_TSL],
+  expr: 'mosaic3(p)',
+}
+
+/** Crackle 2D (Canonical) — TSL shader spec. */
+export const crackle2dCanonicalTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, CELLULAR_TSL],
+  expr: `crackle2(p).mul(${CRACKLE_NORM})`,
+}
+
+/** Crackle 3D (Canonical) — TSL shader spec. */
+export const crackle3dCanonicalTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, CELLULAR_TSL],
+  expr: `crackle3(p).mul(${CRACKLE_NORM})`,
+}
+
+/** Foam 2D (Canonical) — TSL shader spec. */
+export const foam2dCanonicalTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, CELLULAR_TSL],
+  expr: 'foam2(p)',
+}
+
+/** Foam 3D (Canonical) — TSL shader spec. */
+export const foam3dCanonicalTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, CELLULAR_TSL],
+  expr: 'foam3(p)',
+}
+
+/** Stars 2D (Canonical) — TSL shader spec. */
+export const stars2dCanonicalTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, CELLULAR_TSL],
+  expr: `stars2(p).mul(${STARS_NORM})`,
+}
+
+/** Stars 3D (Canonical) — TSL shader spec. */
+export const stars3dCanonicalTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, CELLULAR_TSL],
+  expr: `stars3(p).mul(${STARS_NORM})`,
+}

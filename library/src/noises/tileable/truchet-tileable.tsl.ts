@@ -1,5 +1,9 @@
 // TSL counterpart of truchet-tileable.ts. Requires COMMON_TSL.
 
+import { COMMON_TSL } from '../common.tsl.js'
+
+import type { ShaderSpec } from '../../spec.js'
+
 export const TRUCHET_TILEABLE_TSL = /* js */ `
 const truchet2T = Fn(([p, per]) => {
   const i = floor(p)
@@ -15,3 +19,10 @@ const truchet2T = Fn(([p, per]) => {
   return cos(d1.min(d2).mul(6.283185307179586 * 3))
 })
 `
+
+/** Truchet 2D (Canonical), tileable — TSL shader spec. */
+export const truchet2dCanonicalTileableTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, TRUCHET_TILEABLE_TSL],
+  expr: 'truchet2T(p, per).mul(0.5).add(0.5)',
+}

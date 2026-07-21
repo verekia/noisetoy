@@ -1,5 +1,10 @@
 // GLSL counterpart of ripple.ts. Requires COMMON_GLSL.
 
+import { COMMON_GLSL } from './common.glsl.js'
+import { fmt, RIPPLE_NORM } from './normalization.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const RIPPLE_GLSL = /* glsl */ `
 float ripple2(vec2 p) {
   vec2 i = floor(p);
@@ -47,3 +52,17 @@ float ripple3(vec3 p) {
   return sum;
 }
 `
+
+/** GLSL spec for Ripple 2D (shipping implementation). */
+export const ripple2dCanonicalGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, RIPPLE_GLSL],
+  expr: `0.5 + 0.5 * ${fmt(RIPPLE_NORM)} * ripple2(p)`,
+}
+
+/** GLSL spec for Ripple 3D (shipping implementation). */
+export const ripple3dCanonicalGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, RIPPLE_GLSL],
+  expr: `0.5 + 0.5 * ${fmt(RIPPLE_NORM)} * ripple3(p)`,
+}

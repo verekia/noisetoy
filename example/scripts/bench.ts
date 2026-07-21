@@ -8,8 +8,8 @@
 // single algorithm across all of its implementations: bun run bench perlin
 
 import { benchJsVariant } from '#/lib/bench'
-import { getNoise, NOISES } from 'noisetoy'
-import { ALT_VARIANTS } from 'noisetoy/implementations'
+import { ALT_VARIANTS } from '#/lib/implementations'
+import { getNoise, NOISES } from '#/lib/registry'
 
 const SIZE = 512
 

@@ -11,7 +11,7 @@
 // Arc-distance shading of Truchet tilings is shader-community folklore (no
 // known patent); this is an original implementation on this repo's hash. MIT.
 
-import { hash2 } from './common'
+import { hash2 } from './common.js'
 
 const TAU = 6.283185307179586
 
@@ -31,3 +31,6 @@ export const truchet2 = (x: number, y: number): number => {
   const d = Math.min(d1, d2)
   return Math.cos(d * TAU * TRUCHET_RINGS)
 }
+
+/** Truchet 2D, shipping implementation — display value, nominally [0, 1], unclamped. */
+export const truchet2dCanonical = (x: number, y: number): number => 0.5 + 0.5 * truchet2(x, y)

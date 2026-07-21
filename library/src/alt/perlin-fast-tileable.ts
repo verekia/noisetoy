@@ -21,8 +21,9 @@
 // exactly as it does for the shipping wrap-then-hash. The measured numbers
 // live in the inventory entry.
 
-import { fade, LATTICE_HX, LATTICE_HY, LATTICE_HZ, lerp } from '../noises/common'
-import { grad3, pick } from './perlin-fast'
+import { fade, LATTICE_HX, LATTICE_HY, LATTICE_HZ, lerp } from '../noises/common.js'
+import { PERLIN2_NORM, PERLIN3_NORM } from '../noises/normalization.js'
+import { grad3, pick } from './perlin-fast.js'
 
 /** 2^32 / phi, odd — Knuth's multiplicative hashing constant. */
 const FIB = 0x9e3779b1
@@ -88,3 +89,19 @@ export const perlinFastTileable3 = (x: number, y: number, z: number): number => 
   const nz1 = lerp(lerp(g001, g101, ux), lerp(g011, g111, ux), uy)
   return lerp(nz0, nz1, uz)
 }
+
+/**
+ * Perlin 2D, 'fib-hash-tileable' fast implementation — display value,
+ * unclamped. The tiling period is baked at 8 cells in x/y (no period
+ * parameters).
+ */
+export const perlin2dFastTileable = (x: number, y: number): number =>
+  0.5 + 0.5 * PERLIN2_NORM * perlinFastTileable2(x, y)
+
+/**
+ * Perlin 3D, 'fib-hash-tileable' fast implementation — display value,
+ * unclamped. The tiling period is baked at 8 cells in x/y (no period
+ * parameters); z is unwrapped.
+ */
+export const perlin3dFastTileable = (x: number, y: number, z: number): number =>
+  0.5 + 0.5 * PERLIN3_NORM * perlinFastTileable3(x, y, z)

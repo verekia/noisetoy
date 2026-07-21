@@ -2,6 +2,11 @@
 // Note TSL's select(condition, ifTrue, ifFalse) argument order, which is the
 // reverse of WGSL's.
 
+import { COMMON_TSL } from './common.tsl.js'
+import { PERLIN2_NORM, PERLIN3_NORM } from './normalization.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const PERLIN_TSL = /* js */ `
 const perlin2 = Fn(([p]) => {
   const i = floor(p)
@@ -44,3 +49,17 @@ const perlin3 = Fn(([p]) => {
   return mix(nz0, nz1, uz)
 })
 `
+
+/** Perlin 2D (Canonical) — TSL shader spec. */
+export const perlin2dCanonicalTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, PERLIN_TSL],
+  expr: `perlin2(p).mul(${0.5 * PERLIN2_NORM}).add(0.5)`,
+}
+
+/** Perlin 3D (Canonical) — TSL shader spec. */
+export const perlin3dCanonicalTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, PERLIN_TSL],
+  expr: `perlin3(p).mul(${0.5 * PERLIN3_NORM}).add(0.5)`,
+}

@@ -2,6 +2,11 @@
 // GLSL has no structs-by-convention here: each noise carries its own loop so
 // every function stays self-contained for shader composition.
 
+import { COMMON_GLSL } from './common.glsl.js'
+import { CRACKLE_NORM, fmt, STARS_NORM } from './normalization.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const CELLULAR_GLSL = /* glsl */ `
 float mosaic2(vec2 p) {
   vec2 i = floor(p);
@@ -161,3 +166,59 @@ float stars3(vec3 p) {
   return sum;
 }
 `
+
+/** GLSL spec for Mosaic 2D (shipping implementation). */
+export const mosaic2dCanonicalGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, CELLULAR_GLSL],
+  expr: 'mosaic2(p)',
+}
+
+/** GLSL spec for Mosaic 3D (shipping implementation). */
+export const mosaic3dCanonicalGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, CELLULAR_GLSL],
+  expr: 'mosaic3(p)',
+}
+
+/** GLSL spec for Crackle 2D (shipping implementation). */
+export const crackle2dCanonicalGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, CELLULAR_GLSL],
+  expr: `${fmt(CRACKLE_NORM)} * crackle2(p)`,
+}
+
+/** GLSL spec for Crackle 3D (shipping implementation). */
+export const crackle3dCanonicalGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, CELLULAR_GLSL],
+  expr: `${fmt(CRACKLE_NORM)} * crackle3(p)`,
+}
+
+/** GLSL spec for Foam 2D (shipping implementation). */
+export const foam2dCanonicalGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, CELLULAR_GLSL],
+  expr: 'foam2(p)',
+}
+
+/** GLSL spec for Foam 3D (shipping implementation). */
+export const foam3dCanonicalGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, CELLULAR_GLSL],
+  expr: 'foam3(p)',
+}
+
+/** GLSL spec for Stars 2D (shipping implementation). */
+export const stars2dCanonicalGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, CELLULAR_GLSL],
+  expr: `${fmt(STARS_NORM)} * stars2(p)`,
+}
+
+/** GLSL spec for Stars 3D (shipping implementation). */
+export const stars3dCanonicalGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, CELLULAR_GLSL],
+  expr: `${fmt(STARS_NORM)} * stars3(p)`,
+}

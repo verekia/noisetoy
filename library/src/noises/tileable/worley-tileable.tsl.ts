@@ -1,5 +1,9 @@
 // TSL counterpart of worley-tileable.ts. Requires COMMON_TSL.
 
+import { COMMON_TSL } from '../common.tsl.js'
+
+import type { ShaderSpec } from '../../spec.js'
+
 export const WORLEY_TILEABLE_TSL = /* js */ `
 const worley2T = Fn(([p, per]) => {
   const i = floor(p)
@@ -43,3 +47,17 @@ const worley3T = Fn(([p, per]) => {
   return sqrt(f1)
 })
 `
+
+/** Worley 2D (Canonical), tileable — TSL shader spec. */
+export const worley2dCanonicalTileableTsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_TSL, WORLEY_TILEABLE_TSL],
+  expr: 'worley2T(p, per)',
+}
+
+/** Worley 3D (Canonical), tileable — TSL shader spec. */
+export const worley3dCanonicalTileableTsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_TSL, WORLEY_TILEABLE_TSL],
+  expr: 'worley3T(p, per)',
+}

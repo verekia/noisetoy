@@ -10,7 +10,7 @@
 // Both tile through the tileable Perlin code path (see
 // tileable/perlin-derived-tileable.ts). MIT.
 
-import { perlin2, perlin3 } from './perlin'
+import { perlin2, perlin3 } from './perlin.js'
 
 // These two scale with Perlin's amplitude, not with its pattern: they say how
 // hard to bend and how many rings per unit of noise. Perlin's table gradients
@@ -39,3 +39,15 @@ export const marble3 = (x: number, y: number, z: number): number =>
 export const contour2 = (x: number, y: number): number => Math.cos(perlin2(x, y) * CONTOUR_K)
 
 export const contour3 = (x: number, y: number, z: number): number => Math.cos(perlin3(x, y, z) * CONTOUR_K)
+
+/** Marble 2D, shipping implementation — display value, nominally [0, 1], unclamped. */
+export const marble2dCanonical = (x: number, y: number): number => 0.5 + 0.5 * marble2(x, y)
+
+/** Marble 3D, shipping implementation — display value, nominally [0, 1], unclamped. */
+export const marble3dCanonical = (x: number, y: number, z: number): number => 0.5 + 0.5 * marble3(x, y, z)
+
+/** Contour 2D, shipping implementation — display value, nominally [0, 1], unclamped. */
+export const contour2dCanonical = (x: number, y: number): number => 0.5 + 0.5 * contour2(x, y)
+
+/** Contour 3D, shipping implementation — display value, nominally [0, 1], unclamped. */
+export const contour3dCanonical = (x: number, y: number, z: number): number => 0.5 + 0.5 * contour3(x, y, z)

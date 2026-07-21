@@ -4,7 +4,7 @@
 //
 // Output: Euclidean distance, roughly [0, 1.3]; the display wrapper clamps.
 
-import { hash2, hash3, hashU32, to01 } from './common'
+import { hash2, hash3, hashU32, to01 } from './common.js'
 
 export const worley2 = (x: number, y: number): number => {
   const ix = Math.floor(x)
@@ -52,3 +52,9 @@ export const worley3 = (x: number, y: number, z: number): number => {
   }
   return Math.sqrt(f1)
 }
+
+/** Worley 2D, shipping implementation — display value, nominally [0, 1], unclamped. */
+export const worley2dCanonical = worley2
+
+/** Worley 3D, shipping implementation — display value, nominally [0, 1], unclamped. */
+export const worley3dCanonical = worley3

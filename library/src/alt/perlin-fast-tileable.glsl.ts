@@ -3,6 +3,12 @@
 // registry tile), so the wrap is `& 7` on the signed lattice coordinate —
 // two's-complement AND, defined for negatives in GLSL ES 3.00.
 
+import { COMMON_GLSL } from '../noises/common.glsl.js'
+import { fmt, PERLIN2_NORM, PERLIN3_NORM } from '../noises/normalization.js'
+import { FAST_COMMON_GLSL } from './fast-common.glsl.js'
+
+import type { ShaderSpec } from '../spec.js'
+
 export const PERLIN_FAST_TILEABLE_GLSL = /* glsl */ `
 float perlinFastT2(vec2 p) {
   vec2 i = floor(p);
@@ -54,3 +60,17 @@ float perlinFastT3(vec3 p) {
   return mix(nz0, nz1, uz);
 }
 `
+
+/** Perlin 2D, 'fib-hash-tileable' fast implementation, tileable at a baked 8-cell period — GLSL spec. */
+export const perlin2dFastTileableGlsl: ShaderSpec = {
+  dim: 2,
+  deps: [COMMON_GLSL, FAST_COMMON_GLSL, PERLIN_FAST_TILEABLE_GLSL],
+  expr: `0.5 + 0.5 * ${fmt(PERLIN2_NORM)} * perlinFastT2(p)`,
+}
+
+/** Perlin 3D, 'fib-hash-tileable' fast implementation, tileable at a baked 8-cell period — GLSL spec. */
+export const perlin3dFastTileableGlsl: ShaderSpec = {
+  dim: 3,
+  deps: [COMMON_GLSL, FAST_COMMON_GLSL, PERLIN_FAST_TILEABLE_GLSL],
+  expr: `0.5 + 0.5 * ${fmt(PERLIN3_NORM)} * perlinFastT3(p)`,
+}
