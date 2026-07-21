@@ -37,11 +37,11 @@ const altLayer = (alt: AltVariant): LayerConfig => {
       glsl: alt.glsl,
       wgsl: alt.wgsl,
       tsl: alt.tsl,
-      sampleTileable: alt.sampleTileable,
-      sampleRawTileable: alt.sampleRawTileable,
-      glslTileable: alt.glslTileable,
-      wgslTileable: alt.wgslTileable,
-      tslTileable: alt.tslTileable,
+      sampleTileable: null,
+      sampleRawTileable: null,
+      glslTileable: null,
+      wgslTileable: null,
+      tslTileable: null,
     },
     scale: noise.scale,
     octaves: 2,
@@ -51,17 +51,6 @@ const altLayer = (alt: AltVariant): LayerConfig => {
     opacity: 1,
     speed: 0,
     angle: 0,
-  }
-}
-
-const mulberry32 = (seed: number) => {
-  let a = seed >>> 0
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0
-    let t = a
-    t = Math.imul(t ^ (t >>> 15), t | 1)
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
   }
 }
 
@@ -340,62 +329,6 @@ describe('alt variants keep the non-shipping implementations runnable', () => {
         expect(v).toBeLessThanOrEqual(1)
         expect(alt.sample(x, y, z)).toBe(v)
       }
-    }
-  })
-
-  // Wrap-then-fold must tile EXACTLY and match the untiled candidate away
-  // from the seam — the same bar noises.test.ts holds the shipping tileable
-  // paths to. Tileable slots are optional on candidates; this covers every
-  // candidate that claims them, and the count assertion keeps the test from
-  // going vacuous if the claiming variant is ever removed.
-  test('alt tileable stand-ins wrap seamlessly and match the candidate away from the seam', () => {
-    const tileables = ALT_VARIANTS.filter(a => a.sampleTileable)
-    expect(tileables.length).toBeGreaterThan(0)
-    for (const alt of tileables) {
-      const tileable = alt.sampleTileable as NonNullable<AltVariant['sampleTileable']>
-      const noise = getNoise(alt.noiseId)
-      const px = noise?.scale ?? 8
-      const py = px
-      const rand = mulberry32(7)
-      for (let i = 0; i < 1500; i++) {
-        const x = rand() * px
-        const y = rand() * py
-        const z = rand() * 10
-        const base = tileable(x, y, z, px, py)
-        expect(base).toBeGreaterThanOrEqual(0)
-        expect(base).toBeLessThanOrEqual(1)
-        expect(tileable(x + px, y, z, px, py)).toBeCloseTo(base, 10)
-        expect(tileable(x, y + py, z, px, py)).toBeCloseTo(base, 10)
-        expect(tileable(x - px, y - py, z, px, py)).toBeCloseTo(base, 10)
-      }
-      const rand2 = mulberry32(1337)
-      for (let i = 0; i < 1500; i++) {
-        const x = 1 + rand2() * (px - 2.2)
-        const y = 1 + rand2() * (py - 2.2)
-        const z = rand2() * 10
-        expect(tileable(x, y, z, px, py)).toBeCloseTo(alt.sample(x, y, z), 12)
-      }
-    }
-  })
-
-  test('alt tileable shader specs compose into tiled programs that define their calls', () => {
-    for (const alt of ALT_VARIANTS) {
-      if (!alt.glslTileable || !alt.wgslTileable || !alt.tslTileable) continue
-      expect({ id: alt.id, dims: [alt.glslTileable.dim, alt.wgslTileable.dim, alt.tslTileable.dim] }).toEqual({
-        id: alt.id,
-        dims: [alt.dim, alt.dim, alt.dim],
-      })
-      const cfg = { layers: [altLayer(alt)], tiled: true, size: 512 }
-      const call = (alt.glslTileable.expr.match(/([A-Za-z0-9]+)\(p, per\)/) ?? [])[1] as string
-      expect(call?.length ?? 0).toBeGreaterThan(0)
-      expect(buildGlslFragment(cfg)).toContain(`float ${call}(`)
-      expect(buildWgslShader(cfg)).toContain(`fn ${call}(`)
-      const preamble = `const { ${TSL_IMPORTS.join(', ')} } = TSL\n`
-      const body = buildTslBody(cfg)
-      const factory = new Function('TSL', `"use strict"\n${preamble}${body}\nreturn effect`) as (
-        tsl: typeof TSL,
-      ) => (uv: unknown, z: unknown) => unknown
-      expect(factory(TSL)(TSL.vec2(0.3, 0.7), TSL.float(0.5))).toBeDefined()
     }
   })
 })

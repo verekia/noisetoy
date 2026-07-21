@@ -93,10 +93,6 @@ import { GABOR_FAST_GLSL } from './alt/gabor-fast.glsl'
 import { GABOR_FAST_TSL } from './alt/gabor-fast.tsl'
 import { GABOR_FAST_WGSL } from './alt/gabor-fast.wgsl'
 import { perlinFast2, perlinFast3 } from './alt/perlin-fast'
-import { perlinFastTileable3 } from './alt/perlin-fast-tileable'
-import { PERLIN_FAST_TILEABLE_GLSL } from './alt/perlin-fast-tileable.glsl'
-import { PERLIN_FAST_TILEABLE_TSL } from './alt/perlin-fast-tileable.tsl'
-import { PERLIN_FAST_TILEABLE_WGSL } from './alt/perlin-fast-tileable.wgsl'
 import { PERLIN_FAST_GLSL } from './alt/perlin-fast.glsl'
 import { PERLIN_FAST_TSL } from './alt/perlin-fast.tsl'
 import { PERLIN_FAST_WGSL } from './alt/perlin-fast.wgsl'
@@ -374,7 +370,7 @@ export const IMPLEMENTATIONS: Record<string, NoiseImplementation[]> = {
         "3D keeps the reference's 12 cube-edge gradient set, chosen by the same integer range split as the shipping gradTable3, reading the low 30 bits so the axis choice stays disjoint from the sign bits at 30/31.",
       ],
       rationale:
-        "The current challenger, and the measured FLOOR of the scalar form: a second tuning pass tried a hoisted 3D pre-mix, weighted-sum interpolation, an Estrin-reassociated fade, branchless 2D signs and a bias-trick floor, and every one measured flat or worse over 8-12 interleaved repeats — the FP skeleton (floors, fades, lerps) is ~156 ms of the ~190/~222 ms totals in the bench harness, so the remaining integer work sits latency-hidden behind it. Details in the source header. Measured with `bun run bench:impl`: perlin3 between 1.1x and 1.3x depending on the day's machine state, perlin2 ~1.1x, medians and bests agreeing within any single run. Gradient marginals, adjacent-corner joints along each axis and a checkerboard split all sit inside the 95% chi-square criticals, and the assembled field's mean, RMS, extrema and lattice-lag autocorrelation match the shipping perlin to three decimals — but the field is a DIFFERENT DRAW, so promotion would change the pattern every consumer sees. Not promoted yet: the GLSL/WGSL/TSL specs now exist (see ALT_VARIANTS), and the GPU measurement, since taken via the hardened /bench harness, came back a TIE with shipping in both dimensions (0.98-1.00x on WebGL and WebGPU) — the narrower avalanche neither wins nor loses there, so the CPU numbers are the whole case. The 3D tileable path now exists (perlin-fast-tileable.ts, wrap-then-fold, seam-exactness tested); 2D's is still unwritten.",
+        "The current challenger, and the measured FLOOR of the scalar form: a second tuning pass tried a hoisted 3D pre-mix, weighted-sum interpolation, an Estrin-reassociated fade, branchless 2D signs and a bias-trick floor, and every one measured flat or worse over 8-12 interleaved repeats — the FP skeleton (floors, fades, lerps) is ~156 ms of the ~190/~222 ms totals in the bench harness, so the remaining integer work sits latency-hidden behind it. Details in the source header. Measured with `bun run bench:impl`: perlin3 between 1.1x and 1.3x depending on the day's machine state, perlin2 ~1.1x, medians and bests agreeing within any single run. Gradient marginals, adjacent-corner joints along each axis and a checkerboard split all sit inside the 95% chi-square criticals, and the assembled field's mean, RMS, extrema and lattice-lag autocorrelation match the shipping perlin to three decimals — but the field is a DIFFERENT DRAW, so promotion would change the pattern every consumer sees. Not promoted yet: the GLSL/WGSL/TSL specs now exist (see ALT_VARIANTS), and the GPU measurement, since taken via the hardened /bench harness, came back a TIE with shipping in both dimensions (0.98-1.00x on WebGL and WebGPU) — the narrower avalanche neither wins nor loses there, so the CPU numbers are the whole case. The tileable paths are also unwritten.",
       variantIds: [],
     },
   ],
@@ -950,7 +946,7 @@ export const IMPLEMENTATION_STATUS_BLURB: Record<NonNullable<NoiseImplementation
 // Shader function names carry a Fast/Trig suffix so a stack can compose a
 // candidate next to the shipping chunk of the same noise without collisions.
 
-import type { SampleTileableFn, ShaderSpec } from './registry'
+import type { ShaderSpec } from './registry'
 
 export type AltSampleFn = (x: number, y: number, z: number) => number
 
@@ -972,17 +968,6 @@ export type AltVariant = {
   wgsl: ShaderSpec
   tsl: ShaderSpec
   /**
-   * Tileable stand-ins, same contract as the registry variant's tileable
-   * slots. Null while a candidate's wrapped paths are unwritten — the
-   * explorer disables tiling for such layers, exactly as it does for a
-   * registry variant with null tileable slots.
-   */
-  sampleRawTileable: SampleTileableFn | null
-  sampleTileable: SampleTileableFn | null
-  glslTileable: ShaderSpec | null
-  wgslTileable: ShaderSpec | null
-  tslTileable: ShaderSpec | null
-  /**
    * Cost of one evaluation in the shared unit (Perlin 3D = 1, see cost.ts) —
    * a transferred estimate in the cost model's own sense: the registry
    * variant's VARIANT_COST scaled by the measured GPU throughput ratio
@@ -1002,13 +987,6 @@ const signedTsl = (norm: number, call: string): string => `${call}.mul(${0.5 * n
 
 type AltShaders = { glsl: ShaderSpec; wgsl: ShaderSpec; tsl: ShaderSpec }
 
-type AltTileable = {
-  sampleRaw: SampleTileableFn
-  glsl: ShaderSpec
-  wgsl: ShaderSpec
-  tsl: ShaderSpec
-}
-
 const altVariant = (
   noiseId: string,
   implementationId: string,
@@ -1016,7 +994,6 @@ const altVariant = (
   cost: number,
   sampleRaw: AltSampleFn,
   shaders: AltShaders,
-  tileable?: AltTileable,
 ): AltVariant => ({
   id: `${noiseId}-${dim}d@${implementationId}`,
   variantId: `${noiseId}-${dim}d`,
@@ -1027,11 +1004,6 @@ const altVariant = (
   sampleRaw,
   sample: (x, y, z) => clamp01(sampleRaw(x, y, z)),
   ...shaders,
-  sampleRawTileable: tileable?.sampleRaw ?? null,
-  sampleTileable: tileable ? (x, y, z, px, py) => clamp01(tileable.sampleRaw(x, y, z, px, py)) : null,
-  glslTileable: tileable?.glsl ?? null,
-  wgslTileable: tileable?.wgsl ?? null,
-  tslTileable: tileable?.tsl ?? null,
 })
 
 /**
@@ -1098,12 +1070,6 @@ export const ALT_VARIANTS: AltVariant[] = [
     0.42,
     (x, y, z) => 0.5 + 0.5 * PERLIN3_NORM * perlinFast3(x, y, z),
     fastShaders(3, PERLIN_FAST_CHUNKS, 'perlinFast3(p)', PERLIN3_NORM),
-    {
-      sampleRaw: (x, y, z, px, py) => 0.5 + 0.5 * PERLIN3_NORM * perlinFastTileable3(x, y, z, px, py),
-      glsl: spec(3, [FAST_COMMON_GLSL, PERLIN_FAST_TILEABLE_GLSL], signedText(PERLIN3_NORM, 'perlinFast3T(p, per)')),
-      wgsl: spec(3, [FAST_COMMON_WGSL, PERLIN_FAST_TILEABLE_WGSL], signedText(PERLIN3_NORM, 'perlinFast3T(p, per)')),
-      tsl: spec(3, [FAST_COMMON_TSL, PERLIN_FAST_TILEABLE_TSL], signedTsl(PERLIN3_NORM, 'perlinFast3T(p, per)')),
-    },
   ),
   // Flow's display mapping reuses PERLIN2_NORM like the shipping flow (unit
   // gradients in both). GPU measured a slight candidate win (WebGL 4688 vs
