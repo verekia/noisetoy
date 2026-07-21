@@ -69,6 +69,10 @@
 import { FAST_COMMON_GLSL } from './alt/fast-common.glsl'
 import { FAST_COMMON_TSL } from './alt/fast-common.tsl'
 import { FAST_COMMON_WGSL } from './alt/fast-common.wgsl'
+import { flowFast3 } from './alt/flow-fast'
+import { FLOW_FAST_GLSL } from './alt/flow-fast.glsl'
+import { FLOW_FAST_TSL } from './alt/flow-fast.tsl'
+import { FLOW_FAST_WGSL } from './alt/flow-fast.wgsl'
 import { perlinFast2, perlinFast3 } from './alt/perlin-fast'
 import { PERLIN_FAST_GLSL } from './alt/perlin-fast.glsl'
 import { PERLIN_FAST_TSL } from './alt/perlin-fast.tsl'
@@ -328,6 +332,28 @@ export const IMPLEMENTATIONS: Record<string, NoiseImplementation[]> = {
       rationale:
         'Perlin & Neyret 2001 is 2D-only, which is why this variant is a 2D lattice with the third input as phase rather than a 3D field.',
       variantIds: ['flow-3d'],
+    },
+    {
+      id: 'fast-rot',
+      name: 'Rotated table directions, shared-phase trig',
+      kind: 'alternative',
+      evidence: 'paper-only',
+      status: 'candidate',
+      archivedAt: 'src/alt/flow-fast.ts',
+      reference: {
+        paper: 'Ken Perlin & Fabrice Neyret, "Flow Noise" (SIGGRAPH 2001 sketch)',
+        url: 'http://www-evasion.imag.fr/Publications/2001/PN01/sketch_col.pdf',
+      },
+      follows: "Ken Perlin & Fabrice Neyret, 'Flow Noise' (SIGGRAPH 2001 sketch)",
+      deviations: [
+        "Inherits the shipping implementation's per-corner integer rotation rates (the flagged departure from the sketch's shared angle) with the identical rate mapping and the exact z-period of 1.",
+        'Per-corner trigonometry is eliminated: cos/sin of the phase are computed ONCE per sample, the rate-2 pair comes from the double-angle identities, negative rates flip the sign of sin, and each corner evaluates ck * (g . d) + sk * (g x d) with g its rest direction — two trig calls per sample against the shipping eight.',
+        'Rest directions are the eight unit vectors at 45-degree steps, selected from the top 3 bits of the corner mix, against the shipping continuous to01(hash) * TAU angle. The same quantization trade every table-gradient noise here makes, and the rotation sweeps the set through all angles over a cycle. Rate bits come from bits 27-28 of the SAME mix, against the shipping second avalanche.',
+        "The corner mix is the Perlin candidate's validated two-axis fold (pre-mixed x products, one multiply by 2^32/phi per corner). Flow reads 5 top bits, so the battery was re-run at 32 slots: marginal chi-square 33.1 against a 31-df critical of 45, joints at +x/+y/+xy 1005-1057 against a 1023-df critical of 1098.",
+      ],
+      rationale:
+        'The current challenger, and the largest CPU win of the candidate hunt so far relative to its noise: ~2.1x the shipping flow3 (`bun run bench:impl`, best and median agreeing), because shipping flow is the most trig-bound sampler in the repo — twelve avalanche rounds and eight transcendentals per sample reduce to four short mixes and two. Field statistics match shipping at every phase tested (rms 0.216 both, extrema +-0.70) and the four-second loop is unchanged. On the GPU, where trigonometry is cheap relative to integer work, it still edges shipping out: 1.03x on WebGL and 1.04x on WebGPU (hardened /bench harness; in-browser JS showed 2.5x). Not promoted: no tileable path yet, and the quantized rest angles should be looked at in motion before they are declared invisible.',
+      variantIds: [],
     },
   ],
   simplex: [
@@ -809,6 +835,17 @@ export const ALT_VARIANTS: AltVariant[] = [
     0.42,
     (x, y, z) => 0.5 + 0.5 * PERLIN3_NORM * perlinFast3(x, y, z),
     fastShaders(3, PERLIN_FAST_CHUNKS, 'perlinFast3(p)', PERLIN3_NORM),
+  ),
+  // Flow's display mapping reuses PERLIN2_NORM like the shipping flow (unit
+  // gradients in both). GPU measured a slight candidate win (WebGL 4688 vs
+  // 4572, WebGPU 3305 vs 3179 Msamples/s), ratio ~0.97 -> cost 0.52.
+  altVariant(
+    'flow',
+    'fast-rot',
+    3,
+    0.52,
+    (x, y, z) => 0.5 + 0.5 * PERLIN2_NORM * flowFast3(x, y, z),
+    fastShaders(3, { glsl: FLOW_FAST_GLSL, wgsl: FLOW_FAST_WGSL, tsl: FLOW_FAST_TSL }, 'flowFast3(p)', PERLIN2_NORM),
   ),
   // Same gradient set and kernel as the shipping simplex, so the shipping
   // norms apply unchanged.

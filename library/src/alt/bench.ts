@@ -30,9 +30,11 @@
 // width, which a GPU also prices differently. Treat this as a strong hint,
 // not a settled answer.
 
+import { flow3 } from '../noises/flow'
 import { perlin2, perlin3 } from '../noises/perlin'
 import { simplex2 as simplexTable2, simplex3 as simplexTable3 } from '../noises/simplex'
 import { worley2, worley3 } from '../noises/worley'
+import { flowFast3 } from './flow-fast'
 import { perlinFast2, perlinFast3 } from './perlin-fast'
 import { simplexFast2, simplexFast3 } from './simplex-fast'
 import { worleyFast2, worleyFast3 } from './worley-fast'
@@ -106,6 +108,7 @@ compare(
   ['candidate (split bits, pruned)', (x, y) => worleyFast2(x, y)],
 )
 compare('Worley 3D', ['shipping  (chained avalanches)', worley3], ['candidate (split bits, pruned)', worleyFast3])
+compare('Flow 3D', ['shipping  (per-corner trig)', flow3], ['candidate (shared-phase trig)', flowFast3])
 compare(
   'Simplex 2D vs candidate',
   ['shipping  (folded lowbias32)', (x, y) => simplexTable2(x, y)],
