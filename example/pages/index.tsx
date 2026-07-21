@@ -543,6 +543,19 @@ export default function Home() {
                       </span>
                     </div>
                     <div className="mt-2 space-y-2" onClick={e => e.stopPropagation()}>
+                      {n.variants.length > 1 && (
+                        <div className="flex items-center justify-between gap-2 text-xs text-zinc-500">
+                          Type
+                          <Segmented
+                            value={v.id}
+                            onChange={id => updateLayer(l.id, { variantId: id })}
+                            options={n.variants.map(x => ({
+                              value: x.id,
+                              label: x.dim === 3 ? '3D (animated)' : '2D (static)',
+                            }))}
+                          />
+                        </div>
+                      )}
                       {(IMPLEMENTATIONS[l.noiseId] ?? []).length > 1 && (
                         <div className="flex items-center justify-between gap-2 text-xs text-zinc-500">
                           Impl.
@@ -563,19 +576,6 @@ export default function Home() {
                               value: im.id,
                               label: im.status ? IMPLEMENTATION_STATUS_LABEL[im.status] : 'Shipping',
                               title: im.name,
-                            }))}
-                          />
-                        </div>
-                      )}
-                      {n.variants.length > 1 && (
-                        <div className="flex items-center justify-between gap-2 text-xs text-zinc-500">
-                          Type
-                          <Segmented
-                            value={v.id}
-                            onChange={id => updateLayer(l.id, { variantId: id })}
-                            options={n.variants.map(x => ({
-                              value: x.id,
-                              label: x.dim === 3 ? '3D (animated)' : '2D (static)',
                             }))}
                           />
                         </div>

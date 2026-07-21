@@ -339,6 +339,19 @@ const NoisePicker = ({
             </div>
             <div className="space-y-2">
               <div className="max-w-80 space-y-2">
+                {noise.variants.length > 1 && (
+                  <div className="flex items-center justify-between gap-2 text-xs text-zinc-500">
+                    Type
+                    <Segmented
+                      value={variant.id}
+                      onChange={id => setDraft(d => ({ ...d, variantId: id }))}
+                      options={noise.variants.map(v => ({
+                        value: v.id,
+                        label: v.dim === 3 ? '3D (animated)' : '2D (static)',
+                      }))}
+                    />
+                  </div>
+                )}
                 {implementations.length > 1 && (
                   <div className="flex items-center justify-between gap-2 text-xs text-zinc-500">
                     Implementation
@@ -356,19 +369,6 @@ const NoisePicker = ({
                         value: i.id,
                         label: i.status ? IMPLEMENTATION_STATUS_LABEL[i.status] : 'Shipping',
                         title: i.name,
-                      }))}
-                    />
-                  </div>
-                )}
-                {noise.variants.length > 1 && (
-                  <div className="flex items-center justify-between gap-2 text-xs text-zinc-500">
-                    Type
-                    <Segmented
-                      value={variant.id}
-                      onChange={id => setDraft(d => ({ ...d, variantId: id }))}
-                      options={noise.variants.map(v => ({
-                        value: v.id,
-                        label: v.dim === 3 ? '3D (animated)' : '2D (static)',
                       }))}
                     />
                   </div>
