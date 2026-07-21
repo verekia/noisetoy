@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 
-import Segmented from '#/components/Segmented'
 import { benchJsVariant } from '#/lib/bench'
 import {
   benchThreeAlt,
@@ -13,7 +12,7 @@ import {
 import Head from 'next/head'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
-import { getNoise, NOISES } from 'noisetoy'
+import { NOISES } from 'noisetoy'
 // Non-shipping implementations (candidates, superseded) bench through their
 // AltVariants — TS samplers for the JS column, GLSL/WGSL/TSL specs for the
 // GPU columns — so every implementation gets the full row.
@@ -26,7 +25,16 @@ import type { AltVariant } from 'noisetoy/implementations'
 const JS_SIZE = 256
 const GPU_SIZE = 512
 
-type DimFilter = '' | '2d' | '3d'
+type Dim = '2d' | '3d'
+
+/** Everything benchable: one entry per noise variant, e.g. "Perlin 3D". */
+const TARGETS = NOISES.flatMap(noise =>
+  noise.variants.map(variant => ({
+    noiseId: noise.id,
+    dim: (variant.dim === 2 ? '2d' : '3d') as Dim,
+    label: `${noise.name} ${variant.dim}D`,
+  })),
+)
 
 type Cell = BenchResult | 'running' | 'n/a' | { error: string } | undefined
 
@@ -46,21 +54,22 @@ type Row = {
   alt: AltVariant | null
 }
 
-const rowsFor = (noises: typeof NOISES, dim: DimFilter): Row[] =>
-  noises.flatMap(noise =>
-    noise.variants
-      .filter(variant => dim === '' || variant.dim === (dim === '2d' ? 2 : 3))
-      .flatMap(variant => [
-        { key: variant.id, noiseId: noise.id, scale: noise.scale, variant, alt: null },
-        ...ALT_VARIANTS.filter(a => a.variantId === variant.id).map(alt => ({
-          key: alt.id,
-          noiseId: noise.id,
-          scale: noise.scale,
-          variant: null,
-          alt,
-        })),
-      ]),
-  )
+const rowsFor = (noiseId: string, dim: Dim): Row[] => {
+  const noise = NOISES.find(n => n.id === noiseId)
+  if (!noise) return []
+  return noise.variants
+    .filter(variant => variant.dim === (dim === '2d' ? 2 : 3))
+    .flatMap(variant => [
+      { key: variant.id, noiseId: noise.id, scale: noise.scale, variant, alt: null },
+      ...ALT_VARIANTS.filter(a => a.variantId === variant.id).map(alt => ({
+        key: alt.id,
+        noiseId: noise.id,
+        scale: noise.scale,
+        variant: null,
+        alt,
+      })),
+    ])
+}
 
 export default function Bench() {
   const router = useRouter()
@@ -69,30 +78,27 @@ export default function Bench() {
   const [sortCol, setSortCol] = useState<SortCol>('variant')
   const [sortDesc, setSortDesc] = useState(true)
 
-  // The filters live in the URL (?noise=perlin&dim=3d) so a single
-  // algorithm's implementations — or just its 3D variants — can be
-  // benchmarked from a link; the controls mirror the URL.
-  const rawParam = typeof router.query.noise === 'string' ? router.query.noise : ''
-  const noiseFilter = rawParam && getNoise(rawParam) ? rawParam : ''
+  // The benchmark always targets exactly one noise variant — the whole suite
+  // in one run never produced comparable numbers. The target lives in the URL
+  // (?noise=perlin&dim=3d) so it can be shared as a link; the dropdown
+  // mirrors it, and anything invalid falls back to the first target.
+  const rawNoise = typeof router.query.noise === 'string' ? router.query.noise : ''
   const rawDim = typeof router.query.dim === 'string' ? router.query.dim : ''
-  const dimFilter: DimFilter = rawDim === '2d' || rawDim === '3d' ? rawDim : ''
+  const target =
+    TARGETS.find(t => t.noiseId === rawNoise && t.dim === rawDim) ??
+    TARGETS.find(t => t.noiseId === rawNoise) ??
+    (TARGETS[0] as (typeof TARGETS)[number])
   useEffect(() => {
-    if (router.isReady && ((rawParam && !getNoise(rawParam)) || (rawDim && rawDim !== dimFilter))) {
-      const query: Record<string, string> = {}
-      if (noiseFilter) query.noise = noiseFilter
-      if (dimFilter) query.dim = dimFilter
-      void router.replace({ pathname: router.pathname, query }, undefined, { shallow: true })
+    if (router.isReady && (rawNoise !== target.noiseId || rawDim !== target.dim)) {
+      void router.replace({ pathname: router.pathname, query: { noise: target.noiseId, dim: target.dim } }, undefined, {
+        shallow: true,
+      })
     }
-  }, [router, rawParam, rawDim, noiseFilter, dimFilter])
+  }, [router, rawNoise, rawDim, target])
 
-  const setFilters = (noise: string, dim: DimFilter) => {
-    const query: Record<string, string> = {}
-    if (noise) query.noise = noise
-    if (dim) query.dim = dim
-    void router.replace({ pathname: router.pathname, query }, undefined, { shallow: true })
+  const setTarget = (noiseId: string, dim: Dim) => {
+    void router.replace({ pathname: router.pathname, query: { noise: noiseId, dim } }, undefined, { shallow: true })
   }
-
-  const filteredNoises = noiseFilter ? NOISES.filter(n => n.id === noiseFilter) : NOISES
 
   const setCell = (key: string, cell: Cell) => setResults(prev => ({ ...prev, [key]: cell }))
 
@@ -101,7 +107,7 @@ export default function Bench() {
     setResults({})
     const hasWebgpu = 'gpu' in navigator
     try {
-      for (const row of rowsFor(filteredNoises, dimFilter)) {
+      for (const row of rowsFor(target.noiseId, target.dim)) {
         const backends: { id: Backend; exec: (() => Promise<BenchResult> | BenchResult) | null }[] = row.variant
           ? [
               { id: 'js', exec: () => benchJsVariant(row.variant as NoiseVariant, row.scale, JS_SIZE) },
@@ -141,7 +147,7 @@ export default function Bench() {
     return cell !== undefined && typeof cell === 'object' && 'msamplesPerSec' in cell ? cell.msamplesPerSec : null
   }
 
-  const allRows = rowsFor(filteredNoises, dimFilter)
+  const allRows = rowsFor(target.noiseId, target.dim)
 
   const rows =
     sortCol === 'variant'
@@ -156,8 +162,8 @@ export default function Bench() {
         })
 
   // Relative performance within a column, as "how much slower than the
-  // column's fastest": under 1.5x slower is green, under 2x yellow, under 3x
-  // orange, beyond that red.
+  // column's fastest": under 1.2x slower is green, under 1.5x yellow, under
+  // 1.8x orange, under 2.5x red, beyond that dark red.
   const columnMax: Record<Backend, number> = { js: 0, webgl: 0, webgpu: 0, three: 0 }
   for (const row of allRows) {
     for (const backend of ['js', 'webgl', 'webgpu', 'three'] as Backend[]) {
@@ -167,13 +173,15 @@ export default function Bench() {
   }
 
   const perfClass = (value: number, max: number): string =>
-    max <= 0 || value >= max / 1.5
+    max <= 0 || value >= max / 1.2
       ? 'text-emerald-400'
-      : value >= max / 2
+      : value >= max / 1.5
         ? 'text-yellow-400'
-        : value >= max / 3
+        : value >= max / 1.8
           ? 'text-orange-400'
-          : 'text-red-400'
+          : value >= max / 2.5
+            ? 'text-red-400'
+            : 'text-red-700'
 
   const sortBy = (col: SortCol) => {
     if (col === sortCol) {
@@ -237,9 +245,7 @@ export default function Bench() {
                 sync per batch. Hover a cell for its batch spread; a ± marker means batches disagreed by more than 10%.
                 Rows marked with an implementation id are non-shipping implementations from the inventory, benched
                 through their AltVariant samplers and shader specs. CLI equivalent:{' '}
-                <code className="rounded bg-zinc-900 px-1.5 py-0.5 text-xs">
-                  bun run bench{noiseFilter ? ` ${noiseFilter}` : ''}
-                </code>
+                <code className="rounded bg-zinc-900 px-1.5 py-0.5 text-xs">bun run bench {target.noiseId}</code>
               </p>
             </div>
             <Link
@@ -255,37 +261,26 @@ export default function Bench() {
               disabled={running}
               className="rounded-md bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-900 transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {running
-                ? 'Running…'
-                : `Run ${noiseFilter || 'all'}${dimFilter ? ` ${dimFilter.toUpperCase()}` : ''} benchmarks`}
+              {running ? 'Running…' : `Run ${target.label} benchmarks`}
             </button>
             <label className="flex items-center gap-2 text-sm text-zinc-400">
               Noise
               <select
-                value={noiseFilter}
+                value={`${target.noiseId}:${target.dim}`}
                 disabled={running}
-                onChange={e => setFilters(e.target.value, dimFilter)}
+                onChange={e => {
+                  const [noiseId, dim] = e.target.value.split(':') as [string, Dim]
+                  setTarget(noiseId, dim)
+                }}
                 className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <option value="">All</option>
-                {NOISES.map(n => (
-                  <option key={n.id} value={n.id}>
-                    {n.name}
+                {TARGETS.map(t => (
+                  <option key={`${t.noiseId}:${t.dim}`} value={`${t.noiseId}:${t.dim}`}>
+                    {t.label}
                   </option>
                 ))}
               </select>
             </label>
-            <Segmented
-              value={dimFilter}
-              onChange={dim => {
-                if (!running) setFilters(noiseFilter, dim)
-              }}
-              options={[
-                { value: '' as DimFilter, label: 'All' },
-                { value: '2d' as DimFilter, label: '2D' },
-                { value: '3d' as DimFilter, label: '3D' },
-              ]}
-            />
           </div>
           <table className="w-full border-collapse text-sm">
             <thead>
@@ -320,11 +315,6 @@ export default function Bench() {
               ))}
             </tbody>
           </table>
-          <p className="mt-3 text-xs text-zinc-500">
-            Click a column header to sort. Colors show how much slower a cell is than the fastest in its column:{' '}
-            <span className="text-emerald-400">under 1.5×</span>, <span className="text-yellow-400">under 2×</span>,{' '}
-            <span className="text-orange-400">under 3×</span>, <span className="text-red-400">3× or more</span>.
-          </p>
         </div>
       </div>
     </>
