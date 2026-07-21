@@ -67,10 +67,12 @@
 // quoting more precision than that. CPU ONLY. On a
 // GPU the trade is different — the avalanche this removes is integer work,
 // which GPUs price differently. GLSL/WGSL/TSL counterparts live in
-// perlin-fast.{glsl,wgsl,tsl}.ts and ship through ALT_VARIANTS, so that
-// measurement is now possible — it has not been taken. Promotion would also
-// change the field every consumer sees, since the draw differs, and still
-// needs the tileable paths.
+// perlin-fast.{glsl,wgsl,tsl}.ts and ship through ALT_VARIANTS; the GPU
+// measurement they enabled came back a TIE with shipping in both dimensions
+// (0.98-1.00x, WebGL and WebGPU medians via the hardened /bench harness), so
+// the CPU numbers are the whole case. Promotion would also change the field
+// every consumer sees, since the draw differs, and still needs the tileable
+// paths.
 //
 // Raw amplitude matches noises/perlin.ts: gradients of length sqrt(2) in both
 // dimensions, so the same display norms would apply.

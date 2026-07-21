@@ -48,10 +48,11 @@
 // the shipping worley to three decimals over 1M samples.
 //
 // CPU ONLY, like the Perlin candidate, and doubly so: the pruning branches
-// are exactly what a GPU pays divergence for, so the GPU trade needs its own
-// measurement before any of this is believed there. GLSL/WGSL/TSL
-// counterparts live in worley-fast.{glsl,wgsl,tsl}.ts and ship through
-// ALT_VARIANTS, so that measurement is now possible — it has not been taken.
+// are exactly what a GPU pays divergence for — but the measurement, taken
+// via the hardened /bench harness once the GLSL/WGSL/TSL counterparts in
+// worley-fast.{glsl,wgsl,tsl}.ts shipped through ALT_VARIANTS, settled it in
+// favour of pruning: 1.16x the shipping worley2 and 2.0x worley3 on the GPU
+// as well (WebGL and WebGPU medians). This candidate wins on every backend.
 //
 // Output matches noises/worley.ts: Euclidean F1, roughly [0, 1.3].
 

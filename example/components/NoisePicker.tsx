@@ -322,18 +322,18 @@ const NoisePicker = ({
                     )}
                   </div>
                 )}
-                {/* The cost model is keyed to shipping variants; quoting it
-                    under a non-shipping implementation would misattribute it. */}
-                {!implementation?.status && (
-                  <p className="mt-1.5 text-xs text-zinc-500">
-                    Cost{' '}
-                    <CostBadge
-                      units={variantCost(variant.id, draft.octaves)}
-                      title={`Relative to Perlin 3D at one octave = 1. ${draft.octaves} octave${draft.octaves > 1 ? 's' : ''} of ${variant.label}.`}
-                    />
-                    {draft.octaves > 1 && <span className="text-zinc-600"> ({draft.octaves} octaves)</span>}
-                  </p>
-                )}
+                {/* Non-shipping implementations carry their own measured cost
+                    (AltVariant.cost), so the badge follows the selection. */}
+                <p className="mt-1.5 text-xs text-zinc-500">
+                  Cost{' '}
+                  <CostBadge
+                    units={
+                      altPreview ? altPreview.cost * Math.max(1, draft.octaves) : variantCost(variant.id, draft.octaves)
+                    }
+                    title={`Relative to Perlin 3D at one octave = 1. ${draft.octaves} octave${draft.octaves > 1 ? 's' : ''} of ${variant.label}${altPreview ? ` (${altPreview.implementationId})` : ''}.`}
+                  />
+                  {draft.octaves > 1 && <span className="text-zinc-600"> ({draft.octaves} octaves)</span>}
+                </p>
                 <p className="mt-1.5 text-[10px] leading-relaxed text-zinc-600">{noise.license}</p>
               </div>
             </div>

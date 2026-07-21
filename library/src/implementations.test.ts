@@ -306,6 +306,18 @@ describe('alt variants keep the non-shipping implementations runnable', () => {
     }
   })
 
+  // The cost is what the explorer substitutes into estimates when a layer
+  // renders a non-shipping implementation; a zero or absurd figure would
+  // silently corrupt every stack estimate that includes one.
+  test('alt variants carry a sane cost in the shared unit', () => {
+    for (const alt of ALT_VARIANTS) {
+      expect({ id: alt.id, sane: Number.isFinite(alt.cost) && alt.cost > 0 && alt.cost < 20 }).toEqual({
+        id: alt.id,
+        sane: true,
+      })
+    }
+  })
+
   test('alt samples are deterministic and clamped to [0, 1]', () => {
     for (const alt of ALT_VARIANTS) {
       for (let i = 0; i < 500; i++) {

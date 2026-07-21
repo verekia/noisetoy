@@ -6,7 +6,7 @@ import NoisePicker from '#/components/NoisePicker'
 import Segmented from '#/components/Segmented'
 import Head from 'next/head'
 import Link from 'next/link'
-import { BLEND_MODES, createEffect, defaultVariant, getNoise, getVariant, NOISES, TIER_LABEL } from 'noisetoy'
+import { BLEND_MODES, costTier, createEffect, defaultVariant, getNoise, getVariant, NOISES, TIER_LABEL } from 'noisetoy'
 // Non-shipping implementations (candidates, superseded): the sidebar offers
 // them per layer, and a layer carrying one renders through the inventory's
 // AltVariant (TS samplers + GLSL/WGSL/TSL specs) on every backend.
@@ -177,7 +177,22 @@ export default function Home() {
     return built
   }, [layers, tiled, view, steps, altCount])
 
-  const cost = effect.cost()
+  // The library's estimate is keyed to shipping variants; layers rendering a
+  // non-shipping implementation substitute its own measured cost
+  // (AltVariant.cost), keeping the skipped-layer logic from the estimate.
+  const cost = useMemo(() => {
+    const base = effect.cost()
+    const visible = layers.filter(l => !l.hidden)
+    const active = visible.length > 0 ? visible : [layers[0] as UILayer]
+    const units = base.perLayer.reduce((sum, layerUnits, i) => {
+      const layer = active[i]
+      if (layerUnits === 0 || !layer) return sum + layerUnits
+      const alt = resolveAlt(layer)
+      return sum + (alt ? alt.cost * Math.max(1, layer.octaves) : layerUnits)
+    }, 0)
+    const rounded = Math.round(units * 100) / 100
+    return { units: rounded, tier: costTier(rounded) }
+  }, [effect, layers])
 
   const allTileable = effect.tileable
 
