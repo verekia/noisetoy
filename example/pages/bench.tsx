@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 
+import Segmented from '#/components/Segmented'
 import { benchJsVariant } from '#/lib/bench'
 import {
   benchThreeAlt,
@@ -23,9 +24,9 @@ import type { Backend, NoiseVariant } from 'noisetoy'
 import type { AltVariant } from 'noisetoy/implementations'
 
 const JS_SIZE = 256
-const JS_FRAMES = 3
 const GPU_SIZE = 512
-const GPU_FRAMES = 100
+
+type DimFilter = '' | '2d' | '3d'
 
 type Cell = BenchResult | 'running' | 'n/a' | { error: string } | undefined
 
@@ -45,18 +46,20 @@ type Row = {
   alt: AltVariant | null
 }
 
-const rowsFor = (noises: typeof NOISES): Row[] =>
+const rowsFor = (noises: typeof NOISES, dim: DimFilter): Row[] =>
   noises.flatMap(noise =>
-    noise.variants.flatMap(variant => [
-      { key: variant.id, noiseId: noise.id, scale: noise.scale, variant, alt: null },
-      ...ALT_VARIANTS.filter(a => a.variantId === variant.id).map(alt => ({
-        key: alt.id,
-        noiseId: noise.id,
-        scale: noise.scale,
-        variant: null,
-        alt,
-      })),
-    ]),
+    noise.variants
+      .filter(variant => dim === '' || variant.dim === (dim === '2d' ? 2 : 3))
+      .flatMap(variant => [
+        { key: variant.id, noiseId: noise.id, scale: noise.scale, variant, alt: null },
+        ...ALT_VARIANTS.filter(a => a.variantId === variant.id).map(alt => ({
+          key: alt.id,
+          noiseId: noise.id,
+          scale: noise.scale,
+          variant: null,
+          alt,
+        })),
+      ]),
   )
 
 export default function Bench() {
@@ -66,18 +69,27 @@ export default function Bench() {
   const [sortCol, setSortCol] = useState<SortCol>('variant')
   const [sortDesc, setSortDesc] = useState(true)
 
-  // The noise filter lives in the URL (?noise=perlin) so a single algorithm's
-  // implementations can be benchmarked from a link; the dropdown mirrors it.
+  // The filters live in the URL (?noise=perlin&dim=3d) so a single
+  // algorithm's implementations — or just its 3D variants — can be
+  // benchmarked from a link; the controls mirror the URL.
   const rawParam = typeof router.query.noise === 'string' ? router.query.noise : ''
   const noiseFilter = rawParam && getNoise(rawParam) ? rawParam : ''
+  const rawDim = typeof router.query.dim === 'string' ? router.query.dim : ''
+  const dimFilter: DimFilter = rawDim === '2d' || rawDim === '3d' ? rawDim : ''
   useEffect(() => {
-    if (router.isReady && rawParam && !getNoise(rawParam)) {
-      void router.replace({ pathname: router.pathname }, undefined, { shallow: true })
+    if (router.isReady && ((rawParam && !getNoise(rawParam)) || (rawDim && rawDim !== dimFilter))) {
+      const query: Record<string, string> = {}
+      if (noiseFilter) query.noise = noiseFilter
+      if (dimFilter) query.dim = dimFilter
+      void router.replace({ pathname: router.pathname, query }, undefined, { shallow: true })
     }
-  }, [router, rawParam])
+  }, [router, rawParam, rawDim, noiseFilter, dimFilter])
 
-  const setNoiseFilter = (id: string) => {
-    void router.replace({ pathname: router.pathname, query: id ? { noise: id } : {} }, undefined, { shallow: true })
+  const setFilters = (noise: string, dim: DimFilter) => {
+    const query: Record<string, string> = {}
+    if (noise) query.noise = noise
+    if (dim) query.dim = dim
+    void router.replace({ pathname: router.pathname, query }, undefined, { shallow: true })
   }
 
   const filteredNoises = noiseFilter ? NOISES.filter(n => n.id === noiseFilter) : NOISES
@@ -89,28 +101,19 @@ export default function Bench() {
     setResults({})
     const hasWebgpu = 'gpu' in navigator
     try {
-      for (const row of rowsFor(filteredNoises)) {
+      for (const row of rowsFor(filteredNoises, dimFilter)) {
         const backends: { id: Backend; exec: (() => Promise<BenchResult> | BenchResult) | null }[] = row.variant
           ? [
-              { id: 'js', exec: () => benchJsVariant(row.variant as NoiseVariant, row.scale, JS_SIZE, JS_FRAMES) },
-              {
-                id: 'webgl',
-                exec: () => benchWebglVariant(row.variant as NoiseVariant, row.noiseId, GPU_SIZE, GPU_FRAMES),
-              },
-              {
-                id: 'webgpu',
-                exec: () => benchWebgpuVariant(row.variant as NoiseVariant, row.noiseId, GPU_SIZE, GPU_FRAMES),
-              },
-              {
-                id: 'three',
-                exec: () => benchThreeVariant(row.variant as NoiseVariant, row.noiseId, GPU_SIZE, GPU_FRAMES),
-              },
+              { id: 'js', exec: () => benchJsVariant(row.variant as NoiseVariant, row.scale, JS_SIZE) },
+              { id: 'webgl', exec: () => benchWebglVariant(row.variant as NoiseVariant, row.noiseId, GPU_SIZE) },
+              { id: 'webgpu', exec: () => benchWebgpuVariant(row.variant as NoiseVariant, row.noiseId, GPU_SIZE) },
+              { id: 'three', exec: () => benchThreeVariant(row.variant as NoiseVariant, row.noiseId, GPU_SIZE) },
             ]
           : [
-              { id: 'js', exec: () => benchJsVariant(row.alt as AltVariant, row.scale, JS_SIZE, JS_FRAMES) },
-              { id: 'webgl', exec: () => benchWebglAlt(row.alt as AltVariant, GPU_SIZE, GPU_FRAMES) },
-              { id: 'webgpu', exec: () => benchWebgpuAlt(row.alt as AltVariant, GPU_SIZE, GPU_FRAMES) },
-              { id: 'three', exec: () => benchThreeAlt(row.alt as AltVariant, GPU_SIZE, GPU_FRAMES) },
+              { id: 'js', exec: () => benchJsVariant(row.alt as AltVariant, row.scale, JS_SIZE) },
+              { id: 'webgl', exec: () => benchWebglAlt(row.alt as AltVariant, GPU_SIZE) },
+              { id: 'webgpu', exec: () => benchWebgpuAlt(row.alt as AltVariant, GPU_SIZE) },
+              { id: 'three', exec: () => benchThreeAlt(row.alt as AltVariant, GPU_SIZE) },
             ]
         for (const { id, exec } of backends) {
           const key = `${row.key}-${id}`
@@ -138,7 +141,7 @@ export default function Bench() {
     return cell !== undefined && typeof cell === 'object' && 'msamplesPerSec' in cell ? cell.msamplesPerSec : null
   }
 
-  const allRows = rowsFor(filteredNoises)
+  const allRows = rowsFor(filteredNoises, dimFilter)
 
   const rows =
     sortCol === 'variant'
@@ -186,9 +189,14 @@ export default function Bench() {
         </span>
       )
     return (
-      <span className={perfClass(cell.msamplesPerSec, max)}>
+      <span
+        className={perfClass(cell.msamplesPerSec, max)}
+        title={`Median of 5 batches; spread ${(cell.spread * 100).toFixed(0)}% across batches`}
+      >
         {cell.msamplesPerSec.toFixed(1)}
-        <span className="ml-1 text-[10px] text-zinc-500">({cell.msPerFrame.toFixed(2)} ms)</span>
+        <span className="ml-1 text-[10px] text-zinc-500">
+          ({cell.msPerFrame.toFixed(2)} ms{cell.spread > 0.1 ? ` ±${Math.round(cell.spread * 50)}%` : ''})
+        </span>
       </span>
     )
   }
@@ -217,10 +225,11 @@ export default function Bench() {
             <div>
               <h1 className="text-xl font-semibold">Benchmarks</h1>
               <p className="mt-1 text-sm text-zinc-400">
-                Throughput in Msamples/s (higher is better). JS runs {JS_SIZE}×{JS_SIZE}×{JS_FRAMES} frames on the CPU;
-                WebGL/WebGPU run {GPU_SIZE}×{GPU_SIZE}×{GPU_FRAMES} frames with full GPU sync. Rows marked with an
-                implementation id are non-shipping implementations from the inventory, benched through their AltVariant
-                samplers and shader specs. CLI equivalent:{' '}
+                Throughput in Msamples/s (higher is better): median of 5 duration-calibrated batches after a warmup. JS
+                benches {JS_SIZE}×{JS_SIZE} frames on the CPU; GPU backends bench {GPU_SIZE}×{GPU_SIZE} frames with full
+                sync per batch. Hover a cell for its batch spread; a ± marker means batches disagreed by more than 10%.
+                Rows marked with an implementation id are non-shipping implementations from the inventory, benched
+                through their AltVariant samplers and shader specs. CLI equivalent:{' '}
                 <code className="rounded bg-zinc-900 px-1.5 py-0.5 text-xs">
                   bun run bench{noiseFilter ? ` ${noiseFilter}` : ''}
                 </code>
@@ -239,14 +248,16 @@ export default function Bench() {
               disabled={running}
               className="rounded-md bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-900 transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {running ? 'Running…' : noiseFilter ? `Run ${noiseFilter} benchmarks` : 'Run benchmarks'}
+              {running
+                ? 'Running…'
+                : `Run ${noiseFilter || 'all'}${dimFilter ? ` ${dimFilter.toUpperCase()}` : ''} benchmarks`}
             </button>
             <label className="flex items-center gap-2 text-sm text-zinc-400">
               Noise
               <select
                 value={noiseFilter}
                 disabled={running}
-                onChange={e => setNoiseFilter(e.target.value)}
+                onChange={e => setFilters(e.target.value, dimFilter)}
                 className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <option value="">All</option>
@@ -257,6 +268,17 @@ export default function Bench() {
                 ))}
               </select>
             </label>
+            <Segmented
+              value={dimFilter}
+              onChange={dim => {
+                if (!running) setFilters(noiseFilter, dim)
+              }}
+              options={[
+                { value: '' as DimFilter, label: 'All' },
+                { value: '2d' as DimFilter, label: '2D' },
+                { value: '3d' as DimFilter, label: '3D' },
+              ]}
+            />
           </div>
           <table className="w-full border-collapse text-sm">
             <thead>
