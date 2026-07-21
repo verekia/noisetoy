@@ -36,6 +36,7 @@ import { gabor2, gabor3 } from '../noises/gabor'
 import { perlin2, perlin3 } from '../noises/perlin'
 import { ripple2, ripple3 } from '../noises/ripple'
 import { simplex2 as simplexTable2, simplex3 as simplexTable3 } from '../noises/simplex'
+import { perlin3Tileable } from '../noises/tileable/perlin-tileable'
 import { value2, value3 } from '../noises/value'
 import { vortex2, vortex3 } from '../noises/vortex'
 import { wave2, wave3 } from '../noises/wave'
@@ -56,6 +57,7 @@ import {
 import { flowFast3 } from './flow-fast'
 import { gaborFast2, gaborFast3 } from './gabor-fast'
 import { perlinFast2, perlinFast3 } from './perlin-fast'
+import { perlinFastTileable3 } from './perlin-fast-tileable'
 import { simplexFast2, simplexFast3 } from './simplex-fast'
 import { valueFast2, valueFast3 } from './value-fast'
 import { vortexFast2, vortexFast3 } from './vortex-fast'
@@ -126,6 +128,11 @@ compare(
   ['candidate (Fibonacci hash)', (x, y) => perlinFast2(x, y)],
 )
 compare('Perlin 3D', ['shipping  (folded lowbias32)', perlin3], ['candidate (Fibonacci hash)', perlinFast3])
+compare(
+  'Perlin 3D tileable (8x8 cells)',
+  ['shipping  (wrap, lowbias32)', (x, y, z) => perlin3Tileable(x, y, z, 8, 8)],
+  ['candidate (wrap, fast mix)', (x, y, z) => perlinFastTileable3(x, y, z, 8, 8)],
+)
 compare(
   'Worley 2D',
   ['shipping  (chained avalanches)', (x, y) => worley2(x, y)],

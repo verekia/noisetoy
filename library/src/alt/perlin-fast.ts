@@ -71,8 +71,8 @@
 // measurement they enabled came back a TIE with shipping in both dimensions
 // (0.98-1.00x, WebGL and WebGPU medians via the hardened /bench harness), so
 // the CPU numbers are the whole case. Promotion would also change the field
-// every consumer sees, since the draw differs, and still needs the tileable
-// paths.
+// every consumer sees, since the draw differs. The 3D tileable path now
+// exists (perlin-fast-tileable.ts, wrap-then-fold); 2D is still unwritten.
 //
 // Raw amplitude matches noises/perlin.ts: gradients of length sqrt(2) in both
 // dimensions, so the same display norms would apply.
@@ -152,7 +152,7 @@ export const perlinFast2 = (x: number, y: number): number => {
  * 7-offset battery passes (worst joint 158), and the fix costs nothing
  * measurable — the extra integer work hides behind the FP chain.
  */
-const grad3 = (s: number, x: number, y: number, z: number): number => {
+export const grad3 = (s: number, x: number, y: number, z: number): number => {
   let h = s ^ (s >>> 16)
   h = Math.imul(h, 0x7feb352d)
   h ^= h >>> 15

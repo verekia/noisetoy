@@ -130,8 +130,12 @@ export default function Home() {
 
   const selected = layers.find(l => l.id === selectedId) ?? (layers[0] as UILayer)
 
-  /** Layers rendering a non-shipping implementation; they have no tileable paths. */
-  const altCount = layers.filter(l => !l.hidden && resolveAlt(l)).length
+  /** Layers rendering a non-shipping implementation that has no tileable paths. */
+  const altUntileableCount = layers.filter(l => {
+    if (l.hidden) return false
+    const alt = resolveAlt(l)
+    return alt !== null && !alt.sampleRawTileable
+  }).length
 
   const effect = useMemo(() => {
     const visible = layers.filter(l => !l.hidden)
@@ -139,7 +143,7 @@ export default function Home() {
     // layer at zero opacity: the accumulator starts at 0, so that renders black.
     const active = visible.length > 0 ? visible : [{ ...(layers[0] as UILayer), opacity: 0 }]
     const built = createEffect({
-      tiled: tiled && altCount === 0,
+      tiled: tiled && altUntileableCount === 0,
       steps: band ? 0 : steps,
       band: band ? { center: BAND_CENTER[band.level], width: BAND_WIDTH[band.width] } : undefined,
       // Same displaced-geometry reasoning as stepSmoothing below, at the same
@@ -185,15 +189,15 @@ export default function Home() {
         glsl: alt.glsl,
         wgsl: alt.wgsl,
         tsl: alt.tsl,
-        sampleTileable: null,
-        sampleRawTileable: null,
-        glslTileable: null,
-        wgslTileable: null,
-        tslTileable: null,
+        sampleTileable: alt.sampleTileable,
+        sampleRawTileable: alt.sampleRawTileable,
+        glslTileable: alt.glslTileable,
+        wgslTileable: alt.wgslTileable,
+        tslTileable: alt.tslTileable,
       }
     })
     return built
-  }, [layers, tiled, view, steps, band, altCount])
+  }, [layers, tiled, view, steps, band, altUntileableCount])
 
   // The library's estimate is keyed to shipping variants; layers rendering a
   // non-shipping implementation substitute its own measured cost
@@ -215,8 +219,8 @@ export default function Home() {
   const allTileable = effect.tileable
 
   useEffect(() => {
-    if (tiled && (!allTileable || altCount > 0)) setTiled(false)
-  }, [tiled, allTileable, altCount])
+    if (tiled && (!allTileable || altUntileableCount > 0)) setTiled(false)
+  }, [tiled, allTileable, altUntileableCount])
 
   /** The 3D view is rendered by the Three.js backend, so the two stay in sync. */
   const selectView = (v: ViewMode) => {
@@ -877,7 +881,7 @@ export default function Home() {
               ]}
             />
             {/* A sphere always reads the solid field, where tiling has no meaning. */}
-            {view === 'sphere' ? null : allTileable && altCount === 0 ? (
+            {view === 'sphere' ? null : allTileable && altUntileableCount === 0 ? (
               <Segmented
                 value={tiled}
                 onChange={setTiled}
