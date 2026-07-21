@@ -34,10 +34,12 @@ import { flow3 } from '../noises/flow'
 import { perlin2, perlin3 } from '../noises/perlin'
 import { simplex2 as simplexTable2, simplex3 as simplexTable3 } from '../noises/simplex'
 import { worley2, worley3 } from '../noises/worley'
+import { chebyshev2, chebyshev3, manhattan2, manhattan3 } from '../noises/worley-metrics'
 import { flowFast3 } from './flow-fast'
 import { perlinFast2, perlinFast3 } from './perlin-fast'
 import { simplexFast2, simplexFast3 } from './simplex-fast'
 import { worleyFast2, worleyFast3 } from './worley-fast'
+import { chebyshevFast2, chebyshevFast3, manhattanFast2, manhattanFast3 } from './worley-metrics-fast'
 
 type Fn3 = (x: number, y: number, z: number) => number
 
@@ -109,6 +111,26 @@ compare(
 )
 compare('Worley 3D', ['shipping  (chained avalanches)', worley3], ['candidate (split bits, pruned)', worleyFast3])
 compare('Flow 3D', ['shipping  (per-corner trig)', flow3], ['candidate (shared-phase trig)', flowFast3])
+compare(
+  'Manhattan 2D',
+  ['shipping  (chained avalanches)', (x, y) => manhattan2(x, y)],
+  ['candidate (split bits, pruned)', (x, y) => manhattanFast2(x, y)],
+)
+compare(
+  'Manhattan 3D',
+  ['shipping  (chained avalanches)', manhattan3],
+  ['candidate (split bits, pruned)', manhattanFast3],
+)
+compare(
+  'Chebyshev 2D',
+  ['shipping  (chained avalanches)', (x, y) => chebyshev2(x, y)],
+  ['candidate (split bits, pruned)', (x, y) => chebyshevFast2(x, y)],
+)
+compare(
+  'Chebyshev 3D',
+  ['shipping  (chained avalanches)', chebyshev3],
+  ['candidate (split bits, pruned)', chebyshevFast3],
+)
 compare(
   'Simplex 2D vs candidate',
   ['shipping  (folded lowbias32)', (x, y) => simplexTable2(x, y)],

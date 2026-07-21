@@ -85,7 +85,22 @@ import { worleyFast2, worleyFast3 } from './alt/worley-fast'
 import { WORLEY_FAST_GLSL } from './alt/worley-fast.glsl'
 import { WORLEY_FAST_TSL } from './alt/worley-fast.tsl'
 import { WORLEY_FAST_WGSL } from './alt/worley-fast.wgsl'
-import { clamp01, fmt, PERLIN2_NORM, PERLIN3_NORM, SIMPLEX2_NORM, SIMPLEX3_NORM } from './noises/normalization'
+import { chebyshevFast2, chebyshevFast3, manhattanFast2, manhattanFast3 } from './alt/worley-metrics-fast'
+import { WORLEY_METRICS_FAST_GLSL } from './alt/worley-metrics-fast.glsl'
+import { WORLEY_METRICS_FAST_TSL } from './alt/worley-metrics-fast.tsl'
+import { WORLEY_METRICS_FAST_WGSL } from './alt/worley-metrics-fast.wgsl'
+import {
+  CHEBYSHEV2_NORM,
+  CHEBYSHEV3_NORM,
+  clamp01,
+  fmt,
+  MANHATTAN2_NORM,
+  MANHATTAN3_NORM,
+  PERLIN2_NORM,
+  PERLIN3_NORM,
+  SIMPLEX2_NORM,
+  SIMPLEX3_NORM,
+} from './noises/normalization'
 
 export type ImplementationKind = 'canonical' | 'alternative' | 'conventional' | 'novel'
 
@@ -495,6 +510,25 @@ export const IMPLEMENTATIONS: Record<string, NoiseImplementation[]> = {
       ],
       variantIds: ['worley-manhattan-2d', 'worley-manhattan-3d'],
     },
+    {
+      id: 'split-bits-pruned',
+      name: 'Split-bit offsets, pruned search (L1)',
+      kind: 'alternative',
+      evidence: 'paper-only',
+      status: 'candidate',
+      archivedAt: 'src/alt/worley-metrics-fast.ts',
+      reference: {
+        paper: 'Steven Worley, "A Cellular Texture Basis Function" (SIGGRAPH 1996)',
+        url: 'https://cedric.cnam.fr/~cubaud/PROCEDURAL/worley.pdf',
+      },
+      follows: "Steven Worley, 'A Cellular Texture Basis Function' (SIGGRAPH 1996), Manhattan metric",
+      deviations: [
+        'The worley split-bits-pruned substrate under the L1 metric: one hash per cell with split-bit offsets, centre-first search. The prune bound composes ADDITIVELY across axes (a diagonal column clears |vx| + |vz| at least colDist + planeDist), still conservative, so the result is exactly the unpruned minimum (zero mismatches over 400k probes).',
+      ],
+      rationale:
+        'Measured with `bun run bench:impl`: ~2.5x the shipping manhattan3 and ~1.7x manhattan2 on the CPU, and a GPU win too — 1.55x in 3D, 1.07x in 2D (WebGL+WebGPU medians). Field mean/rms/extrema match shipping to three decimals. Not promoted: no tileable paths yet.',
+      variantIds: [],
+    },
   ],
   'worley-chebyshev': [
     {
@@ -513,6 +547,26 @@ export const IMPLEMENTATIONS: Record<string, NoiseImplementation[]> = {
         ONE_POINT_PER_CELL,
       ],
       variantIds: ['worley-chebyshev-2d', 'worley-chebyshev-3d'],
+    },
+    {
+      id: 'split-bits-pruned',
+      name: 'Split-bit offsets, pruned search (Linf)',
+      kind: 'alternative',
+      evidence: 'paper-only',
+      status: 'candidate',
+      archivedAt: 'src/alt/worley-metrics-fast.ts',
+      reference: {
+        paper: 'Steven Worley, "A Cellular Texture Basis Function" (SIGGRAPH 1996)',
+        url: 'https://cedric.cnam.fr/~cubaud/PROCEDURAL/worley.pdf',
+      },
+      follows: "Steven Worley's cellular basis, 'A Cellular Texture Basis Function' (SIGGRAPH 1996)",
+      deviations: [
+        "The Chebyshev metric is NOT in Worley's paper; only the cellular basis is traceable to the source (see the shipping entry).",
+        'The worley split-bits-pruned substrate under the Linf metric: one hash per cell with split-bit offsets, centre-first search. The prune bound composes by MAX across axes, still conservative, so the result is exactly the unpruned minimum (zero mismatches over 400k probes).',
+      ],
+      rationale:
+        'Measured with `bun run bench:impl`: ~2.5x the shipping chebyshev3 on the CPU, and a GPU win too — 1.9x in 3D, 1.09x in 2D (WebGL+WebGPU medians). chebyshev2 CPU is 1.2-1.45x ISOLATED but read 0.83x inside the full bench suite — the harness caveat in bench.ts, quoted here so nobody panics at the suite number. Field mean/rms/extrema match shipping to three decimals. Not promoted: no tileable paths yet.',
+      variantIds: [],
     },
   ],
   gabor: [
@@ -790,21 +844,35 @@ const altVariant = (
   ...shaders,
 })
 
-/** The three language specs for one candidate call, sharing one display expression shape. */
+/**
+ * The three language specs for one candidate call, sharing one display
+ * expression shape: null norm renders raw, 'signed' maps 0.5 + 0.5 * norm * v
+ * (Perlin-family), 'unsigned' maps norm * v (distance-family).
+ */
 const fastShaders = (
   dim: 2 | 3,
   chunks: { glsl: string; wgsl: string; tsl: string },
   call: string,
   norm: number | null,
-): AltShaders => ({
-  glsl: spec(dim, [FAST_COMMON_GLSL, chunks.glsl], norm === null ? call : signedText(norm, call)),
-  wgsl: spec(dim, [FAST_COMMON_WGSL, chunks.wgsl], norm === null ? call : signedText(norm, call)),
-  tsl: spec(dim, [FAST_COMMON_TSL, chunks.tsl], norm === null ? call : signedTsl(norm, call)),
-})
+  mode: 'signed' | 'unsigned' = 'signed',
+): AltShaders => {
+  const text = norm === null ? call : mode === 'signed' ? signedText(norm, call) : `${fmt(norm)} * ${call}`
+  const tslText = norm === null ? call : mode === 'signed' ? signedTsl(norm, call) : `${call}.mul(${norm})`
+  return {
+    glsl: spec(dim, [FAST_COMMON_GLSL, chunks.glsl], text),
+    wgsl: spec(dim, [FAST_COMMON_WGSL, chunks.wgsl], text),
+    tsl: spec(dim, [FAST_COMMON_TSL, chunks.tsl], tslText),
+  }
+}
 
 const PERLIN_FAST_CHUNKS = { glsl: PERLIN_FAST_GLSL, wgsl: PERLIN_FAST_WGSL, tsl: PERLIN_FAST_TSL }
 const SIMPLEX_FAST_CHUNKS = { glsl: SIMPLEX_FAST_GLSL, wgsl: SIMPLEX_FAST_WGSL, tsl: SIMPLEX_FAST_TSL }
 const WORLEY_FAST_CHUNKS = { glsl: WORLEY_FAST_GLSL, wgsl: WORLEY_FAST_WGSL, tsl: WORLEY_FAST_TSL }
+const WORLEY_METRICS_FAST_CHUNKS = {
+  glsl: WORLEY_METRICS_FAST_GLSL,
+  wgsl: WORLEY_METRICS_FAST_WGSL,
+  tsl: WORLEY_METRICS_FAST_TSL,
+}
 
 /**
  * Display mappings mirror the registry: Perlin and Simplex are signed noises
@@ -880,6 +948,41 @@ export const ALT_VARIANTS: AltVariant[] = [
     1.2,
     (x, y, z) => worleyFast3(x, y, z),
     fastShaders(3, WORLEY_FAST_CHUNKS, 'worleyFast3(p)', null),
+  ),
+  // Metric-candidate costs: shipping VARIANT_COST x measured GPU throughput
+  // ratio (WebGL+WebGPU medians). Manhattan: 0.94 (2D) / 0.65 (3D).
+  // Chebyshev: 0.92 (2D) / 0.52 (3D).
+  altVariant(
+    'worley-manhattan',
+    'split-bits-pruned',
+    2,
+    0.54,
+    (x, y) => MANHATTAN2_NORM * manhattanFast2(x, y),
+    fastShaders(2, WORLEY_METRICS_FAST_CHUNKS, 'manhattanFast2(p)', MANHATTAN2_NORM, 'unsigned'),
+  ),
+  altVariant(
+    'worley-manhattan',
+    'split-bits-pruned',
+    3,
+    1.5,
+    (x, y, z) => MANHATTAN3_NORM * manhattanFast3(x, y, z),
+    fastShaders(3, WORLEY_METRICS_FAST_CHUNKS, 'manhattanFast3(p)', MANHATTAN3_NORM, 'unsigned'),
+  ),
+  altVariant(
+    'worley-chebyshev',
+    'split-bits-pruned',
+    2,
+    0.53,
+    (x, y) => CHEBYSHEV2_NORM * chebyshevFast2(x, y),
+    fastShaders(2, WORLEY_METRICS_FAST_CHUNKS, 'chebyshevFast2(p)', CHEBYSHEV2_NORM, 'unsigned'),
+  ),
+  altVariant(
+    'worley-chebyshev',
+    'split-bits-pruned',
+    3,
+    1.2,
+    (x, y, z) => CHEBYSHEV3_NORM * chebyshevFast3(x, y, z),
+    fastShaders(3, WORLEY_METRICS_FAST_CHUNKS, 'chebyshevFast3(p)', CHEBYSHEV3_NORM, 'unsigned'),
   ),
 ]
 
