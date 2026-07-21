@@ -11,6 +11,7 @@ import {
   OCTAVE_ROT2,
   OCTAVE_ROT3,
   RIDGE_FEEDBACK,
+  BAND_SMOOTHING,
   STEP_SMOOTHING,
   TILE_REPEAT,
   translationVelocity,
@@ -115,6 +116,10 @@ export const buildWgslShader = (cfg: RenderConfig): string => {
   const { layers, tiled } = cfg
   const steps = cfg.steps && cfg.steps >= 2 ? cfg.steps : 0
   const smoothing = cfg.stepSmoothing ?? STEP_SMOOTHING
+  const band = cfg.band ?? null
+  const be = band ? band.width * (cfg.bandSmoothing ?? BAND_SMOOTHING) : 0
+  const bandLo = band ? band.center - band.width / 2 : 0
+  const bandHi = band ? band.center + band.width / 2 : 0
   const chunks: string[] = [COMMON_WGSL]
   const seen = new Set<string>(chunks)
   const fns: string[] = []
@@ -162,7 +167,9 @@ ${fns.join('\n')}
       ? `let sp = acc * ${f(steps)};
   let sb = floor(sp);
   acc = min(sb + smoothstep(${f(1 - smoothing)}, 1.0, sp - sb), ${f(steps - 1)}) / ${f(steps - 1)};`
-      : ''
+      : band
+        ? `acc = smoothstep(${f(bandLo)}, ${f(bandLo + be)}, acc) - smoothstep(${f(bandHi - be)}, ${f(bandHi)}, acc);`
+        : ''
   }
   return vec4f(acc, acc, acc, 1.0);
 }

@@ -284,3 +284,42 @@ describe('octave normalization preserves contrast', () => {
     expect(clipped / N).toBeLessThan(0.002)
   })
 })
+
+// The band display option: 1 inside one value interval, 0 outside, eased
+// edges — the mask-preview counterpart of stepped rendering.
+describe('band rendering', () => {
+  test('isolates a single band: values stay in [0, 1] and both sides occur', () => {
+    const effect = createEffect({ layers: [{ noise: 'perlin' }], band: { center: 0.5, width: 0.1 } })
+    let inside = 0
+    let outside = 0
+    for (let i = 0; i < 4000; i++) {
+      const v = effect.sample((i % 63) / 63, ((i * 13) % 61) / 61, 0.3)
+      expect(v).toBeGreaterThanOrEqual(0)
+      expect(v).toBeLessThanOrEqual(1)
+      if (v > 0.99) inside++
+      if (v < 0.01) outside++
+    }
+    // A 10%-wide mid band over Perlin is sparse but not empty, and most of
+    // the field is outside it.
+    expect(inside).toBeGreaterThan(0)
+    expect(outside).toBeGreaterThan(inside)
+  })
+
+  test('band and steps are mutually exclusive', () => {
+    expect(() => createEffect({ layers: [{ noise: 'perlin' }], steps: 4, band: { center: 0.5, width: 0.1 } })).toThrow()
+  })
+
+  test('every language emits the band pass', () => {
+    const effect = createEffect({ layers: [{ noise: 'perlin' }], band: { center: 0.25, width: 0.04 } })
+    // lo = 0.23; the eased rise ends at lo + width * BAND_SMOOTHING = 0.236.
+    expect(effect.glsl()).toContain('smoothstep(0.23, 0.236')
+    expect(effect.wgsl()).toContain('smoothstep(0.23, 0.236')
+    expect(effect.tslBody()).toContain('smoothstep(float(0.23), float(0.236')
+    expect(effect.spec.band).toEqual({ center: 0.25, width: 0.04 })
+  })
+
+  test('the smooth gradient never runs the band pass', () => {
+    const effect = createEffect({ layers: [{ noise: 'perlin' }] })
+    expect(effect.spec.band).toBeNull()
+  })
+})

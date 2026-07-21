@@ -7,7 +7,7 @@ import { defaultVariant, getNoise, getVariant, NOISES } from './registry'
 import { buildGlslFragment } from './render/glsl'
 import { createSampler, createSolidSampler } from './render/sampler'
 import { buildTslBody, buildTslModule } from './render/tsl'
-import { BLEND_MODES, STEP_SMOOTHING } from './render/types'
+import { BAND_SMOOTHING, BLEND_MODES, STEP_SMOOTHING } from './render/types'
 import { buildWgslShader } from './render/wgsl'
 
 import type { CostEstimate } from './cost'
@@ -84,6 +84,22 @@ export type EffectSpec = {
    * where triangles snap to either side of it.
    */
   stepSmoothing?: number
+  /**
+   * Isolate a single value band instead of rendering the gradient: output 1
+   * where the folded stack lands inside [center - width/2, center + width/2]
+   * and 0 elsewhere, with eased edges. The way to preview a noise as a mask —
+   * a thin band low in the range reads as caustic lines, a thick middle band
+   * as coastlines. A display option like `steps`, and mutually exclusive
+   * with it: createEffect throws if both are set. Omit or null for none.
+   */
+  band?: { center: number; width: number } | null
+  /**
+   * Fraction of the band width over which each band edge eases, 0.01-0.5,
+   * from the INSIDE of the edge. The default (BAND_SMOOTHING, 0.15) keeps
+   * edges crisp on pixels without aliasing; renders that displace geometry
+   * should widen it (~0.4), for the same sawtooth reason as stepSmoothing.
+   */
+  bandSmoothing?: number
 }
 
 export type Effect = {
@@ -201,8 +217,26 @@ export const createEffect = (spec: EffectSpec): Effect => {
   const stepSmoothing = Number.isFinite(spec.stepSmoothing)
     ? Math.min(1, Math.max(0.01, spec.stepSmoothing as number))
     : STEP_SMOOTHING
-  const cfg = { layers, tiled, size: 1, domain, steps, stepSmoothing }
-  const resolvedSpec: Required<EffectSpec> = { layers: normalized, tiled, domain, steps, stepSmoothing }
+  const band = spec.band
+    ? {
+        center: Math.min(1, Math.max(0, spec.band.center)),
+        width: Math.min(1, Math.max(0.005, spec.band.width)),
+      }
+    : null
+  if (band && steps) throw new Error('steps and band are mutually exclusive display options')
+  const bandSmoothing = Number.isFinite(spec.bandSmoothing)
+    ? Math.min(0.5, Math.max(0.01, spec.bandSmoothing as number))
+    : BAND_SMOOTHING
+  const cfg = { layers, tiled, size: 1, domain, steps, stepSmoothing, band: band ?? undefined, bandSmoothing }
+  const resolvedSpec: Required<EffectSpec> = {
+    layers: normalized,
+    tiled,
+    domain,
+    steps,
+    stepSmoothing,
+    band,
+    bandSmoothing,
+  }
 
   return {
     spec: resolvedSpec,

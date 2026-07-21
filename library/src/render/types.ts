@@ -222,6 +222,14 @@ export type RenderConfig = {
   steps?: number
   /** Band-edge ease fraction for stepped rendering. Default STEP_SMOOTHING. */
   stepSmoothing?: number
+  /**
+   * Isolate one value band: 1 where the folded stack lands inside
+   * [center - width/2, center + width/2], 0 elsewhere. Mutually exclusive
+   * with `steps`.
+   */
+  band?: { center: number; width: number }
+  /** Inside-edge ease fraction of the band width. Default BAND_SMOOTHING. */
+  bandSmoothing?: number
 }
 
 /**
@@ -240,6 +248,18 @@ export type RenderConfig = {
  * transition spanning several grid cells (~0.25).
  */
 export const STEP_SMOOTHING = 0.03
+
+/**
+ * Fraction of the band width over which an isolated band eases from 0 to 1
+ * on the INSIDE of each edge. Higher than STEP_SMOOTHING because it is
+ * relative to the band itself, which can be a twentieth of the value range —
+ * the same absolute crispness a stepped level gets needs a larger fraction
+ * here. Renders that displace geometry should widen it further (~0.4): a
+ * vertex grid cannot resolve the band's near-vertical walls.
+ *
+ * This is the DEFAULT; EffectSpec.bandSmoothing overrides it per effect.
+ */
+export const BAND_SMOOTHING = 0.15
 
 export type Renderer = {
   render: (timeSec: number) => void

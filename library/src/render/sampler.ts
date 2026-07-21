@@ -10,6 +10,7 @@
 import { clamp01 } from '../noises/normalization'
 import {
   applyBlend,
+  BAND_SMOOTHING,
   FRACTAL_GAIN,
   fractalAmpSum,
   fractalRms,
@@ -33,6 +34,22 @@ const [OFF_X, OFF_Y, OFF_Z] = OCTAVE_OFFSET
  * easing into the next level over the top STEP_SMOOTHING of each band so the
  * borders do not alias.
  */
+const sstep = (a: number, b: number, v: number): number => {
+  const t = Math.min(Math.max((v - a) / (b - a), 0), 1)
+  return t * t * (3 - 2 * t)
+}
+
+/**
+ * 1 inside [center - width/2, center + width/2], 0 outside, eased from the
+ * inside of each edge over `width * smoothing` so the band's walls do not
+ * alias — the same idea as posterize's eased level borders.
+ */
+const bandpass = (v: number, center: number, width: number, smoothing: number): number => {
+  const half = width / 2
+  const e = width * smoothing
+  return sstep(center - half, center - half + e, v) - sstep(center + half - e, center + half, v)
+}
+
 const posterize = (v: number, steps: number, smoothing: number): number => {
   const s = v * steps
   const b = Math.floor(s)
@@ -145,6 +162,8 @@ export const createSolidSampler = (cfg: RenderConfig): ((x: number, y: number, z
   const { layers } = cfg
   const steps = cfg.steps && cfg.steps >= 2 ? cfg.steps : 0
   const smoothing = cfg.stepSmoothing ?? STEP_SMOOTHING
+  const band = cfg.band ?? null
+  const bandSmoothing = cfg.bandSmoothing ?? BAND_SMOOTHING
   const velocities = layers.map(l => translationVelocity(l.speed, l.angle, l.scale))
   return (x, y, z, time = 0) => {
     let acc = 0
@@ -186,6 +205,7 @@ export const createSolidSampler = (cfg: RenderConfig): ((x: number, y: number, z
       const b = applyBlend(L.blend, acc, val)
       acc += (b - acc) * L.opacity
     }
+    if (band) return bandpass(acc, band.center, band.width, bandSmoothing)
     return steps ? posterize(acc, steps, smoothing) : acc
   }
 }
@@ -199,6 +219,8 @@ export const createSampler = (cfg: RenderConfig): ((u: number, v: number, time?:
   const { layers, tiled } = cfg
   const steps = cfg.steps && cfg.steps >= 2 ? cfg.steps : 0
   const smoothing = cfg.stepSmoothing ?? STEP_SMOOTHING
+  const band = cfg.band ?? null
+  const bandSmoothing = cfg.bandSmoothing ?? BAND_SMOOTHING
   const tiledFlags = layers.map(l => tiled && l.variant.sampleTileable !== null)
   const velocities = layers.map(l => translationVelocity(l.speed, l.angle, l.scale))
   return (u, v, time = 0) => {
@@ -223,6 +245,7 @@ export const createSampler = (cfg: RenderConfig): ((u: number, v: number, time?:
       const b = applyBlend(L.blend, acc, val)
       acc += (b - acc) * L.opacity
     }
+    if (band) return bandpass(acc, band.center, band.width, bandSmoothing)
     return steps ? posterize(acc, steps, smoothing) : acc
   }
 }

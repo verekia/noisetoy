@@ -36,6 +36,16 @@ type UILayer = PickerDraft & {
   hidden?: boolean
 }
 
+/**
+ * Isolated-band presets: where the band sits in the value range and how wide
+ * it is. A thin low band previews a noise as caustic lines; a thick middle
+ * band as coastlines. Mutually exclusive with stepped rendering.
+ */
+type BandLevel = 'lows' | 'mids' | 'highs'
+type BandWidth = 'thin' | 'medium' | 'thick'
+const BAND_CENTER: Record<BandLevel, number> = { lows: 0.25, mids: 0.5, highs: 0.75 }
+const BAND_WIDTH: Record<BandWidth, number> = { thin: 0.04, medium: 0.1, thick: 0.2 }
+
 /** Screen-relative drift presets, in canvas units per second. */
 const DRIFTS = [
   { value: 0, label: 'None' },
@@ -96,6 +106,8 @@ export default function Home() {
   const [tiled, setTiled] = useState(false)
   /** Posterization levels for the whole stack; 0 renders the smooth gradient. */
   const [steps, setSteps] = useState(0)
+  /** Isolated band, or null for the gradient. Exclusive with steps. */
+  const [band, setBand] = useState<{ level: BandLevel; width: BandWidth } | null>(null)
   const [hasWebgpu, setHasWebgpu] = useState(false)
   const [copied, setCopied] = useState<'json' | 'glsl' | 'wgsl' | 'tsl' | null>(null)
   const [importOpen, setImportOpen] = useState(false)
@@ -128,7 +140,11 @@ export default function Home() {
     const active = visible.length > 0 ? visible : [{ ...(layers[0] as UILayer), opacity: 0 }]
     const built = createEffect({
       tiled: tiled && altCount === 0,
-      steps,
+      steps: band ? 0 : steps,
+      band: band ? { center: BAND_CENTER[band.level], width: BAND_WIDTH[band.width] } : undefined,
+      // Same displaced-geometry reasoning as stepSmoothing below: a vertex
+      // grid cannot resolve the band's walls, so the 3D views ease wider.
+      bandSmoothing: view === 'sphere' ? 0.5 : view === 'plane' ? 0.4 : undefined,
       // The 3D views displace a vertex grid, which cannot resolve the crisp
       // 2D band edges: cliffs falling between grid columns render as sawtooth.
       // A wide ease bevels the terraces over several grid cells instead. The
@@ -175,7 +191,7 @@ export default function Home() {
       }
     })
     return built
-  }, [layers, tiled, view, steps, altCount])
+  }, [layers, tiled, view, steps, band, altCount])
 
   // The library's estimate is keyed to shipping variants; layers rendering a
   // non-shipping implementation substitute its own measured cost
@@ -821,11 +837,41 @@ export default function Home() {
               ]}
             />
             <Segmented
-              value={steps}
-              onChange={setSteps}
+              value={band ? -1 : steps}
+              onChange={s => {
+                setBand(null)
+                setSteps(s)
+              }}
               options={[
                 { value: 0, label: 'Smooth' },
                 ...[2, 3, 4, 6, 8].map(n => ({ value: n, label: String(n), title: `${n} stepped levels` })),
+              ]}
+            />
+            {/* Isolated band: preview the stack as a mask (e.g. a thin low
+                band as caustic lines). Selecting either group activates band
+                mode and deselects Smooth/steps, and vice versa. */}
+            <Segmented
+              value={band?.level ?? ''}
+              onChange={v => {
+                setSteps(0)
+                setBand(b => ({ level: v as BandLevel, width: b?.width ?? 'medium' }))
+              }}
+              options={[
+                { value: 'lows', label: 'Lows', title: 'Band centered at 0.25' },
+                { value: 'mids', label: 'Mids', title: 'Band centered at 0.5' },
+                { value: 'highs', label: 'Highs', title: 'Band centered at 0.75' },
+              ]}
+            />
+            <Segmented
+              value={band?.width ?? ''}
+              onChange={v => {
+                setSteps(0)
+                setBand(b => ({ level: b?.level ?? 'mids', width: v as BandWidth }))
+              }}
+              options={[
+                { value: 'thin', label: 'Thin', title: '4% of the value range' },
+                { value: 'medium', label: 'Medium', title: '10% of the value range' },
+                { value: 'thick', label: 'Thick', title: '20% of the value range' },
               ]}
             />
             {/* A sphere always reads the solid field, where tiling has no meaning. */}

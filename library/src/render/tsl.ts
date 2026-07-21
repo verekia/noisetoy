@@ -13,6 +13,7 @@ import {
   OCTAVE_ROT2,
   OCTAVE_ROT3,
   RIDGE_FEEDBACK,
+  BAND_SMOOTHING,
   STEP_SMOOTHING,
   TILE_REPEAT,
   translationVelocity,
@@ -181,6 +182,10 @@ export const buildTslBody = (cfg: RenderConfig): string => {
   const solid = cfg.domain === 'position'
   const steps = cfg.steps && cfg.steps >= 2 ? cfg.steps : 0
   const smoothing = cfg.stepSmoothing ?? STEP_SMOOTHING
+  const band = cfg.band ?? null
+  const be = band ? band.width * (cfg.bandSmoothing ?? BAND_SMOOTHING) : 0
+  const bandLo = band ? band.center - band.width / 2 : 0
+  const bandHi = band ? band.center + band.width / 2 : 0
   const chunks: string[] = [COMMON_TSL]
   const seen = new Set<string>(chunks)
   const fns: string[] = []
@@ -218,7 +223,9 @@ const effect = Fn(([uvIn, t]) => {
   return ${
     steps
       ? `sb.add(smoothstep(float(${1 - smoothing}), float(1), sp.sub(sb))).min(${steps - 1}).div(${steps - 1})`
-      : 'acc'
+      : band
+        ? `smoothstep(float(${bandLo}), float(${bandLo + be}), acc).sub(smoothstep(float(${bandHi - be}), float(${bandHi}), acc))`
+        : 'acc'
   }
 })`
 }

@@ -13,6 +13,7 @@ import {
   OCTAVE_ROT2,
   OCTAVE_ROT3,
   RIDGE_FEEDBACK,
+  BAND_SMOOTHING,
   STEP_SMOOTHING,
   TILE_REPEAT,
   translationVelocity,
@@ -117,6 +118,10 @@ export const buildGlslFragment = (cfg: RenderConfig): string => {
   const { layers, tiled } = cfg
   const steps = cfg.steps && cfg.steps >= 2 ? cfg.steps : 0
   const smoothing = cfg.stepSmoothing ?? STEP_SMOOTHING
+  const band = cfg.band ?? null
+  const be = band ? band.width * (cfg.bandSmoothing ?? BAND_SMOOTHING) : 0
+  const bandLo = band ? band.center - band.width / 2 : 0
+  const bandHi = band ? band.center + band.width / 2 : 0
   const chunks: string[] = [COMMON_GLSL]
   const seen = new Set<string>(chunks)
   const fns: string[] = []
@@ -159,7 +164,9 @@ void main() {
       ? `float sp = acc * ${f(steps)};
   float sb = floor(sp);
   acc = min(sb + smoothstep(${f(1 - smoothing)}, 1.0, sp - sb), ${f(steps - 1)}) / ${f(steps - 1)};`
-      : ''
+      : band
+        ? `acc = smoothstep(${f(bandLo)}, ${f(bandLo + be)}, acc) - smoothstep(${f(bandHi - be)}, ${f(bandHi)}, acc);`
+        : ''
   }
   outColor = vec4(vec3(acc), 1.0);
 }
