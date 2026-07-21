@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 
 import {
+  ALT_VARIANTS,
   allImplementations,
+  altVariantsFor,
   defaultImplementationOf,
   EVIDENCE_LABEL,
   evidenceSupportsKind,
@@ -9,7 +11,7 @@ import {
   IMPLEMENTATIONS,
   implementationOf,
 } from './implementations'
-import { NOISES } from './registry'
+import { getNoise, NOISES } from './registry'
 
 // The inventory is a separate entry point and deliberately has no runtime link
 // to the registry, so nothing checks that the two agree except these tests.
@@ -194,4 +196,51 @@ test('every archivedAt path actually exists', async () => {
     const abs = `${import.meta.dir}/../${rel}`
     expect({ noiseId, rel, exists: await Bun.file(abs).exists() }).toEqual({ noiseId, rel, exists: true })
   }
+})
+
+// A speed claim that cannot be re-run outside this repo is an anecdote. Every
+// non-shipping implementation kept in src/alt must stay runnable through
+// ALT_VARIANTS, one stand-in per dimension its noise ships, or the explorer's
+// benchmark silently stops covering it.
+describe('alt variants keep the non-shipping implementations runnable', () => {
+  test('every non-shipping implementation in src/alt provides a stand-in per shipping dimension', () => {
+    for (const { noiseId, implementation } of allImplementations()) {
+      if (!implementation.status || !implementation.archivedAt?.startsWith('src/alt/')) continue
+      const noise = getNoise(noiseId)
+      for (const variant of noise?.variants ?? []) {
+        const alt = altVariantsFor(noiseId, implementation.id).find(v => v.dim === variant.dim)
+        expect({ noiseId, impl: implementation.id, dim: variant.dim, runnable: Boolean(alt) }).toEqual({
+          noiseId,
+          impl: implementation.id,
+          dim: variant.dim,
+          runnable: true,
+        })
+      }
+    }
+  })
+
+  test('every alt variant points at a documented non-shipping implementation and a real registry variant', () => {
+    for (const alt of ALT_VARIANTS) {
+      const impl = (IMPLEMENTATIONS[alt.noiseId] ?? []).find(i => i.id === alt.implementationId)
+      expect({ id: alt.id, documented: Boolean(impl?.status) }).toEqual({ id: alt.id, documented: true })
+      const noise = getNoise(alt.noiseId)
+      const variant = noise?.variants.find(v => v.id === alt.variantId)
+      expect({ id: alt.id, mirrors: variant?.dim }).toEqual({ id: alt.id, mirrors: alt.dim })
+      expect(alt.id).toBe(`${alt.variantId}@${alt.implementationId}`)
+    }
+  })
+
+  test('alt samples are deterministic and clamped to [0, 1]', () => {
+    for (const alt of ALT_VARIANTS) {
+      for (let i = 0; i < 500; i++) {
+        const x = (i % 37) * 0.61 - 9
+        const y = (i % 23) * 0.43 - 5
+        const z = (i % 17) * 0.29
+        const v = alt.sample(x, y, z)
+        expect(v).toBeGreaterThanOrEqual(0)
+        expect(v).toBeLessThanOrEqual(1)
+        expect(alt.sample(x, y, z)).toBe(v)
+      }
+    }
+  })
 })

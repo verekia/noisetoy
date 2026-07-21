@@ -1,13 +1,19 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { benchJsVariant } from '#/lib/bench'
 import { benchThreeVariant, benchWebglVariant, benchWebgpuVariant } from '#/lib/bench-gpu'
 import Head from 'next/head'
 import Link from 'next/link'
-import { NOISES } from 'noisetoy'
+import { useRouter } from 'next/router'
+import { getNoise, NOISES } from 'noisetoy'
+// Non-shipping implementations (candidates, superseded) bench through their
+// AltVariants: TS-only stand-ins, so they fill the JS column and sit at n/a on
+// the GPU columns until they grow shaders.
+import { ALT_VARIANTS } from 'noisetoy/implementations'
 
 import type { BenchResult } from '#/lib/bench'
-import type { Backend } from 'noisetoy'
+import type { Backend, NoiseVariant } from 'noisetoy'
+import type { AltVariant } from 'noisetoy/implementations'
 
 const JS_SIZE = 256
 const JS_FRAMES = 3
@@ -20,11 +26,54 @@ const nextFrame = () => new Promise<void>(resolve => requestAnimationFrame(() =>
 
 type SortCol = 'variant' | Backend
 
+/**
+ * One benchmark row: a shipping registry variant, or a non-shipping
+ * implementation's AltVariant standing in for the same registry variant.
+ */
+type Row = {
+  key: string
+  noiseId: string
+  scale: number
+  variant: NoiseVariant | null
+  alt: AltVariant | null
+}
+
+const rowsFor = (noises: typeof NOISES): Row[] =>
+  noises.flatMap(noise =>
+    noise.variants.flatMap(variant => [
+      { key: variant.id, noiseId: noise.id, scale: noise.scale, variant, alt: null },
+      ...ALT_VARIANTS.filter(a => a.variantId === variant.id).map(alt => ({
+        key: alt.id,
+        noiseId: noise.id,
+        scale: noise.scale,
+        variant: null,
+        alt,
+      })),
+    ]),
+  )
+
 export default function Bench() {
+  const router = useRouter()
   const [results, setResults] = useState<Record<string, Cell>>({})
   const [running, setRunning] = useState(false)
   const [sortCol, setSortCol] = useState<SortCol>('variant')
   const [sortDesc, setSortDesc] = useState(true)
+
+  // The noise filter lives in the URL (?noise=perlin) so a single algorithm's
+  // implementations can be benchmarked from a link; the dropdown mirrors it.
+  const rawParam = typeof router.query.noise === 'string' ? router.query.noise : ''
+  const noiseFilter = rawParam && getNoise(rawParam) ? rawParam : ''
+  useEffect(() => {
+    if (router.isReady && rawParam && !getNoise(rawParam)) {
+      void router.replace({ pathname: router.pathname }, undefined, { shallow: true })
+    }
+  }, [router, rawParam])
+
+  const setNoiseFilter = (id: string) => {
+    void router.replace({ pathname: router.pathname, query: id ? { noise: id } : {} }, undefined, { shallow: true })
+  }
+
+  const filteredNoises = noiseFilter ? NOISES.filter(n => n.id === noiseFilter) : NOISES
 
   const setCell = (key: string, cell: Cell) => setResults(prev => ({ ...prev, [key]: cell }))
 
@@ -33,29 +82,45 @@ export default function Bench() {
     setResults({})
     const hasWebgpu = 'gpu' in navigator
     try {
-      for (const noise of NOISES) {
-        for (const variant of noise.variants) {
-          const backends: { id: Backend; exec: () => Promise<BenchResult> | BenchResult }[] = [
-            { id: 'js', exec: () => benchJsVariant(variant, noise.scale, JS_SIZE, JS_FRAMES) },
-            { id: 'webgl', exec: () => benchWebglVariant(variant, noise.id, GPU_SIZE, GPU_FRAMES) },
-            { id: 'webgpu', exec: () => benchWebgpuVariant(variant, noise.id, GPU_SIZE, GPU_FRAMES) },
-            { id: 'three', exec: () => benchThreeVariant(variant, noise.id, GPU_SIZE, GPU_FRAMES) },
-          ]
-          for (const { id, exec } of backends) {
-            const key = `${variant.id}-${id}`
-            if ((id === 'webgpu' || id === 'three') && !hasWebgpu) {
-              setCell(key, 'n/a')
-              continue
-            }
-            setCell(key, 'running')
-            await nextFrame()
-            try {
-              setCell(key, await exec())
-            } catch (e) {
-              setCell(key, { error: e instanceof Error ? e.message : String(e) })
-            }
-            await nextFrame()
+      for (const row of rowsFor(filteredNoises)) {
+        const backends: { id: Backend; exec: (() => Promise<BenchResult> | BenchResult) | null }[] = row.variant
+          ? [
+              { id: 'js', exec: () => benchJsVariant(row.variant as NoiseVariant, row.scale, JS_SIZE, JS_FRAMES) },
+              {
+                id: 'webgl',
+                exec: () => benchWebglVariant(row.variant as NoiseVariant, row.noiseId, GPU_SIZE, GPU_FRAMES),
+              },
+              {
+                id: 'webgpu',
+                exec: () => benchWebgpuVariant(row.variant as NoiseVariant, row.noiseId, GPU_SIZE, GPU_FRAMES),
+              },
+              {
+                id: 'three',
+                exec: () => benchThreeVariant(row.variant as NoiseVariant, row.noiseId, GPU_SIZE, GPU_FRAMES),
+              },
+            ]
+          : [
+              // A non-shipping implementation has TS samplers only: the GPU
+              // columns are honestly n/a, not merely unmeasured.
+              { id: 'js', exec: () => benchJsVariant(row.alt as AltVariant, row.scale, JS_SIZE, JS_FRAMES) },
+              { id: 'webgl', exec: null },
+              { id: 'webgpu', exec: null },
+              { id: 'three', exec: null },
+            ]
+        for (const { id, exec } of backends) {
+          const key = `${row.key}-${id}`
+          if (exec === null || ((id === 'webgpu' || id === 'three') && !hasWebgpu)) {
+            setCell(key, 'n/a')
+            continue
           }
+          setCell(key, 'running')
+          await nextFrame()
+          try {
+            setCell(key, await exec())
+          } catch (e) {
+            setCell(key, { error: e instanceof Error ? e.message : String(e) })
+          }
+          await nextFrame()
         }
       }
     } finally {
@@ -63,19 +128,19 @@ export default function Bench() {
     }
   }
 
-  const cellValue = (variantId: string, backend: Backend): number | null => {
-    const cell = results[`${variantId}-${backend}`]
+  const cellValue = (rowKey: string, backend: Backend): number | null => {
+    const cell = results[`${rowKey}-${backend}`]
     return cell !== undefined && typeof cell === 'object' && 'msamplesPerSec' in cell ? cell.msamplesPerSec : null
   }
 
-  const allRows = NOISES.flatMap(noise => noise.variants.map(variant => ({ scale: noise.scale, variant })))
+  const allRows = rowsFor(filteredNoises)
 
   const rows =
     sortCol === 'variant'
       ? allRows
       : allRows.toSorted((a, b) => {
-          const va = cellValue(a.variant.id, sortCol)
-          const vb = cellValue(b.variant.id, sortCol)
+          const va = cellValue(a.key, sortCol)
+          const vb = cellValue(b.key, sortCol)
           if (va === null && vb === null) return 0
           if (va === null) return 1
           if (vb === null) return -1
@@ -85,9 +150,9 @@ export default function Bench() {
   // Relative performance within a column: >= 1/3 of the column's fastest is
   // green, >= 1/10 is yellow, slower is orange.
   const columnMax: Record<Backend, number> = { js: 0, webgl: 0, webgpu: 0, three: 0 }
-  for (const { variant } of allRows) {
+  for (const row of allRows) {
     for (const backend of ['js', 'webgl', 'webgpu', 'three'] as Backend[]) {
-      const v = cellValue(variant.id, backend)
+      const v = cellValue(row.key, backend)
       if (v !== null && v > columnMax[backend]) columnMax[backend] = v
     }
   }
@@ -148,8 +213,12 @@ export default function Bench() {
               <h1 className="text-xl font-semibold">Benchmarks</h1>
               <p className="mt-1 text-sm text-zinc-400">
                 Throughput in Msamples/s (higher is better). JS runs {JS_SIZE}×{JS_SIZE}×{JS_FRAMES} frames on the CPU;
-                WebGL/WebGPU run {GPU_SIZE}×{GPU_SIZE}×{GPU_FRAMES} frames with full GPU sync. CLI equivalent:{' '}
-                <code className="rounded bg-zinc-900 px-1.5 py-0.5 text-xs">bun run bench</code>
+                WebGL/WebGPU run {GPU_SIZE}×{GPU_SIZE}×{GPU_FRAMES} frames with full GPU sync. Rows marked with an
+                implementation id are non-shipping implementations from the inventory (CPU-only, so GPU columns are
+                n/a). CLI equivalent:{' '}
+                <code className="rounded bg-zinc-900 px-1.5 py-0.5 text-xs">
+                  bun run bench{noiseFilter ? ` ${noiseFilter}` : ''}
+                </code>
               </p>
             </div>
             <Link
@@ -159,13 +228,31 @@ export default function Bench() {
               ← Viewer
             </Link>
           </div>
-          <button
-            onClick={run}
-            disabled={running}
-            className="mb-6 rounded-md bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-900 transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {running ? 'Running…' : 'Run benchmarks'}
-          </button>
+          <div className="mb-6 flex items-center gap-3">
+            <button
+              onClick={run}
+              disabled={running}
+              className="rounded-md bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-900 transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {running ? 'Running…' : noiseFilter ? `Run ${noiseFilter} benchmarks` : 'Run benchmarks'}
+            </button>
+            <label className="flex items-center gap-2 text-sm text-zinc-400">
+              Noise
+              <select
+                value={noiseFilter}
+                disabled={running}
+                onChange={e => setNoiseFilter(e.target.value)}
+                className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="">All</option>
+                {NOISES.map(n => (
+                  <option key={n.id} value={n.id}>
+                    {n.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="border-b border-zinc-700 text-left text-xs text-zinc-400">
@@ -177,13 +264,24 @@ export default function Bench() {
               </tr>
             </thead>
             <tbody className="font-mono">
-              {rows.map(({ variant }) => (
-                <tr key={variant.id} className="border-b border-zinc-900">
-                  <td className="py-2 pr-4 font-sans">{variant.id}</td>
-                  <td className="py-2 pr-4">{renderCell(results[`${variant.id}-js`], columnMax.js)}</td>
-                  <td className="py-2 pr-4">{renderCell(results[`${variant.id}-webgl`], columnMax.webgl)}</td>
-                  <td className="py-2 pr-4">{renderCell(results[`${variant.id}-webgpu`], columnMax.webgpu)}</td>
-                  <td className="py-2">{renderCell(results[`${variant.id}-three`], columnMax.three)}</td>
+              {rows.map(row => (
+                <tr key={row.key} className="border-b border-zinc-900">
+                  <td className="py-2 pr-4 font-sans">
+                    {row.alt ? (
+                      <>
+                        {row.alt.variantId}
+                        <span className="ml-1.5 rounded-sm bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-400">
+                          {row.alt.implementationId}
+                        </span>
+                      </>
+                    ) : (
+                      row.key
+                    )}
+                  </td>
+                  <td className="py-2 pr-4">{renderCell(results[`${row.key}-js`], columnMax.js)}</td>
+                  <td className="py-2 pr-4">{renderCell(results[`${row.key}-webgl`], columnMax.webgl)}</td>
+                  <td className="py-2 pr-4">{renderCell(results[`${row.key}-webgpu`], columnMax.webgpu)}</td>
+                  <td className="py-2">{renderCell(results[`${row.key}-three`], columnMax.three)}</td>
                 </tr>
               ))}
             </tbody>

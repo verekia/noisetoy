@@ -6,6 +6,11 @@
 // is a separate entry point and nothing under src/index.ts may import it. A test
 // enforces that. See PROMOTION below for how the two stay in sync.
 //
+// Besides the metadata, this entry carries the non-shipping implementations
+// THEMSELVES, as runnable display-mapped samplers (ALT_VARIANTS at the bottom).
+// That is what lets the explorer preview and benchmark every implementation in
+// the inventory without any of them riding along with the default entry.
+//
 // WHY THIS FILE EXISTS. A noise is an idea; an implementation is one way of
 // computing it, and two implementations of the same idea can differ severalfold
 // in cost while producing an equivalent-looking field. To hunt for faster
@@ -60,6 +65,11 @@
 // measurements are CPU-only, and psrdnoise's case for trigonometry was about
 // GPUs. The table gradients live alongside it in common.ts as `gradTable2` /
 // `gradTable3`, so switching a noise over is a small change.
+
+import { perlinFast2, perlinFast3 } from './alt/perlin-fast'
+import { simplex2 as simplexTrig2, simplex3 as simplexTrig3 } from './alt/simplex-trig'
+import { worleyFast2, worleyFast3 } from './alt/worley-fast'
+import { clamp01, PERLIN2_NORM, PERLIN3_NORM } from './noises/normalization'
 
 export type ImplementationKind = 'canonical' | 'alternative' | 'conventional' | 'novel'
 
@@ -652,3 +662,80 @@ export const implementationOf = (variantId: string): NoiseImplementation | undef
 /** The implementation a caller gets from `noisetoy` when they do not ask for one. */
 export const defaultImplementationOf = (noiseId: string): NoiseImplementation | undefined =>
   IMPLEMENTATIONS[noiseId]?.find(i => !i.status)
+
+export const IMPLEMENTATION_STATUS_LABEL: Record<NonNullable<NoiseImplementation['status']>, string> = {
+  superseded: 'Superseded',
+  baseline: 'Baseline',
+  candidate: 'Candidate',
+}
+
+export const IMPLEMENTATION_STATUS_BLURB: Record<NonNullable<NoiseImplementation['status']>, string> = {
+  superseded: 'Was the default and lost a measured comparison; kept so the comparison can be re-run.',
+  baseline: 'Never a candidate to ship; exists only to be measured against.',
+  candidate:
+    'Currently beats the shipping implementation on the CPU, but is not promoted: no GPU backends yet, GPU unmeasured.',
+}
+
+// ---------------------------------------------------------------------------
+// Runnable stand-ins for the non-shipping implementations.
+//
+// A registry variant is the full contract — four languages, tiling, cost
+// entry. A non-shipping implementation has none of that, but it still needs to
+// be RUNNABLE or the inventory's speed claims cannot be checked outside this
+// repo, and the explorer cannot show what an implementation looks like. An
+// AltVariant is the minimal runnable slice: the TS samplers, display-mapped
+// exactly like the registry variant it stands in for, so previews and
+// benchmarks are apples-to-apples with the shipping row.
+//
+// TS-only on purpose. The moment one of these grows the other three languages
+// and a GPU measurement, it stops being an AltVariant and gets PROMOTED.
+
+export type AltSampleFn = (x: number, y: number, z: number) => number
+
+export type AltVariant = {
+  /** Globally unique: `${variantId}@${implementationId}`. */
+  id: string
+  /** The registry variant this stands in for, e.g. 'perlin-2d'. */
+  variantId: string
+  noiseId: string
+  /** The inventory implementation (always one with `status` set) providing it. */
+  implementationId: string
+  dim: 2 | 3
+  /** Pre-clamp display value, same mapping as the registry variant's sampleRaw. */
+  sampleRaw: AltSampleFn
+  /** Display sample, clamped to [0, 1], same contract as the registry's sample. */
+  sample: AltSampleFn
+}
+
+// The display norms of the superseded trig Simplex. These are NOT the shipping
+// SIMPLEX*_NORMs: the unit gradients and the kernel-radius fork put its
+// amplitude elsewhere, and it was calibrated empirically to these values when
+// it was the default (see its inventory entry above).
+const SIMPLEX_TRIG2_NORM = 90
+const SIMPLEX_TRIG3_NORM = 98
+
+const altVariant = (noiseId: string, implementationId: string, dim: 2 | 3, sampleRaw: AltSampleFn): AltVariant => ({
+  id: `${noiseId}-${dim}d@${implementationId}`,
+  variantId: `${noiseId}-${dim}d`,
+  noiseId,
+  implementationId,
+  dim,
+  sampleRaw,
+  sample: (x, y, z) => clamp01(sampleRaw(x, y, z)),
+})
+
+/**
+ * Display mappings mirror the registry: Perlin and Simplex are signed noises
+ * mapped 0.5 + 0.5 * norm * raw; Worley's F1 distance is displayed raw.
+ */
+export const ALT_VARIANTS: AltVariant[] = [
+  altVariant('perlin', 'fib-hash', 2, (x, y) => 0.5 + 0.5 * PERLIN2_NORM * perlinFast2(x, y)),
+  altVariant('perlin', 'fib-hash', 3, (x, y, z) => 0.5 + 0.5 * PERLIN3_NORM * perlinFast3(x, y, z)),
+  altVariant('simplex', 'trig-gradients', 2, (x, y) => 0.5 + 0.5 * SIMPLEX_TRIG2_NORM * simplexTrig2(x, y)),
+  altVariant('simplex', 'trig-gradients', 3, (x, y, z) => 0.5 + 0.5 * SIMPLEX_TRIG3_NORM * simplexTrig3(x, y, z)),
+  altVariant('worley', 'split-bits-pruned', 2, (x, y) => worleyFast2(x, y)),
+  altVariant('worley', 'split-bits-pruned', 3, (x, y, z) => worleyFast3(x, y, z)),
+]
+
+export const altVariantsFor = (noiseId: string, implementationId: string): AltVariant[] =>
+  ALT_VARIANTS.filter(v => v.noiseId === noiseId && v.implementationId === implementationId)

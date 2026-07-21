@@ -1,5 +1,8 @@
 // Pure-TS benchmark kernel, shared by the CLI benchmark (bun) and the
 // in-browser JS benchmark. Times sampling of a size x size grid.
+//
+// Takes anything with a display `sample` so registry variants and the
+// inventory's AltVariants (non-shipping implementations) bench identically.
 
 import type { NoiseVariant } from 'noisetoy'
 
@@ -10,7 +13,12 @@ export type BenchResult = {
   msamplesPerSec: number
 }
 
-export const benchJsVariant = (variant: NoiseVariant, scale: number, size: number, frames: number): BenchResult => {
+export const benchJsVariant = (
+  variant: Pick<NoiseVariant, 'sample'>,
+  scale: number,
+  size: number,
+  frames: number,
+): BenchResult => {
   const sample = variant.sample
   let sink = 0
 

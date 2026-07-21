@@ -8,10 +8,14 @@ import { createEffect, defaultVariant, getNoise, getVariant, NOISES, variantCost
 // reference material for benchmarking, and consumers of the library never ship
 // it. The explorer is exactly the consumer that should.
 import {
+  altVariantsFor,
   EVIDENCE_LABEL,
   IMPLEMENTATION_KIND_BLURB,
   IMPLEMENTATION_KIND_LABEL,
+  IMPLEMENTATION_STATUS_BLURB,
+  IMPLEMENTATION_STATUS_LABEL,
   implementationOf,
+  IMPLEMENTATIONS,
 } from 'noisetoy/implementations'
 
 import type { Backend, BlendMode, FractalStyle, LayerSpec, NoiseDef } from 'noisetoy'
@@ -98,6 +102,11 @@ const NoisePicker = ({
 }) => {
   const [draft, setDraft] = useState<PickerDraft>(initial)
   const [preview, setPreview] = useState<'layer' | 'isolated'>('layer')
+  // Which of the noise's implementations the panel is inspecting. Null means
+  // the shipping one. Non-shipping selections change the info card and the
+  // preview only — a saved layer always uses what `noisetoy` ships, because
+  // the registry has no variants for the others.
+  const [implId, setImplId] = useState<string | null>(null)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -109,9 +118,17 @@ const NoisePicker = ({
 
   const noise = getNoise(draft.noiseId) ?? (NOISES[0] as NoiseDef)
   const variant = getVariant(noise, draft.variantId)
-  // Per variant, not per noise: once a noise carries more than one
-  // implementation, the selected variant is what says which one you are looking at.
-  const implementation = implementationOf(variant.id)
+  // Every implementation of the selected noise, shipping first (the inventory
+  // lists them that way). The card shows whichever one is selected; with no
+  // selection it falls back to the implementation owning the variant.
+  const implementations = IMPLEMENTATIONS[noise.id] ?? []
+  const implementation =
+    (implId ? implementations.find(i => i.id === implId) : undefined) ?? implementationOf(variant.id)
+  // A non-shipping implementation previews through its TS stand-in when the
+  // inventory provides one for this dimension.
+  const altPreview = implementation?.status
+    ? (altVariantsFor(noise.id, implementation.id).find(v => v.dim === variant.dim) ?? null)
+    : null
 
   const draftLayer: LayerSpec = {
     noise: draft.noiseId,
@@ -128,31 +145,51 @@ const NoisePicker = ({
   // object identity the parent rebuilds every render.
   const stackKey = stack ? JSON.stringify(stack) : ''
 
-  const previewEffect = useMemo(
-    () =>
-      createEffect({
-        layers:
-          asLayer && stack
-            ? [...stack.below, { ...draftLayer, blend: stack.blend, opacity: stack.opacity }, ...stack.above]
-            : [draftLayer],
-      }),
+  const previewEffect = useMemo(() => {
+    const effect = createEffect({
+      layers:
+        asLayer && stack
+          ? [...stack.below, { ...draftLayer, blend: stack.blend, opacity: stack.opacity }, ...stack.above]
+          : [draftLayer],
+    })
+    // Swap the draft layer's sampling for the non-shipping implementation's
+    // stand-in. The CPU sampler reads the layer's variant per call, so the
+    // whole pipeline (octaves, styles, blending) applies to it unchanged; the
+    // GPU renderers never see this effect because the preview is forced to
+    // the JS backend below.
+    if (altPreview) {
+      const layer = effect.layers[asLayer && stack ? stack.below.length : 0]
+      if (layer) {
+        layer.variant = {
+          ...layer.variant,
+          sample: altPreview.sample,
+          sampleRaw: altPreview.sampleRaw,
+          sampleTileable: null,
+          sampleRawTileable: null,
+        }
+      }
+    }
+    return effect
     // draftLayer and stack are rebuilt each render, so key on their contents.
     // oxlint-disable-next-line exhaustive-deps
-    [
-      draft.noiseId,
-      draft.variantId,
-      draft.octaves,
-      draft.rotate,
-      draft.style,
-      draft.scaleMul,
-      draft.speed,
-      draft.angle,
-      asLayer,
-      stackKey,
-    ],
-  )
+  }, [
+    draft.noiseId,
+    draft.variantId,
+    draft.octaves,
+    draft.rotate,
+    draft.style,
+    draft.scaleMul,
+    draft.speed,
+    draft.angle,
+    asLayer,
+    stackKey,
+    altPreview,
+  ])
 
-  const selectNoise = (n: NoiseDef) => setDraft(d => ({ ...d, noiseId: n.id, variantId: defaultVariant(n).id }))
+  const selectNoise = (n: NoiseDef) => {
+    setImplId(null)
+    setDraft(d => ({ ...d, noiseId: n.id, variantId: defaultVariant(n).id }))
+  }
 
   return (
     <div
@@ -200,8 +237,13 @@ const NoisePicker = ({
             <div className="flex gap-4">
               <div className="w-56 shrink-0 space-y-2">
                 <div className="aspect-square">
-                  <NoiseCanvas effect={previewEffect} backend={backend} />
+                  <NoiseCanvas effect={previewEffect} backend={altPreview ? 'js' : backend} />
                 </div>
+                {altPreview && (
+                  <p className="text-[10px] leading-relaxed text-zinc-500">
+                    CPU (JS) preview of a non-shipping implementation. Saved layers always use the shipping one.
+                  </p>
+                )}
                 {stack !== null && (
                   <div className="flex">
                     <Segmented
@@ -228,6 +270,14 @@ const NoisePicker = ({
                       >
                         {IMPLEMENTATION_KIND_LABEL[implementation.kind]}
                       </span>
+                      {implementation.status && (
+                        <span
+                          title={IMPLEMENTATION_STATUS_BLURB[implementation.status]}
+                          className="rounded-sm bg-zinc-800 px-1.5 py-0.5 text-[10px] font-medium text-zinc-300 ring-1 ring-zinc-700 ring-inset"
+                        >
+                          {IMPLEMENTATION_STATUS_LABEL[implementation.status]}
+                        </span>
+                      )}
                       <span className="text-xs text-zinc-300">{implementation.name}</span>
                     </div>
                     {/* Never show the claim without what backs it: a bare
@@ -266,19 +316,37 @@ const NoisePicker = ({
                     )}
                   </div>
                 )}
-                <p className="mt-1.5 text-xs text-zinc-500">
-                  Cost{' '}
-                  <CostBadge
-                    units={variantCost(variant.id, draft.octaves)}
-                    title={`Relative to Perlin 3D at one octave = 1. ${draft.octaves} octave${draft.octaves > 1 ? 's' : ''} of ${variant.label}.`}
-                  />
-                  {draft.octaves > 1 && <span className="text-zinc-600"> ({draft.octaves} octaves)</span>}
-                </p>
+                {/* The cost model is keyed to shipping variants; quoting it
+                    under a non-shipping implementation would misattribute it. */}
+                {!implementation?.status && (
+                  <p className="mt-1.5 text-xs text-zinc-500">
+                    Cost{' '}
+                    <CostBadge
+                      units={variantCost(variant.id, draft.octaves)}
+                      title={`Relative to Perlin 3D at one octave = 1. ${draft.octaves} octave${draft.octaves > 1 ? 's' : ''} of ${variant.label}.`}
+                    />
+                    {draft.octaves > 1 && <span className="text-zinc-600"> ({draft.octaves} octaves)</span>}
+                  </p>
+                )}
                 <p className="mt-1.5 text-[10px] leading-relaxed text-zinc-600">{noise.license}</p>
               </div>
             </div>
             <div className="space-y-2">
               <div className="max-w-80 space-y-2">
+                {implementations.length > 1 && (
+                  <div className="flex items-center justify-between gap-2 text-xs text-zinc-500">
+                    Implementation
+                    <Segmented
+                      value={implementation?.id ?? ''}
+                      onChange={id => setImplId(id)}
+                      options={implementations.map(i => ({
+                        value: i.id,
+                        label: i.status ? IMPLEMENTATION_STATUS_LABEL[i.status] : 'Shipping',
+                        title: i.name,
+                      }))}
+                    />
+                  </div>
+                )}
                 {noise.variants.length > 1 && (
                   <div className="flex items-center justify-between gap-2 text-xs text-zinc-500">
                     Type
