@@ -1,5 +1,4 @@
 import { costTier, TIER_LABEL } from '#/lib/cost'
-
 import type { CostTier } from '#/lib/cost'
 
 /** Green/yellow/orange, matching the tiers in the library's cost model. */

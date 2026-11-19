@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 
-import { createJsRenderer } from '#/lib/render/js'
-import { createThreeRenderer } from '#/lib/render/three'
-import { createWebglRenderer } from '#/lib/render/webgl'
-import { createWebgpuRenderer } from '#/lib/render/webgpu'
-
 import type { Effect } from '#/lib/effect'
 import type { Backend } from '#/lib/registry'
+import { createJsRenderer } from '#/lib/render/js'
+import { createThreeRenderer } from '#/lib/render/three'
 import type { Renderer, ViewMode } from '#/lib/render/types'
+import { createWebglRenderer } from '#/lib/render/webgl'
+import { createWebgpuRenderer } from '#/lib/render/webgpu'
 
 /** Square resolution used by the flat views, which never fill the viewport. */
 export const RENDER_SIZE = 512

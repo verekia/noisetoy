@@ -18,8 +18,9 @@
 //
 // three modules are imported dynamically so the main bundle stays lean.
 
-import type { RenderOptions, Renderer } from '#/lib/render/types'
 import type { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+
+import type { RenderOptions, Renderer } from '#/lib/render/types'
 
 // Denser than the plane per surface area: the sphere's vertex grid is what
 // resolves stepped cliffs, and its equator spans 2*pi local units against the

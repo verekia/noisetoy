@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react'
 
+import Head from 'next/head'
+import Link from 'next/link'
+import { useRouter } from 'next/router'
+
 import { benchJsVariant } from '#/lib/bench'
+import type { BenchResult } from '#/lib/bench'
 import {
   benchThreeAlt,
   benchThreeVariant,
@@ -13,13 +18,8 @@ import {
 // AltVariants — TS samplers for the JS column, GLSL/WGSL/TSL specs for the
 // GPU columns — so every implementation gets the full row.
 import { ALT_VARIANTS } from '#/lib/implementations'
-import { NOISES } from '#/lib/registry'
-import Head from 'next/head'
-import Link from 'next/link'
-import { useRouter } from 'next/router'
-
-import type { BenchResult } from '#/lib/bench'
 import type { AltVariant } from '#/lib/implementations'
+import { NOISES } from '#/lib/registry'
 import type { Backend, NoiseVariant } from '#/lib/registry'
 
 const JS_SIZE = 256

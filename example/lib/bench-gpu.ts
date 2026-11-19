@@ -16,16 +16,15 @@
 //      and carry the spread so unstable cells are visible.
 
 import { BENCH_BATCH_MS, BENCH_BATCHES, BENCH_WARMUP_MS, BENCH_Z_CYCLE, summarizeBatches } from '#/lib/bench'
-import { createEffect } from '#/lib/effect'
-import { createThreeRenderer } from '#/lib/render/three'
-import { createWebglRenderer } from '#/lib/render/webgl'
-import { createWebgpuRenderer } from '#/lib/render/webgpu'
-
 import type { BenchResult } from '#/lib/bench'
+import { createEffect } from '#/lib/effect'
 import type { EffectSpec } from '#/lib/effect'
 import type { AltVariant } from '#/lib/implementations'
 import type { NoiseVariant } from '#/lib/registry'
+import { createThreeRenderer } from '#/lib/render/three'
 import type { Renderer, RenderOptions } from '#/lib/render/types'
+import { createWebglRenderer } from '#/lib/render/webgl'
+import { createWebgpuRenderer } from '#/lib/render/webgpu'
 
 /** Frames per synced warmup/probe chunk — keeps the submit queue bounded. */
 const CHUNK = 8

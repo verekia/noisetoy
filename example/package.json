@@ -12,7 +12,7 @@
     "build": "next build",
     "start": "serve out",
     "bench": "bun run scripts/bench.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "bun check"
   },
   "dependencies": {
     "noisetoy": "workspace:*",

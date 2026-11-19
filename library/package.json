@@ -37,7 +37,7 @@
   "scripts": {
     "dev": "tsc -p tsconfig.build.json --watch",
     "build": "rm -rf dist && tsc -p tsconfig.build.json && cp ../README.md README.md",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "bun check",
     "bench:impl": "bun run src/alt/bench.ts"
   },
   "devDependencies": {

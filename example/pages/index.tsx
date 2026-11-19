@@ -1,25 +1,25 @@
 import { useEffect, useMemo, useState } from 'react'
 
+import Head from 'next/head'
+import Link from 'next/link'
+
 import { TIER_CLASS } from '#/components/CostBadge'
 import NoiseCanvas from '#/components/NoiseCanvas'
 import NoisePicker from '#/components/NoisePicker'
+import type { PickerDraft, PickerStack } from '#/components/NoisePicker'
 import Segmented from '#/components/Segmented'
 import { costTier, estimateCost, TIER_LABEL } from '#/lib/cost'
 import { createEffect } from '#/lib/effect'
+import type { LayerSpec } from '#/lib/effect'
 // Non-shipping implementations (candidates, superseded): the sidebar offers
 // them per layer, and a layer carrying one renders through the inventory's
 // AltVariant (its NoiseSource: TS sampler + GLSL/WGSL/TSL specs) on every
 // backend.
 import { altVariantsFor, IMPLEMENTATION_STATUS_LABEL, IMPLEMENTATIONS } from '#/lib/implementations'
-import { defaultVariant, getNoise, getVariant, NOISES } from '#/lib/registry'
-import { BLEND_MODES } from '#/lib/render/types'
-import Head from 'next/head'
-import Link from 'next/link'
-
-import type { PickerDraft, PickerStack } from '#/components/NoisePicker'
-import type { LayerSpec } from '#/lib/effect'
 import type { AltVariant } from '#/lib/implementations'
+import { defaultVariant, getNoise, getVariant, NOISES } from '#/lib/registry'
 import type { Backend, NoiseDef, NoiseVariant } from '#/lib/registry'
+import { BLEND_MODES } from '#/lib/render/types'
 import type { BlendMode, FractalStyle, ViewMode } from '#/lib/render/types'
 
 const STYLES: FractalStyle[] = ['basic', 'billow', 'ridged']

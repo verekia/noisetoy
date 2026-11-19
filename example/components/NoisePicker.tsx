@@ -5,6 +5,7 @@ import NoiseCanvas from '#/components/NoiseCanvas'
 import Segmented from '#/components/Segmented'
 import { variantCost } from '#/lib/cost'
 import { createEffect } from '#/lib/effect'
+import type { LayerSpec } from '#/lib/effect'
 // The implementation inventory is reference material for benchmarking;
 // library consumers never ship it. The explorer is exactly the app that
 // should.
@@ -18,10 +19,8 @@ import {
   implementationOf,
   IMPLEMENTATIONS,
 } from '#/lib/implementations'
-import { defaultVariant, getNoise, getVariant, NOISES } from '#/lib/registry'
-
-import type { LayerSpec } from '#/lib/effect'
 import type { ImplementationKind } from '#/lib/implementations'
+import { defaultVariant, getNoise, getVariant, NOISES } from '#/lib/registry'
 import type { Backend, NoiseDef } from '#/lib/registry'
 import type { BlendMode, FractalStyle } from '#/lib/render/types'
 
